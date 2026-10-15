@@ -15,22 +15,47 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Landmark, Banknote, Target } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { PageHeader } from '../components/ui/surface/index.js'
+import { Landmark, Banknote, Target, FileBarChart2, ClipboardList, CloudUpload, Plus } from 'lucide-react'
 import '../styles/pending/b2-finance.css'
 import BillingBanner from '../components/BillingBanner.jsx'
-import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
+import {
+  AuroraButton,
+  AuroraEmpty,
+  AuroraLightButton,
+  AuroraSection,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
+import {
+  FinanceSubPage,
+  FinanceSubBand,
+  FinanceMore,
+  FinancePeriodSwitch,
+  yearName,
+} from '../components/statements/financeSub.jsx'
+import { periodClosed } from '../components/finance/financeAurora.js'
+import { formatShortDate } from '../lib/format.js'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
+import { addDataHref } from '../lib/dataDestinations.js'
 import CapitalScheduleWorkspace from '../components/reports/schedules/CapitalScheduleWorkspace.jsx'
 import CashScheduleWorkspace from '../components/reports/schedules/CashScheduleWorkspace.jsx'
 import CampaignScheduleWorkspace from '../components/reports/schedules/CampaignScheduleWorkspace.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 
+// `add` — the band's primary button for that schedule: the workspace's own
+// default "add" (the button marked data-add-default), clicked for the reader.
 const TABS = [
-  { id: 'capital', label: 'Capital Budget', Icon: Landmark },
-  { id: 'cash', label: 'Cash & Investments', Icon: Banknote },
-  { id: 'campaign', label: 'Capital Campaign', Icon: Target },
+  { id: 'capital', label: 'Capital Budget', Icon: Landmark, add: 'Add project' },
+  { id: 'cash', label: 'Cash & Investments', Icon: Banknote, add: 'Add account' },
+  { id: 'campaign', label: 'Capital Campaign', Icon: Target, add: 'Add division' },
+]
+
+const CRUMBS = [
+  { label: 'Dashboard', to: '/app' },
+  { label: 'Finance', to: '/finance' },
+  { label: 'Reports', to: '/reports' },
+  { label: 'Supporting Schedules' },
 ]
 
 export default function SchedulesPage() {
@@ -72,8 +97,22 @@ export default function SchedulesPage() {
   }, [pickerPeriods])
 
   const [tab, setTab] = useState('capital')
-
+  const uiV2 = useUiV2()
   const reduce = useReducedMotion()
+  const period = pickerPeriods.find((p) => p.id === periodId) ?? null
+  const periodName = period ? yearName(period.label) : null
+  const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]
+
+  // The band's main job: run the open schedule's own default "add" (the same
+  // button the table carries), then bring that table into view.
+  const editorRef = useRef(null)
+  const addFromBand = () => {
+    const btn = editorRef.current?.querySelector('[data-add-default="true"]')
+    if (!btn) return
+    btn.click()
+    btn.closest('section')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  }
+
   const tabRefs = useRef([])
   const onTabKey = (e, i) => {
     let next = null
@@ -90,93 +129,138 @@ export default function SchedulesPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <main className="mx-auto max-w-page px-4 py-6 sm:px-10">
-        <Link to="/reports" className="back-link mb-2">
-          <ArrowLeft size={15} aria-hidden="true" /> All reports
-        </Link>
+      <main>
+        <FinanceSubPage crumbs={CRUMBS}>
+          <FinanceSubBand
+            eyebrow={
+              period?.periodEndDate
+                ? `${periodClosed(period.periodEndDate) ? 'Year ended' : 'Year ends'} ${formatShortDate(period.periodEndDate)}`
+                : null
+            }
+            title="Supporting Schedules"
+            verdict={
+              periodName ? (
+                <>
+                  Capital projects, cash and investments for <VerdictEm>{periodName}</VerdictEm>. They flow into your next
+                  board report.
+                </>
+              ) : (
+                <>Add a year&rsquo;s numbers first, then fill in the schedules here.</>
+              )
+            }
+            actions={
+              <>
+                {canEdit && periodId ? (
+                  <AuroraButton variant="primary" onClick={addFromBand} icon={<Plus size={19} aria-hidden="true" />}>
+                    {activeTab.add}
+                  </AuroraButton>
+                ) : null}
+                <AuroraButton to="/reports" icon={<FileBarChart2 size={19} aria-hidden="true" />}>
+                  All reports
+                </AuroraButton>
+              </>
+            }
+            aside={<FinancePeriodSwitch periods={pickerPeriods} activeId={periodId} onSelect={setPeriodId} />}
+          />
 
-        <PageHeader
-          eyebrow={['Reports', activeSchool?.name, 'Supporting schedules'].filter(Boolean).join(' · ')}
-          title="Supporting schedules"
-          meta="Capital projects and cash & investment accounts that flow into your board packet. Pick a period, fill in the tables, and the next board report picks up the totals automatically."
-          hue="37 99 235"
-          actions={
-            pickerPeriods.length > 0 ? (
-              <div className="flex min-w-0 max-w-full flex-col gap-1">
-                <span className="toolbar-label">Period</span>
-                <PeriodSelector periods={pickerPeriods} activeId={periodId} onSelect={setPeriodId} light />
-              </div>
-            ) : null
-          }
-        />
-
-        {pickerPeriods.length === 0 ? (
-          <div className="b2-note mt-8">
-            <p>No periods yet — import a trial balance to get started.</p>
-          </div>
-        ) : (
-          <>
-            <div className="scrollbar-none mb-6 mt-4 overflow-x-auto">
-              <div role="tablist" aria-label="Schedules" className="tabs-ink min-w-max">
-                {TABS.map((t, i) => {
-                  const Icon = t.Icon
-                  const active = tab === t.id
-                  return (
-                    <button
-                      key={t.id}
-                      ref={(el) => {
-                        tabRefs.current[i] = el
-                      }}
-                      id={t.id === 'capital' ? 'schedules-capital-tab' : undefined}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      tabIndex={active ? 0 : -1}
-                      onClick={() => setTab(t.id)}
-                      onKeyDown={(e) => onTabKey(e, i)}
-                      className="tab-ink shrink-0"
-                    >
-                      <span className="flex items-center gap-1.5 whitespace-nowrap">
-                        <Icon size={14} aria-hidden="true" className="text-ink2" /> {t.label}
-                      </span>
-                      {active &&
-                        (reduce ? (
-                          <span className="tab-ink-rule" aria-hidden="true" />
-                        ) : (
-                          <motion.span layoutId="schedules-tab-rule" className="tab-ink-rule" aria-hidden="true" />
-                        ))}
-                    </button>
-                  )
-                })}
-              </div>
+          {pickerPeriods.length === 0 ? (
+            <div className="mt-8">
+              <AuroraEmpty
+                icon={ClipboardList}
+                text="No saved years yet."
+                sub="Import a trial balance to get started."
+                action={
+                  <AuroraLightButton to={addDataHref(uiV2, { add: 'tb' })} icon={<CloudUpload size={15} aria-hidden="true" />}>
+                    Add a trial balance
+                  </AuroraLightButton>
+                }
+              />
             </div>
+          ) : (
+            <AuroraSection first icon={ClipboardList} title="Your schedules" subtitle="Pick one and fill in the table" count={periodName}>
+              <div className="fsub-nav fsub-nav-in scrollbar-none mb-5 overflow-x-auto">
+                <div role="tablist" aria-label="Schedules" className="tabs-ink min-w-max">
+                  {TABS.map((t, i) => {
+                    const Icon = t.Icon
+                    const active = tab === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        ref={(el) => {
+                          tabRefs.current[i] = el
+                        }}
+                        id={t.id === 'capital' ? 'schedules-capital-tab' : undefined}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        tabIndex={active ? 0 : -1}
+                        onClick={() => setTab(t.id)}
+                        onKeyDown={(e) => onTabKey(e, i)}
+                        className="tab-ink shrink-0"
+                      >
+                        <span className="flex items-center gap-1.5 whitespace-nowrap">
+                          <Icon size={14} aria-hidden="true" className="text-ink2" /> {t.label}
+                        </span>
+                        {active &&
+                          (reduce ? (
+                            <span className="tab-ink-rule" aria-hidden="true" />
+                          ) : (
+                            <motion.span layoutId="schedules-tab-rule" className="tab-ink-rule" aria-hidden="true" />
+                          ))}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
-            {tab === 'capital' && (
-              <CapitalScheduleWorkspace
-                key={`cap:${schoolId}:${periodId}`}
-                schoolId={schoolId}
-                periodId={periodId}
-                canEdit={canEdit}
-              />
-            )}
-            {tab === 'cash' && (
-              <CashScheduleWorkspace
-                key={`cash:${schoolId}:${periodId}`}
-                schoolId={schoolId}
-                periodId={periodId}
-                canEdit={canEdit}
-              />
-            )}
-            {tab === 'campaign' && (
-              <CampaignScheduleWorkspace
-                key={`camp:${schoolId}:${periodId}`}
-                schoolId={schoolId}
-                periodId={periodId}
-                canEdit={canEdit}
-              />
-            )}
-          </>
-        )}
+              <div ref={editorRef} className="fsub-sched">
+              {tab === 'capital' && (
+                <CapitalScheduleWorkspace
+                  key={`cap:${schoolId}:${periodId}`}
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                />
+              )}
+              {tab === 'cash' && (
+                <CashScheduleWorkspace
+                  key={`cash:${schoolId}:${periodId}`}
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                />
+              )}
+              {tab === 'campaign' && (
+                <CampaignScheduleWorkspace
+                  key={`camp:${schoolId}:${periodId}`}
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                />
+              )}
+              </div>
+            </AuroraSection>
+          )}
+
+          <FinanceMore current="reports" only={['reports', 'statements', 'budget', 'cash']} />
+
+          <HowThisWorks>
+            <p>
+              Capital projects and cash &amp; investment accounts are kept per year. Fill in the tables and the next
+              board report picks up the totals automatically.
+            </p>
+            <p>
+              Capital Budget tracks capital projects against budget; over/(under) and totals are worked out in the
+              board packet.
+            </p>
+            <p>
+              Cash &amp; Investments lists bank and investment accounts with insured vs. uninsured amounts. Enter rates
+              as a percent (4.25 = 4.25%).
+            </p>
+            <p>Capital Campaign tracks campaign lines against budget; the difference to budget is worked out in the packet.</p>
+            <p>Changes save as you type.</p>
+          </HowThisWorks>
+        </FinanceSubPage>
       </main>
     </div>
   )

@@ -11,7 +11,10 @@
 // Org-scoped (uses useScope().orgId). Owner/accountant permission + 'enrollment'
 // entitlement are enforced per-school INSIDE the apply service (un-permitted /
 // un-entitled schools come back `skipped`, never blocking the batch).
-// Navy/gold theme; the review table scrolls in its own overflow-x container.
+// AURORA (2026-10-15): the Enrollment band (org chip, "Diocesan import", one
+// plain sentence per step, the step's counts as glass cards) over one section
+// per step — upload, check each match, what happened. The method text sits in
+// How this works. The review table scrolls in its own overflow-x container.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -26,13 +29,31 @@ import {
   RotateCcw,
   Trash2,
   ArrowRight,
+  ListChecks,
+  Rows3,
+  SkipForward,
+  XCircle,
+  History,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
-import { PageHeader, StatStrip, Stat, Pill, DataTable } from '../components/ui/surface/index.js'
+import { Pill, DataTable } from '../components/ui/surface/index.js'
 import '../styles/pending/b2-finance.css'
+import '../styles/pending/aurora-enroll-acad.css'
 import DiocesanReviewTable from '../components/enrollment/DiocesanReviewTable.jsx'
+import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
+import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
+import { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import {
+  AuroraHero,
+  AuroraButton,
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+  AuroraLightButton,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
 import { useScope } from '../context/ScopeContext.jsx'
 import { diocesanEnrollmentApi, apiErrorMessage } from '../lib/api.js'
 
@@ -57,7 +78,7 @@ function initDecisions(rows = []) {
 }
 
 export default function DiocesanImportPage() {
-  const { orgId, orgResolved, isMultiSchool } = useScope()
+  const { orgId, orgName, orgResolved, isMultiSchool } = useScope()
   const [params, setParams] = useSearchParams()
   const importId = params.get('importId') || null
 
@@ -206,38 +227,163 @@ export default function DiocesanImportPage() {
     return (
       <div className="min-h-screen">
         <BillingBanner />
-        <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
-          <BackLink className="mb-2" />
-          <PageHeader eyebrow="Enrollment · Diocesan import" title="One file, every school" hue="37 99 235" />
-          <div className="b2-note mt-8 flex flex-col items-center gap-2">
-            <GraduationCap size={24} aria-hidden="true" className="text-ink2" />
-            <h2 className="b2-note-title">This is a diocese-wide import</h2>
-            <p className="max-w-md">
-              Upload one enrollment file for every school in your organization. It&apos;s available for
-              multi-school organizations — add more schools to use it, or import each school&apos;s roster
-              from its Enrollment page.
-            </p>
-          </div>
-        </div>
+        <DomainStatePanel
+          moduleKey="enrollment"
+          title="Enrollment"
+          eyebrow="Diocesan import"
+          showBack
+          verdict="This is a diocese-wide import."
+          icon={GraduationCap}
+          text="It works for organizations with more than one school."
+          sub="Import each school's roster from its Enrollment page instead."
+          action={
+            <AuroraLightButton variant="ghost" to="/enrollment">
+              Open Enrollment
+            </AuroraLightButton>
+          }
+        />
       </div>
     )
   }
 
+  // A batch resumed through ?importId that was ALREADY applied is its own
+  // step: the table is read-only and nothing can be applied again, so the band
+  // must not invite a check-then-apply that cannot happen.
+  const step = result ? 'done' : payload?.status === 'applied' ? 'applied' : payload ? 'review' : 'upload'
+  const appliedRows = (payload?.rows ?? []).filter((r) => r.decision === 'applied').length
+
+  // ONE plain sentence per step, from the real counts.
+  const verdict =
+    step === 'done' ? (
+      <>
+        <VerdictEm tone="good">
+          {result.applied ?? 0} school{(result.applied ?? 0) === 1 ? '' : 's'} updated
+        </VerdictEm>
+        {result.failed ? (
+          <>
+            , <VerdictEm tone="risk">{result.failed} failed</VerdictEm>
+          </>
+        ) : null}
+        .
+      </>
+    ) : step === 'applied' ? (
+      <>
+        This file was already applied to{' '}
+        <VerdictEm tone="good">
+          {appliedRows} school{appliedRows === 1 ? '' : 's'}
+        </VerdictEm>
+        .
+      </>
+    ) : step === 'review' ? (
+      <>
+        <VerdictEm>
+          {counts.matched} school{counts.matched === 1 ? '' : 's'} ready
+        </VerdictEm>
+        {counts.review > 0 ? (
+          <>
+            , <VerdictEm tone="watch">{counts.review} still need a match</VerdictEm>
+          </>
+        ) : null}
+        . Check each match, then confirm below.
+      </>
+    ) : (
+      <>One enrollment file fills in every school. You check each match before anything is saved.</>
+    )
+
+  const kpis =
+    step === 'applied'
+      ? [
+          { key: 'rows', icon: Rows3, label: 'Rows', value: String(counts.total) },
+          { key: 'applied', icon: CheckCircle2, label: 'Applied', value: String(appliedRows) },
+        ]
+      : step === 'review'
+      ? [
+          { key: 'rows', icon: Rows3, label: 'Rows', value: String(counts.total) },
+          { key: 'ready', icon: CheckCircle2, label: 'Ready', value: String(counts.matched) },
+          {
+            key: 'review',
+            icon: ListChecks,
+            label: 'Need review',
+            value: String(counts.review),
+            verdict: counts.review ? 'watch' : null,
+            verdictLabel: counts.review ? 'To check' : null,
+          },
+          { key: 'skipped', icon: SkipForward, label: 'Skipped', value: String(counts.skipped) },
+        ]
+      : step === 'done'
+        ? [
+            { key: 'applied', icon: CheckCircle2, label: 'Applied', value: String(result.applied ?? 0) },
+            { key: 'superseded', icon: History, label: 'Replaced a typed figure', value: String(result.superseded ?? 0) },
+            { key: 'skipped', icon: SkipForward, label: 'Skipped', value: String(result.skipped ?? 0) },
+            {
+              key: 'failed',
+              icon: XCircle,
+              label: 'Failed',
+              value: String(result.failed ?? 0),
+              verdict: result.failed ? 'risk' : null,
+            },
+          ]
+        : null
+
+  const actions =
+    step === 'done' || step === 'applied' ? (
+      <>
+        <AuroraButton variant="primary" onClick={startOver} icon={<RotateCcw size={18} aria-hidden="true" />}>
+          Import another file
+        </AuroraButton>
+        <AuroraButton to="/enrollment" icon={<GraduationCap size={18} aria-hidden="true" />}>
+          Open Enrollment
+        </AuroraButton>
+      </>
+    ) : step === 'review' ? (
+      <>
+        {/* NOT an apply button: the page exists so ambiguous rows are checked
+            before anything is written. The ONE apply is the sticky "Confirm &
+            apply" bar under the table; the band takes the reader to the rows. */}
+        <AuroraButton variant="primary" href="#diocesan-review" icon={<ListChecks size={18} aria-hidden="true" />}>
+          Check the matches
+        </AuroraButton>
+        <AuroraButton onClick={doDiscard} icon={<Trash2 size={18} aria-hidden="true" />}>
+          Discard
+        </AuroraButton>
+      </>
+    ) : (
+      // The dropzone right under the band carries "Choose a file" — a second
+      // copy here was the same button twice, a few pixels apart.
+      <>
+        <AuroraButton to="/enrollment" icon={<GraduationCap size={18} aria-hidden="true" />}>
+          Back to Enrollment
+        </AuroraButton>
+      </>
+    )
+
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
-        <BackLink className="mb-2" />
-        <PageHeader
-          eyebrow="Enrollment · Diocesan import"
-          title="One file, every school"
-          meta="Upload one enrollment file for every school in your organization; review each match before it is applied."
-          hue="37 99 235"
+      <ModuleAccent moduleKey="enrollment">
+      <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+        <div className="mb-3">
+          <ModuleBreadcrumb
+            crumbs={[
+              { label: 'Dashboard', to: '/app' },
+              { label: 'Enrollment', to: '/enrollment' },
+              { label: 'Diocesan import' },
+            ]}
+          />
+        </div>
+
+        <AuroraHero
+          moduleKey="enrollment"
+          school={orgName ?? null}
+          eyebrow="Diocesan import"
+          title="Enrollment"
+          verdict={verdict}
+          actions={actions}
+          kpis={kpis}
         />
-        <div className="mt-6" />
 
         {error && (
-          <div className="b2-callout b2-risk mb-5" role="alert">
+          <div className="b2-callout b2-risk mt-6" role="alert">
             <AlertTriangle size={14} aria-hidden="true" />
             <span>{error}</span>
           </div>
@@ -245,89 +391,83 @@ export default function DiocesanImportPage() {
 
         {/* ── APPLY RESULT ── */}
         {result ? (
-          <ApplyResult result={result} onStartOver={startOver} />
+          <ApplyResult result={result} />
         ) : payload ? (
           // ── REVIEW STEP ──
-          <div className="space-y-5 pb-28">
-            <StatStrip cols={4} className="stats-compact">
-              <Stat label="Rows" value={counts.total} />
-              <Stat label="Ready" value={counts.matched} status={counts.matched ? 'good' : undefined} />
-              <Stat label="Need review" value={counts.review} status={counts.review ? 'watch' : undefined} />
-              <Stat label="Skipped" value={counts.skipped} />
-            </StatStrip>
-            <div className="flex flex-wrap items-end justify-end gap-3">
-              <label className="block">
-                <span className="b2-label">As of date</span>
-                <DatePicker
-                  value={observedOn}
-                  onChange={setObservedOn}
-                  disabled={applied}
-                  className="b2-input w-44 font-semibold"
-                />
-              </label>
-              <button type="button" onClick={doDiscard} className="btn btn-quiet">
-                <Trash2 size={14} aria-hidden="true" /> Discard
-              </button>
-            </div>
-
-            {payload.fileName && (
-              <p className="flex items-center gap-1.5 text-[13px] text-ink2">
-                <FileSpreadsheet size={14} /> {payload.fileName}
-                {payload.sourceShape ? (
-                  <Pill className="ml-1 capitalize">{payload.sourceShape}</Pill>
-                ) : null}
-              </p>
-            )}
-
-            {Array.isArray(payload.warnings) && payload.warnings.length > 0 && (
-              <ul className="b2-callout b2-watch flex-col !gap-1">
-                {payload.warnings.map((w, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-[13px] text-ink">
-                    <AlertTriangle size={13} aria-hidden="true" className="mt-0.5 shrink-0 text-ink2" /> {w}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <DiocesanReviewTable
-              rows={payload.rows || []}
-              schoolOptions={payload.schoolOptions || []}
-              decisions={decisions}
-              onRowChange={onRowChange}
-              applied={applied}
-            />
-
-            {/* Sticky confirm-and-apply bar. */}
-            {!applied && (
-              <div className="fixed inset-x-0 bottom-0 z-40 border-t border-hair bg-white shadow-float lg:left-64">
-                <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-4 py-3.5 sm:px-10">
-                  <p className="text-[14px] text-ink2">
-                    <b className="text-ink">{counts.matched}</b> school{counts.matched === 1 ? '' : 's'} ready
-                    {counts.review > 0 && (
-                      <span className="text-ink"> · {counts.review} still need a match</span>
-                    )}
+          <AuroraSection
+            first
+            id="diocesan-review"
+            icon={ListChecks}
+            title={step === 'applied' ? 'What was applied' : 'Check each match'}
+            subtitle={step === 'applied' ? 'Read only — this file is already saved' : "Pick a school for anything we weren't sure of"}
+            count={step === 'applied' ? 'Applied' : counts.review ? `${counts.review} to check` : `${counts.matched} ready`}
+          >
+            <div className="space-y-5 pb-28">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                {payload.fileName ? (
+                  <p className="flex min-w-0 items-center gap-1.5 break-words text-[13px] text-ink2">
+                    <FileSpreadsheet size={14} className="shrink-0" /> {payload.fileName}
+                    {payload.sourceShape ? <Pill className="ml-1 capitalize">{payload.sourceShape}</Pill> : null}
                   </p>
-                  <button
-                    type="button"
-                    onClick={doApply}
-                    disabled={applying || counts.matched === 0}
-                    className="btn btn-primary"
-                  >
-                    {applying ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" /> Applying…
-                      </>
-                    ) : (
-                      <>
-                        Confirm &amp; apply {counts.matched} school{counts.matched === 1 ? '' : 's'}
-                        <ArrowRight size={16} />
-                      </>
-                    )}
-                  </button>
-                </div>
+                ) : (
+                  <span />
+                )}
+                <label className="block">
+                  <span className="b2-label">As of date</span>
+                  <DatePicker
+                    value={observedOn}
+                    onChange={setObservedOn}
+                    disabled={applied}
+                    className="b2-input w-44 font-semibold"
+                  />
+                </label>
               </div>
-            )}
-          </div>
+
+              {Array.isArray(payload.warnings) && payload.warnings.length > 0 && (
+                <AuroraTileGrid stack>
+                  {payload.warnings.map((w, i) => (
+                    <AuroraTile key={i} row art={false} icon={AlertTriangle} tone="watch" title={w} />
+                  ))}
+                </AuroraTileGrid>
+              )}
+
+              <div className="au-card au-card-flat au-register min-w-0">
+                <DiocesanReviewTable
+                  rows={payload.rows || []}
+                  schoolOptions={payload.schoolOptions || []}
+                  decisions={decisions}
+                  onRowChange={onRowChange}
+                  applied={applied}
+                />
+              </div>
+
+              {/* Sticky confirm-and-apply bar. */}
+              {!applied && (
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-hair bg-white shadow-float lg:left-64">
+                  <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-10">
+                    <p className="text-[14px] text-ink2">
+                      <b className="text-ink">{counts.matched}</b> school{counts.matched === 1 ? '' : 's'} ready
+                      {counts.review > 0 && <span className="text-ink"> · {counts.review} still need a match</span>}
+                    </p>
+                    <AuroraLightButton
+                      onClick={doApply}
+                      disabled={applying || counts.matched === 0}
+                      icon={applying ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : null}
+                    >
+                      {applying ? (
+                        'Applying…'
+                      ) : (
+                        <>
+                          Confirm &amp; apply {counts.matched} school{counts.matched === 1 ? '' : 's'}
+                          <ArrowRight size={16} aria-hidden="true" />
+                        </>
+                      )}
+                    </AuroraLightButton>
+                  </div>
+                </div>
+              )}
+            </div>
+          </AuroraSection>
         ) : (
           // ── UPLOAD STEP ──
           <UploadStep
@@ -340,77 +480,79 @@ export default function DiocesanImportPage() {
             onFile={doUpload}
           />
         )}
+
+        <HowThisWorks>
+          <p>
+            Drop in one diocesan enrollment export — an admissions dashboard (School · New · Returning · Total) or the
+            detailed grade × gender / ethnicity / race matrix.
+          </p>
+          <p>
+            Each row is routed to the right school by name, keeping the grade and demographic breakdowns. Clear
+            matches are ready to go; anything ambiguous waits for you to pick a school or skip it.
+          </p>
+          <p>
+            Applying writes each school&apos;s enrollment. Where it replaces a figure someone typed in, the typed
+            figure is kept as history and can be restored from that school&apos;s Enrollment page.
+          </p>
+        </HowThisWorks>
       </div>
+      </ModuleAccent>
     </div>
   )
 }
 
 function UploadStep({ loading, dragOver, setDragOver, fileRef, observedOn, setObservedOn, onFile }) {
   return (
-    <div className="max-w-2xl space-y-5">
-      <p className="text-[15.5px] leading-relaxed text-ink2">
-        Drop in a single diocesan enrollment export — an admissions dashboard
-        (School · New · Returning · Total) or the detailed grade × gender / ethnicity / race matrix. We
-        route each row to the right school by name, keep the grade and demographic breakdowns, and let
-        you review anything ambiguous before it&apos;s applied.
-      </p>
+    <AuroraSection first icon={UploadCloud} title="Upload the file" subtitle="CSV or Excel, up to 25 MB">
+      <div className="space-y-5">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink2">
+            As of date (optional — overrides the file&apos;s date)
+          </span>
+          <DatePicker value={observedOn} onChange={setObservedOn} className="b2-input w-52 font-semibold" />
+        </label>
 
-      <label className="block">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink2">
-          As of date (optional — overrides the file&apos;s date)
-        </span>
-        <DatePicker
-          value={observedOn}
-          onChange={setObservedOn}
-          className="b2-input w-52 font-semibold"
-        />
-      </label>
-
-      <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragOver(true)
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDragOver(false)
-          const f = e.dataTransfer?.files?.[0]
-          if (f) onFile(f)
-        }}
-        data-active={dragOver ? 'true' : undefined}
-        className="b2-drop py-12"
-      >
-        <span className="b2-drop-icon">
-          {loading ? <Loader2 size={28} className="animate-spin" aria-hidden="true" /> : <UploadCloud size={28} aria-hidden="true" />}
-        </span>
-        <div>
-          <p className="text-heading font-semibold text-ink">
-            {loading ? 'Reading your file…' : 'Drop your diocesan file here'}
-          </p>
-          <p className="mt-1 text-[14px] text-ink2">CSV or Excel (.xlsx), up to 25 MB.</p>
-        </div>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => fileRef.current?.click()}
-          className="btn btn-primary mt-1"
-        >
-          Choose a file
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.xlsx,.xls"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) onFile(f)
-            e.target.value = ''
+        <div
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragOver(true)
           }}
-        />
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragOver(false)
+            const f = e.dataTransfer?.files?.[0]
+            if (f) onFile(f)
+          }}
+          data-active={dragOver ? 'true' : undefined}
+          className="b2-drop py-12"
+        >
+          <span className="b2-drop-icon">
+            {loading ? <Loader2 size={28} className="animate-spin" aria-hidden="true" /> : <UploadCloud size={28} aria-hidden="true" />}
+          </span>
+          <div>
+            <p className="text-heading font-semibold text-ink">
+              {loading ? 'Reading your file…' : 'Drop your diocesan file here'}
+            </p>
+            <p className="mt-1 text-[14px] text-ink2">One file, every school.</p>
+          </div>
+          <AuroraLightButton disabled={loading} onClick={() => fileRef.current?.click()} icon={<UploadCloud size={15} aria-hidden="true" />}>
+            Choose a file
+          </AuroraLightButton>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) onFile(f)
+              e.target.value = ''
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </AuroraSection>
   )
 }
 
@@ -430,37 +572,33 @@ const RESULT_COLUMNS = [
     className: 'text-ink2',
     render: (r) =>
       r.status === 'superseded' && Number.isFinite(r.supersededManual)
-        ? `Replaced manual ${r.supersededManual.toLocaleString('en-US')}`
+        ? `Replaced a typed ${r.supersededManual.toLocaleString('en-US')}`
         : r.reason || '—',
   },
 ]
 
-function ApplyResult({ result, onStartOver }) {
+function ApplyResult({ result }) {
   const { total = 0, applied = 0, superseded = 0, skipped = 0, failed = 0, results = [] } = result || {}
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-      <div className="b2-callout b2-good">
-        <CheckCircle2 size={16} aria-hidden="true" />
-        <div>
-          <h2 className="text-heading font-semibold text-ink">Enrollment applied</h2>
-          <p className="text-small text-ink2">
-            {applied} applied · {superseded} superseded manual · {skipped} skipped
-            {failed ? ` · ${failed} failed` : ''} of {total}.
-          </p>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <AuroraSection
+        first
+        icon={CheckCircle2}
+        tone={failed ? 'risk' : 'good'}
+        title="What happened"
+        subtitle="Enrollment applied, school by school"
+        count={`${applied} applied · ${superseded} replaced · ${skipped} skipped${failed ? ` · ${failed} failed` : ''} of ${total}`}
+      >
+        <div className="au-card au-card-flat au-register min-w-0">
+          <DataTable
+            columns={RESULT_COLUMNS}
+            rows={results}
+            rowKey={(r, i) => r.schoolId ?? i}
+            markOf={(r) => RESULT_TONE[r.status] ?? 'neutral'}
+            caption="Diocesan import results by school"
+          />
         </div>
-      </div>
-
-      <DataTable
-        columns={RESULT_COLUMNS}
-        rows={results}
-        rowKey={(r, i) => r.schoolId ?? i}
-        markOf={(r) => RESULT_TONE[r.status] ?? 'neutral'}
-        caption="Diocesan import results by school"
-      />
-
-      <button type="button" onClick={onStartOver} className="btn btn-secondary">
-        <RotateCcw size={14} aria-hidden="true" /> Import another file
-      </button>
+      </AuroraSection>
     </motion.div>
   )
 }

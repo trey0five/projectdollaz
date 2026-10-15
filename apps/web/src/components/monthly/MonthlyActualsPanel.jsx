@@ -30,7 +30,20 @@ export const MONTHLY_BLURB =
 // `hosted` — the caller (the Reports hub's MonthlyActualsSection) already shows
 // a PageHeader titled "Monthly actuals", so the panel drops its own heading and
 // keeps only the upload action.
-export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = false, hosted = false }) {
+//
+// `upload` / `onUploadChange` (optional, used together by a host that puts the
+// "Upload a month" button somewhere else — the Reports hub's band): the upload
+// state becomes controlled — null = idle, { month } = the upload card open on
+// that month ('' = pick one). Omit both and the panel owns it, as before; a
+// controlled host also drops the panel's own two upload buttons.
+export default function MonthlyActualsPanel({
+  schoolId,
+  periodId,
+  canEdit = false,
+  hosted = false,
+  upload = undefined,
+  onUploadChange = undefined,
+}) {
   const { fiscalYearStart, months, loading, error, notEntitled, reload } = useMonthlySnapshots(
     schoolId,
     periodId,
@@ -38,22 +51,31 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
 
   // 'idle' | 'upload'. When opening upload via a cell's Replace/Add, pre-set the
   // month so the picker lands on it.
-  const [mode, setMode] = useState('idle')
-  const [presetMonth, setPresetMonth] = useState('')
+  const controlled = upload !== undefined && typeof onUploadChange === 'function'
+  const [innerMode, setInnerMode] = useState('idle')
+  const [innerPreset, setInnerPreset] = useState('')
+  const mode = controlled ? (upload ? 'upload' : 'idle') : innerMode
+  const presetMonth = controlled ? (upload?.month ?? '') : innerPreset
   const [toast, setToast] = useState('')
   const [deleteError, setDeleteError] = useState('')
 
   const loadedMonthKeys = months.map((m) => m.monthKey)
 
   const openUpload = (monthKey = '') => {
-    setPresetMonth(monthKey)
-    setMode('upload')
+    if (controlled) onUploadChange({ month: monthKey })
+    else {
+      setInnerPreset(monthKey)
+      setInnerMode('upload')
+    }
     setDeleteError('')
   }
 
   const closeUpload = () => {
-    setMode('idle')
-    setPresetMonth('')
+    if (controlled) onUploadChange(null)
+    else {
+      setInnerMode('idle')
+      setInnerPreset('')
+    }
   }
 
   const onSaved = async (res) => {
@@ -101,6 +123,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
 
   return (
     <div className="space-y-5">
+      {controlled && hosted ? null : (
       <div className={`flex flex-wrap items-start gap-3 ${hosted ? 'justify-end' : 'justify-between'}`}>
         {!hosted && (
           <div className="flex items-start gap-2.5">
@@ -117,6 +140,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
           </Button>
         )}
       </div>
+      )}
 
       {error && (
         <p className="b2-callout b2-risk" role="alert">
@@ -158,7 +182,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
             <Info size={13} aria-hidden="true" className="shrink-0" />
             Each month should be a cumulative year-to-date trial balance as of that month-end.
           </p>
-          {canEdit && (
+          {canEdit && !controlled && (
             <div className="pt-2">
               <Button variant="secondary" onClick={() => openUpload('')} icon={<Plus size={14} />}>
                 Upload your first month

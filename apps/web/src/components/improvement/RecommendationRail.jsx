@@ -19,10 +19,8 @@
 // seeded RecordFlow. It is shown only to editors — a viewer sees the reasoning and
 // a plain sentence about who can act, never a dead button.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
-import { Section, Pill, Button } from '../ui/surface/index.js'
-import '../../styles/pending/b1-domain.css'
+import { ArrowRight, Compass, Lightbulb, Target } from 'lucide-react'
+import { AuroraEmpty, AuroraLightButton, AuroraSection, AuroraTile, AuroraTileGrid } from '../ui/aurora/index.js'
 import { TEMPLATE_LABELS, OWNER_ROLE_LABELS, recommendationId } from './improvementMeta.js'
 
 const BASIS_LABEL = {
@@ -30,70 +28,50 @@ const BASIS_LABEL = {
   fullLift: 'full marks',
 }
 
-function LiftChip({ lift }) {
-  if (!lift || lift.points == null) return null
-  return (
-    <Pill
-      variant="status"
-      tone="good"
-      className="tabular-nums"
-      title={`Attributed to ${BASIS_LABEL[lift.basis] ?? lift.basis}`}
-    >
-      +{lift.points} index pts
-    </Pill>
-  )
-}
-
-/** One recommendation: a ruled row on the ground (no card, no shadow). */
-function RecommendationCard({ rec, index, canEdit, onWork, reduce }) {
-  const kicker = TEMPLATE_LABELS[rec.templateId] ?? 'Recommended'
+/**
+ * One recommendation as an Aurora tile: what kind of step it is and the
+ * standards it serves (kicker), the step itself (title), the engine's own
+ * rationale (one line), the attributed lift as the big figure — or, when the
+ * engine has no number, its literal reason and NO figure — and the one action.
+ */
+function RecommendationCard({ rec, canEdit, onWork }) {
+  // The standard codes ride the kicker only when the title does not already
+  // name them ("Raise COG-1 one rubric level" needs no second "COG-1").
+  const tags = (rec.standardTags ?? []).slice(0, 3)
+  const titleNamesTags = tags.length > 0 && tags.every((t) => String(rec.title ?? '').includes(t))
+  const kicker = [TEMPLATE_LABELS[rec.templateId] ?? 'Recommended', ...(titleNamesTags ? [] : tags)].join(' · ')
   const hasLift = !!rec.estimatedLift && rec.estimatedLift.points != null
+  const owner = rec.suggestedOwnerRole ? (OWNER_ROLE_LABELS[rec.suggestedOwnerRole] ?? rec.suggestedOwnerRole) : null
   return (
-    <motion.li
-      initial={reduce ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: reduce ? 0 : Math.min(index * 0.03, 0.2), duration: 0.28 }}
-      className="flex flex-col gap-1.5 py-3.5"
+    <AuroraTile
       data-testid="recommendation"
+      className="imp-rec"
+      icon={hasLift ? Target : Lightbulb}
+      kicker={kicker}
+      title={rec.title}
+      figure={hasLift ? `+${rec.estimatedLift.points}` : null}
+      unit={hasLift ? ' points' : null}
+      desc={rec.rationale}
+      tip={hasLift ? `${rec.rationale} (Attributed to ${BASIS_LABEL[rec.estimatedLift.basis] ?? rec.estimatedLift.basis}.)` : undefined}
+      art={false}
+      foot={
+        <>
+          {owner ? <span className="imp-rec-owner">Owner · {owner}</span> : null}
+          {canEdit ? (
+            <AuroraLightButton size="sm" onClick={() => onWork?.(rec)} icon={<ArrowRight size={15} aria-hidden="true" />}>
+              Work this gap
+            </AuroraLightButton>
+          ) : null}
+        </>
+      }
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="pg-eyebrow !mb-0">{kicker}</span>
-        {(rec.standardTags ?? []).slice(0, 3).map((t) => (
-          <span key={t} className="text-[11px] font-semibold text-ink2">
-            {t}
-          </span>
-        ))}
-        <span className="flex-1" />
-        {hasLift ? <LiftChip lift={rec.estimatedLift} /> : null}
-      </div>
-
-      <p className="text-[14px] font-semibold leading-snug text-ink">{rec.title}</p>
-      <p className="max-w-prose text-[12.5px] leading-relaxed text-ink2">{rec.rationale}</p>
-
       {/* No number is available — say why, in the engine's own words. */}
       {!hasLift && rec.estimatedLiftReason ? (
-        <p className="border-l-2 border-hair pl-2.5 text-[12px] leading-relaxed text-ink2" data-testid="lift-reason">
+        <p className="imp-rec-reason" data-testid="lift-reason">
           {rec.estimatedLiftReason}
         </p>
       ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        {rec.suggestedOwnerRole ? (
-          <span className="text-[12px] text-ink2">
-            Suggested owner ·{' '}
-            <span className="font-semibold text-ink">
-              {OWNER_ROLE_LABELS[rec.suggestedOwnerRole] ?? rec.suggestedOwnerRole}
-            </span>
-          </span>
-        ) : null}
-        <span className="flex-1" />
-        {canEdit ? (
-          <Button size="sm" onClick={() => onWork?.(rec)} icon={<ArrowRight size={13} aria-hidden />}>
-            Work this gap
-          </Button>
-        ) : null}
-      </div>
-    </motion.li>
+    </AuroraTile>
   )
 }
 
@@ -125,12 +103,7 @@ function EmptyRail({ basis }) {
     headline = 'Nothing is waiting on a plan.'
     detail = 'Every open gap, unmet assurance and non-informational warning is already being worked.'
   }
-  return (
-    <div className="b1-empty" data-testid="rail-empty">
-      <p className="b1-empty-title">{headline}</p>
-      {detail ? <p>{detail}</p> : null}
-    </div>
-  )
+  return <AuroraEmpty data-testid="rail-empty" icon={Compass} text={headline} sub={detail} />
 }
 
 export default function RecommendationRail({
@@ -140,37 +113,30 @@ export default function RecommendationRail({
   loading = false,
   degraded = false,
   basis = null,
-  reduce = false,
 }) {
+  const n = recommendations.length
   return (
-    <Section
+    <AuroraSection
+      first
       aria-labelledby="improvement-recommendations"
-      className="!mt-0"
-      label={<span id="improvement-recommendations">What to work on next</span>}
-      aside={!canEdit ? <span>An owner or accountant can start this work.</span> : null}
+      icon={Lightbulb}
+      title={<span id="improvement-recommendations">What to work on next</span>}
+      subtitle={canEdit ? 'Turn a gap into owned, dated work' : 'An owner or accountant can start this work.'}
+      count={n > 0 ? `${n} idea${n === 1 ? '' : 's'}` : null}
     >
-      {loading && recommendations.length === 0 ? (
-        <p className="text-[13px] text-ink2">Reading your readiness gaps and open warnings…</p>
+      {loading && n === 0 ? (
+        <AuroraEmpty icon={Compass} text="Reading your readiness gaps and open warnings…" aria-busy="true" />
       ) : degraded ? (
-        <div className="b1-empty">
-          <p>Recommendations are unavailable right now. Your initiatives below are unaffected.</p>
-        </div>
-      ) : recommendations.length === 0 ? (
+        <AuroraEmpty icon={Compass} text="Recommendations are unavailable right now. Your initiatives below are unaffected." />
+      ) : n === 0 ? (
         <EmptyRail basis={basis} />
       ) : (
-        <ul className="grid gap-x-10 lg:grid-cols-2 [&>li]:border-b [&>li]:border-hair">
-          {recommendations.map((rec, i) => (
-            <RecommendationCard
-              key={recommendationId(rec)}
-              rec={rec}
-              index={i}
-              canEdit={canEdit}
-              onWork={onWork}
-              reduce={reduce}
-            />
+        <AuroraTileGrid cols={n >= 3 ? 3 : 2}>
+          {recommendations.map((rec) => (
+            <RecommendationCard key={recommendationId(rec)} rec={rec} canEdit={canEdit} onWork={onWork} />
           ))}
-        </ul>
+        </AuroraTileGrid>
       )}
-    </Section>
+    </AuroraSection>
   )
 }

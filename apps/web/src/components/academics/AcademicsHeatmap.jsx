@@ -28,24 +28,63 @@ import { subjectLabelOf } from '@finrep/analytics'
 import HeatCell, { HeatScaleLegend, HeatStateKeys } from '../analytics/charts/HeatCell.jsx'
 import { DIVERGING_INK, divergingScale } from '../analytics/charts/heatScales.js'
 import { fmtScore, signed } from './cohortKit.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
-const HUE = '#0D9488'
+const HUE = moduleHue('academics')
 const EASE = [0.2, 0.8, 0.2, 1]
 const label = subjectLabelOf
 
 const hasNum = (v) => v !== null && v !== undefined && Number.isFinite(Number(v))
 
-export default function AcademicsHeatmap({ cells = [], subjects = [], unit = null, reduce = false }) {
+/** The family's material gap and its unit words — one derivation for the grid
+ *  and for the explanation that can sit behind a card's ⓘ. */
+function gapOf(unit) {
+  const points = unit?.points ?? 'points'
+  const gap = hasNum(unit?.gap) && Number(unit.gap) > 0 ? Number(unit.gap) : 5
+  return { gap, points }
+}
+
+/**
+ * How to read the grid, in words. Printed under the legend by default; a page
+ * that keeps its explanations behind an ⓘ passes `explain={false}` and renders
+ * this inside the popover instead — the same sentences, nothing dropped.
+ */
+export function HeatmapExplainer({ unit = null }) {
+  const { gap, points } = gapOf(unit)
+  return (
+    <div className="space-y-2 text-small leading-snug text-ink">
+      <p>
+        Each cell leads with its gap; the score sits beneath. Within{' '}
+        <span className="font-semibold tabular-nums">±{gap}</span> {points} is level (grey); every further {gap}{' '}
+        {points} is one step darker —{' '}
+        <span className="font-semibold" style={{ color: DIVERGING_INK.pos }}>
+          blue ahead
+        </span>
+        ,{' '}
+        <span className="font-semibold" style={{ color: DIVERGING_INK.neg }}>
+          red behind
+        </span>
+        . The steps are fixed, so a cell keeps its shade whatever else is on screen.
+      </p>
+      <p className="text-ink2">
+        Each cell compares that grade with the SAME grade at other schools — the only comparison that means anything.
+        A grade with fewer than five scored students shows a hatched cell — hidden, not zero: the gate nulls its
+        values before they reach this chart, so there is no number here to shade.
+      </p>
+    </div>
+  )
+}
+
+export default function AcademicsHeatmap({ cells = [], subjects = [], unit = null, reduce = false, explain = true }) {
   const grades = [...new Set(cells.map((c) => c.grade))]
   if (grades.length === 0) return null
   const shown = subjects.filter((s) => cells.some((c) => c.subject === s && c.value !== null))
   if (shown.length === 0) return null
 
   const decimals = unit?.decimals ?? 0
-  const points = unit?.points ?? 'points'
   // The family's material gap is the step. It comes from the semantic layer
   // with the unit; the fallback only exists so a family without one still draws.
-  const gap = hasNum(unit?.gap) && Number(unit.gap) > 0 ? Number(unit.gap) : 5
+  const { gap, points } = gapOf(unit)
   const scale = divergingScale(gap)
   const tick = (v) => signed(v, decimals)
 
@@ -55,9 +94,13 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
         initial={reduce ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: EASE }}
-        className="overflow-x-auto"
+        className="acad-heat-scroll overflow-x-auto"
+        data-many={shown.length > 3 ? 'true' : undefined}
       >
-        <table className="w-full min-w-[420px] border-separate" style={{ borderSpacing: '2px' }}>
+        {/* Width follows the subject count (a 56px grade gutter + ~84px a
+            column), so two or three subjects fit a 390 phone with no hidden
+            column; more scroll, with an edge fade saying so. */}
+        <table className="w-full border-separate" style={{ borderSpacing: '2px', minWidth: 56 + shown.length * 84 }}>
           <caption className="sr-only">
             Score by grade and subject, each cell shaded by its gap from the same grade elsewhere in steps of {gap}{' '}
             {points}.
@@ -151,6 +194,7 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
         ticks={['', ...scale.ticks.map(tick), '']}
         extras={<HeatStateKeys absentLabel="no result on file" />}
         caption={
+          explain ? (
           <>
             Each cell leads with its gap; the score sits beneath. Within{' '}
             <span className="font-semibold tabular-nums">±{gap}</span> {points} is level (grey); every further {gap}{' '}
@@ -164,6 +208,9 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
             </span>
             . The steps are fixed, so a cell keeps its shade whatever else is on screen.
           </>
+          ) : (
+            <>Within ±{gap} {points} is level.</>
+          )
         }
       />
     </div>

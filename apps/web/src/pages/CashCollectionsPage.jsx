@@ -27,18 +27,18 @@ import {
   Check,
   Database,
   AlertTriangle,
-  ArrowRight,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
+import { FinanceMoreBlock } from '../components/statements/financeSub.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, AuroraLightButton } from '../components/ui/aurora/index.js'
 import AgingBars from '../components/cash/AgingBars.jsx'
 import AgingRegisterTable from '../components/cash/AgingRegisterTable.jsx'
 import CashFlowSection from '../components/cash/CashFlowSection.jsx'
 import ReconcileBadge from '../components/cash/ReconcileBadge.jsx'
-import { PageHeader, Pill, Button } from '../components/ui/surface/index.js'
+import { Pill, Button } from '../components/ui/surface/index.js'
 import '../styles/pending/b2-finance.css'
-import PennyAvatar from '../components/penny/PennyAvatar.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { addDataHref } from '../lib/dataDestinations.js'
@@ -67,66 +67,71 @@ function bucketCounts(items) {
 }
 
 // ── Full-page state panels (module-level so they're never re-defined in render) ──
-// The non-data states (loading / error / org-fed / not connected): the page
-// header on its hairline, then a ruled note on the ground — no card.
-function PagePanel({ children }) {
-  return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
-      <BackLink className="mb-2" />
-      <PageHeader eyebrow="Finance · Cash & Collections" title="Cash & Collections" hue="37 99 235" />
-      <div className="b2-note mt-8 flex flex-col items-center gap-2">{children}</div>
-    </div>
-  )
+// The non-data states (loading / error / org-fed / not connected) wear the same
+// Aurora band as the live page — title, one plain sentence, one white button —
+// over a designed empty state (one line + one button). This is the screen a new
+// school lands on, so it must still read as the module.
+// (The breadcrumb — Dashboard › Finance › Cash & Collections — is drawn once by
+// the page wrapper below, so the panels and the live page leave showBack off.)
+const STATE_BASE = {
+  eyebrow: 'Finance',
+  title: 'Cash & Collections',
+  Icon: HandCoins,
+  icon: HandCoins,
 }
 
 function LoadingPanel() {
   return (
-    <PagePanel>
-      <HandCoins size={24} aria-hidden="true" className="text-ink2" />
-      <h2 className="b2-note-title">Reading your cash position…</h2>
-      <p className="max-w-md" aria-busy="true">
-        Pulling aged receivables and payables from QuickBooks.
-      </p>
-    </PagePanel>
+    <DomainStatePanel
+      {...STATE_BASE}
+      verdict="Reading your cash position…"
+      text="Pulling aged receivables and payables from QuickBooks."
+      busy
+    />
   )
 }
 
 function ErrorPanel() {
   return (
-    <PagePanel>
-      <AlertTriangle size={24} aria-hidden="true" className="tone-risk" />
-      <h2 className="b2-note-title">We couldn&apos;t load Cash &amp; Collections</h2>
-      <p className="max-w-md">Something interrupted the connection. Try again in a moment.</p>
-    </PagePanel>
+    <DomainStatePanel
+      {...STATE_BASE}
+      icon={AlertTriangle}
+      verdict="We couldn’t load Cash & Collections."
+      text="Something interrupted the connection. Try again in a moment."
+      action={
+        <AuroraLightButton variant="ghost" onClick={() => window.location.reload()}>
+          Try again
+        </AuroraLightButton>
+      }
+    />
   )
 }
 
 function OrgFedPanel() {
   return (
-    <PagePanel>
-      <HandCoins size={24} aria-hidden="true" className="text-ink2" />
-      <h2 className="b2-note-title">Consolidated at the org level</h2>
-      <p className="max-w-md">
-        This school&apos;s books are consolidated in one organization-wide QuickBooks company.
-        Per-school aging is coming soon.
-      </p>
-    </PagePanel>
+    <DomainStatePanel
+      {...STATE_BASE}
+      verdict="This school’s cash is kept at the organization level."
+      text="Its books are in one organization-wide QuickBooks company."
+      sub="Per-school aging is coming soon."
+    />
   )
 }
 
 function ConnectNudge({ onGoToData }) {
   return (
-    <PagePanel>
-      <PennyAvatar size={64} />
-      <h2 className="b2-note-title">Connect QuickBooks to see your cash</h2>
-      <p className="max-w-md">
-        Once QuickBooks is connected, KYRO shows who owes the school and what the school owes — aged into
-        buckets, with a one-click jump into each invoice and bill.
-      </p>
-      <Button variant="primary" onClick={onGoToData} icon={<Database size={14} />} className="mt-1">
-        Connect QuickBooks <ArrowRight size={14} aria-hidden="true" />
-      </Button>
-    </PagePanel>
+    <DomainStatePanel
+      {...STATE_BASE}
+      verdict="Connect QuickBooks to see who owes the school and what it owes."
+      primaryAction={
+        <AuroraButton variant="primary" onClick={onGoToData} icon={<Database size={19} aria-hidden="true" />}>
+          Connect QuickBooks
+        </AuroraButton>
+      }
+      icon={Database}
+      text="Not connected to QuickBooks yet."
+      sub="Once it is, money owed both ways shows here, by age."
+    />
   )
 }
 
@@ -339,7 +344,6 @@ function CashCollectionsWorkspace() {
 
   return (
     <DomainCommandCenter
-      showBack
       eyebrow="Finance · Cash & Collections · live from QuickBooks"
       title="Cash & Collections"
       Icon={HandCoins}
@@ -373,11 +377,27 @@ function CashCollectionsWorkspace() {
   )
 }
 
+// Cash & Collections is a Finance tool: the trail names Finance (a real step
+// back) and the page ends with "More in Finance", like every Finance sub-page —
+// the sidebar shows no Finance group here, so this is the way sideways.
+const CRUMBS = [
+  { label: 'Dashboard', to: '/app' },
+  { label: 'Finance', to: '/finance' },
+  { label: 'Cash & Collections' },
+]
+
 export default function CashCollectionsPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <CashCollectionsWorkspace />
+      <div className="mx-auto max-w-page px-4 pt-6 sm:px-10 sm:pt-8">
+        <ModuleBreadcrumb crumbs={CRUMBS} />
+      </div>
+      {/* The command center's own top padding, less the breadcrumb's gap. */}
+      <div className="-mt-3 sm:-mt-5">
+        <CashCollectionsWorkspace />
+      </div>
+      <FinanceMoreBlock current="cash" />
     </div>
   )
 }

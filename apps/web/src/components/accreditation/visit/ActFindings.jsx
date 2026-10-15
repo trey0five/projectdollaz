@@ -128,8 +128,10 @@ function FindingCard({ finding, defaultOpen = true }) {
 function Group({ code, findings, note = null, Icon = null }) {
   const list = Array.isArray(findings) ? findings : []
   return (
-    <section data-testid="finding-group">
-      <h3 className="sec-head !mb-1">
+    // AURORA: each standard is its own ruled, tinted block with a clear gap
+    // before the next, so a reader can see where one standard's findings end.
+    <section data-testid="finding-group" className="acc-fgroup">
+      <h3 className="sec-head acc-fgroup-head !mb-1">
         {Icon ? <Icon size={14} className="shrink-0 text-ink2" aria-hidden /> : null}
         <span data-testid="group-code" className="text-[13px] font-semibold tracking-[0.02em] text-ink">
           {code}

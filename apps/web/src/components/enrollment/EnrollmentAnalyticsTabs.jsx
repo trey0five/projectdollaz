@@ -19,9 +19,10 @@
 //
 // The underline wears the MODULE hue rather than gold: this strip renders inside
 // <ModuleAccent moduleKey="enrollment">, where a gold rule would be the only
-// thing on the page that had not been re-hued. Premium UI P4 (a2): the strip is
-// the shared `.tabs-ink` vocabulary (ink label + caps caption on the ground, a
-// 2px hue rule under the active door) — no card-tabs, no white tab fill.
+// thing on the page that had not been re-hued. AURORA (2026-10-15): the strip
+// wears the shared `.au-tabs` hue pills (the same pills the Records tab uses),
+// each with its short caption under the label; the active door fills with the
+// module gradient.
 //
 // ── URL MODEL ───────────────────────────────────────────────────────────────
 // The view is `?view=` beside the page's existing `?tab=` — the same sub-view
@@ -31,7 +32,6 @@
 // an email opens on the chart it was written about.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useRef } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 
 /** The doors, in reading order: the whole school, then its parts, then its people. */
@@ -108,7 +108,6 @@ export function useEnrollmentCohortWindow() {
 }
 
 export default function EnrollmentAnalyticsTabs({ view, onView }) {
-  const reduce = useReducedMotion()
   const tabRefs = useRef([])
 
   const onKeyDown = (e, i) => {
@@ -124,7 +123,7 @@ export default function EnrollmentAnalyticsTabs({ view, onView }) {
   }
 
   return (
-    <div role="tablist" aria-label="Enrollment analysis" className="tabs-ink flex-wrap">
+    <div role="tablist" aria-label="Enrollment analysis" className="au-tabs enr-doors">
       {ENROLLMENT_VIEWS.map((v, i) => {
         const active = v.key === view
         return (
@@ -141,16 +140,10 @@ export default function EnrollmentAnalyticsTabs({ view, onView }) {
             tabIndex={active ? 0 : -1}
             onClick={() => onView(v.key)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className="tab-ink shrink-0"
+            className="au-tab"
           >
             <span>{v.label}</span>
-            <span className="tab-ink-cap">{v.caption}</span>
-            {active &&
-              (reduce ? (
-                <span className="tab-ink-rule" aria-hidden="true" />
-              ) : (
-                <motion.span layoutId="enr-analytics-underline" className="tab-ink-rule" aria-hidden="true" />
-              ))}
+            <span className="au-tab-cap">{v.caption}</span>
           </button>
         )
       })}
@@ -161,7 +154,7 @@ export default function EnrollmentAnalyticsTabs({ view, onView }) {
 /** The one panel every tab controls — labelled by whichever tab is selected. */
 export function EnrollmentAnalyticsPanel({ view, children }) {
   return (
-    <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(view)} tabIndex={-1} className="space-y-4 outline-none">
+    <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(view)} tabIndex={-1} className="space-y-5 outline-none">
       {children}
     </div>
   )

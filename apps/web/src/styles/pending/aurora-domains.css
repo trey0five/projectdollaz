@@ -1,0 +1,18 @@
+/* Aurora — domains group: the FY-end forecast workspace (Planning page + Data hub).
+   Screen-only refinements; print is untouched. */
+
+/* Phone: the two-line "Projection method" options stack instead of scrolling
+   sideways, so the second option's hint is never cut to "Ag…". */
+@media screen and (max-width: 639px) {
+  .au-forecast-ws .seg[aria-label='Projection method'] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    overflow-x: visible;
+  }
+  .au-forecast-ws .seg[aria-label='Projection method'] > .seg-btn {
+    width: 100%;
+    white-space: normal;
+  }
+}

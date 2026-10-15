@@ -6,8 +6,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CalendarDays, Plus, Trash2 } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 
-const HUE = '#0D9488'
 // Status → the Pill's 2px mark tone; the word is always printed.
 const STATUS_TONE = {
   draft: 'neutral',
@@ -64,13 +64,9 @@ export default function LessonPlanRegister({ schoolId, canEdit }) {
   }
 
   if (rows.length === 0) {
-    return (
-      <div className="border-y border-hair py-8 text-center">
-        <CalendarDays size={20} className="mx-auto mb-2" style={{ color: HUE }} />
-        <p className="font-serif text-[17px] font-semibold text-navy">No lesson plans yet</p>
-        <p className="mt-1 text-[12.5px] text-muted">Add one from the Add data tab.</p>
-      </div>
-    )
+    // One line + the register's own "+ New" (RegisterEmpty reads it from the
+    // ModuleRegister shell; a viewer sees the line and no button).
+    return <RegisterEmpty icon={CalendarDays} text="No lesson plans yet." actionLabel="Add a lesson plan" />
   }
 
   return (

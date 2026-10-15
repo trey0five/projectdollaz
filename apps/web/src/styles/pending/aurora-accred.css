@@ -1,0 +1,769 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENDING — slice "Aurora: Accreditation + Improvement + Portfolio".
+   The few pieces these pages need that the shared Aurora primitives do not
+   carry: the readiness dial on the band, the cycle stepper, the quick-win tile
+   figure, ruled row buttons inside a card, and the Mock-visit / Portfolio
+   section bodies. Hue comes from the inherited --au-* vars (never a module
+   hex); status colours from the fixed --au-good/-watch/-risk trio.
+   Screen only: nothing here targets @media print or the print routes.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── The readiness dial on the band ───────────────────────────────────────── */
+.acc-dial {
+  margin: 0;
+  width: 300px;
+  max-width: 100%;
+}
+.acc-dial svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--font-body);
+}
+.acc-dial-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+/* The dial IS the aside's picture — the faint monogram behind it is noise. */
+.au-aside:has(.acc-dial) .au-monogram {
+  display: none;
+}
+@media (max-width: 900px) {
+  .au-aside:has(.acc-dial) {
+    justify-items: center;
+    width: 100%;
+  }
+  .au-aside:has(.acc-dial) .au-aside-body {
+    align-items: center;
+    width: 100%;
+  }
+  .acc-dial {
+    width: 260px;
+  }
+}
+@media (max-width: 639px) {
+  /* On a phone the "Projected score" glass card already carries the number;
+     the dial would only push the figures a screen further down. */
+  .au-aside:has(.acc-dial) {
+    display: none;
+  }
+}
+
+/* ── Where you are in the cycle (the stepper card) ────────────────────────── */
+.acc-cycle {
+  padding: 30px 26px 24px;
+}
+.acc-steps {
+  --n: 6;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 14px 0 0;
+  list-style: none;
+}
+.acc-steps::before {
+  /* the road behind the nodes */
+  content: '';
+  position: absolute;
+  top: calc(14px + 25px);
+  left: calc(100% / var(--n) / 2);
+  right: calc(100% / var(--n) / 2);
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--au-h, #d97706) 55%, #fff), var(--au-h2, #e11d48));
+  opacity: 0.45;
+}
+.acc-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+.acc-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  border: 4px solid #fff;
+  color: #fff;
+  background: linear-gradient(140deg, #94a3b8, #64748b);
+  box-shadow: 0 8px 18px -10px rgba(16, 28, 61, 0.55);
+}
+.acc-step[data-verdict='good'] .acc-node {
+  background: linear-gradient(140deg, var(--au-good-dot, #10b981), var(--au-good-h, #059669));
+}
+.acc-step[data-verdict='watch'] .acc-node {
+  background: linear-gradient(140deg, var(--au-watch-dot, #f59e0b), var(--au-watch-h, #d97706));
+}
+.acc-step[data-verdict='risk'] .acc-node {
+  background: linear-gradient(140deg, #fb7185, var(--au-risk-h, #e11d48));
+}
+.acc-step.acc-here .acc-node {
+  width: 64px;
+  height: 64px;
+  margin-top: -5px;
+  margin-bottom: -5px;
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--au-h, #d97706) 22%, transparent),
+    0 12px 24px -12px rgba(16, 28, 61, 0.6);
+}
+.acc-here-tag {
+  position: absolute;
+  /* Clear of the enlarged current node: it rises 5px above the step and its
+     6px ring a further 6px, so the ~17px tag sits fully above both. */
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--au-deep, #92400e);
+  background: color-mix(in srgb, var(--au-h, #d97706) 16%, #fff);
+}
+.acc-step-name {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--au-ink-1, #101c3d);
+  overflow-wrap: break-word;
+}
+.acc-step-when {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--au-ink-3, #5a6480);
+}
+.acc-step .au-pill {
+  margin-top: 2px;
+}
+.acc-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 24px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--au-h, #d97706) 22%, var(--au-line, #e3e7f0));
+  background: color-mix(in srgb, var(--au-h, #d97706) 7%, #fff);
+}
+.acc-next-big {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--au-deep, #92400e);
+  font-variant-numeric: tabular-nums;
+}
+.acc-next-big small {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.acc-next-words {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--au-ink-2, #3d4865);
+}
+.acc-next-words b {
+  color: var(--au-ink-1, #101c3d);
+}
+@media screen and (min-width: 761px) {
+  /* Room above the road for the "You are here" tag (screen only — the tag is
+     hidden in print, so print keeps its original spacing). */
+  .acc-steps {
+    padding-top: 26px;
+  }
+  .acc-steps::before {
+    top: calc(26px + 25px);
+  }
+}
+@media (max-width: 760px) {
+  /* A phone cannot fit six stations side by side: the road turns vertical. */
+  .acc-cycle {
+    padding: 20px 16px;
+  }
+  .acc-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding-top: 0;
+  }
+  .acc-steps::before {
+    top: 24px;
+    bottom: 24px;
+    left: 25px;
+    right: auto;
+    width: 4px;
+    height: auto;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--au-h, #d97706) 55%, #fff), var(--au-h2, #e11d48));
+  }
+  .acc-step {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    grid-template-areas:
+      'node name'
+      'node when'
+      'node pill';
+    column-gap: 14px;
+    row-gap: 2px;
+    align-items: center;
+    text-align: left;
+  }
+  .acc-node {
+    grid-area: node;
+    align-self: center;
+  }
+  .acc-step.acc-here .acc-node {
+    width: 54px;
+    height: 54px;
+    margin: 0;
+  }
+  .acc-step-name {
+    grid-area: name;
+    margin-top: 0;
+  }
+  .acc-step-when {
+    grid-area: when;
+  }
+  .acc-step .au-pill {
+    grid-area: pill;
+    justify-self: start;
+  }
+  .acc-here-tag {
+    position: static;
+    transform: none;
+    grid-area: when;
+    justify-self: end;
+    align-self: start;
+  }
+}
+
+/* ── Quick-win tiles: the lift is the headline ────────────────────────────── */
+.acc-win .au-tile-title {
+  margin-top: 0;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--th) 70%, #0b1020);
+}
+.acc-win .au-tile-fig {
+  margin-top: 4px;
+  color: var(--au-good, #047857);
+}
+.acc-win .au-tile-desc {
+  margin-top: 8px;
+}
+.acc-check .au-tile-title {
+  font-size: 16px;
+}
+
+/* ── Rows inside a card that act (the unbacked-points line, the countdown) ── */
+.acc-row-btn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--au-line, #e3e7f0);
+  background: color-mix(in srgb, var(--au-h, #d97706) 5%, #fff);
+  text-align: left;
+  font-size: 13.5px;
+  color: var(--au-ink-1, #101c3d);
+  transition: background-color 0.2s ease;
+}
+.acc-row-btn:hover {
+  background: color-mix(in srgb, var(--au-h, #d97706) 12%, #fff);
+}
+
+/* The two "Your score" cards keep their own heights (no stretch). */
+.acc-readiness .au-cols2 {
+  align-items: start;
+}
+.acc-score .au-card-head,
+.acc-trend .au-card-head {
+  align-items: flex-start;
+}
+
+/* The target ladder wraps inside its card instead of clipping. */
+.acc-score .seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+/* Must-pass checks on a phone: two compact tiles a row — the code and the
+   verdict are the point; six full-width rows was a screen of scrolling. */
+@media (max-width: 639px) {
+  .au-tiles.acc-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .acc-checks .au-tile.acc-check {
+    display: flex;
+    flex-direction: column;
+  }
+  .acc-checks .au-tile.acc-check {
+    padding: 14px 14px 12px;
+  }
+  .acc-checks .au-tile .au-well {
+    width: 36px;
+    height: 36px;
+  }
+  .acc-checks .au-tile-title {
+    margin-top: 8px;
+  }
+  .acc-checks .au-tile-desc {
+    font-size: 12.5px;
+  }
+}
+
+/* A reference list folded behind a disclosure inside a Records tab: a ruled
+   strip that opens in place (full width — these are tables, not prose). */
+.au-how.acc-disclose {
+  padding: 8px 10px;
+  border: 1px solid var(--au-line, #e3e7f0);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--au-h, #d97706) 4%, #fff);
+}
+.au-how.acc-disclose[open] {
+  background: #fff;
+}
+.au-how.acc-disclose > .au-how-body {
+  max-width: none;
+  padding: 10px 4px 4px;
+}
+
+/* ── Improvement: recommendation tiles ───────────────────────────────────── */
+.imp-rec .au-tile-fig {
+  color: var(--au-good, #047857);
+}
+.imp-rec-owner {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--au-ink-3, #5a6480);
+}
+.imp-rec-reason {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--au-line, #e3e7f0);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--au-ink-2, #3d4865);
+}
+/* The owner is always its own line and the button always sits under it —
+   space-between let a short owner pull the button up beside it on some tiles
+   and not others. The rationale is one line; the full text is the tooltip. */
+.imp-rec .au-tile-lift {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.imp-rec-owner {
+  flex-basis: 100%;
+}
+.imp-rec .au-tile-desc {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+/* ── Contrast: the module's own hue, deepened for white text ──────────────
+   The shared light button fills with 78% hue + black. For a LIGHT hue —
+   accreditation amber, improvement teal — that is ~3.5:1 behind 13px white
+   text. On these pages the solid button's hue is deepened first (65% + black:
+   ~7:1 amber, ~7:1 teal; ~5.8:1 on hover), the outline button's words go
+   darker, and the selected pill tab gets the same deep fill. Still the ONE
+   registry hue (var(--au-h)), never a second palette. */
+.acc-hue .au-lbtn:not(.au-lbtn-ghost) {
+  --th: color-mix(in srgb, var(--au-h, #2563eb) 65%, #000);
+}
+.acc-hue .au-lbtn-ghost {
+  color: color-mix(in srgb, var(--th) 55%, #000);
+}
+.acc-hue .au-tile-live:is(:hover, :focus-within) .au-lbtn {
+  color: color-mix(in srgb, var(--th) 60%, #000);
+}
+.acc-hue .au-tab[aria-selected='true'] {
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--th) 62%, #000),
+    color-mix(in srgb, var(--th) 48%, #0b1020)
+  );
+}
+
+/* ── Quickest wins on a phone: two compact tiles a row, no icon gutter ──────
+   aurora.css turns every phone tile into a 46px-icon grid; a quick-win tile
+   has no icon, so that left an empty column on five full-width tiles. Higher
+   specificity than `.au-tile:not(.au-tile-row)` so it wins regardless of
+   stylesheet order. */
+@media (max-width: 639px) {
+  .acc-readiness .au-tiles:has(> .acc-win) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .acc-readiness .au-tiles .au-tile.acc-win {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 14px 12px;
+  }
+  .acc-readiness .au-tile.acc-win > * {
+    grid-column: auto;
+  }
+  .acc-readiness .au-tile.acc-win .au-tile-fig {
+    font-size: 24px;
+  }
+  .acc-readiness .au-tile.acc-win .au-tile-desc {
+    font-size: 12.5px;
+  }
+  .acc-readiness .au-tile.acc-win .au-tile-foot {
+    padding-top: 10px;
+    gap: 6px;
+  }
+}
+
+/* ── Records: six tiles, then the chosen panel under a compact pill bar ────
+   DomainCommandCenter wraps the register in a white card; the tiles are the
+   section's own content (no card-in-card), so that wrapper steps back when it
+   holds the tile grid, and the open panel brings its own white card. */
+.au-register:has(> .acc-records) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.acc-records-open {
+  margin-top: 26px;
+  scroll-margin-top: 88px;
+}
+.acc-records-open > .au-tabs {
+  margin-bottom: 12px;
+}
+.au-tile.acc-rec-on {
+  border-color: color-mix(in srgb, var(--th) 70%, #000);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--th) 70%, #000),
+    0 14px 30px -24px color-mix(in srgb, var(--th) 60%, transparent);
+}
+@media (max-width: 639px) {
+  .acc-records .au-tiles {
+    gap: 12px;
+  }
+}
+
+/* ── Portfolio tables on a phone: each row is a stacked card ──────────────
+   ≥640px the ranked and not-ranked tables stay tables. Below it the header
+   row moves off screen (still read by assistive tech), each row becomes a
+   card — rank beside the school, then attention, urgency, evidence-backed,
+   peers and the reasons, each with its column name — so nothing hides
+   behind a sideways scroll. */
+.pf-m-label {
+  display: none;
+}
+@media (max-width: 639px) {
+  .pf-stack.dt-wrap {
+    overflow: visible;
+  }
+  .pf-stack .dt {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .pf-stack .dt thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .pf-stack .dt tbody {
+    display: block;
+  }
+  .pf-stack .dt tbody tr {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    column-gap: 10px;
+    row-gap: 10px;
+    padding: 14px 2px;
+    border-bottom: 1px solid var(--au-line, #e3e7f0);
+  }
+  .pf-stack .dt tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .pf-stack .dt tbody td {
+    display: block;
+    height: auto !important;
+    grid-column: 2;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    background: none;
+  }
+  .pf-stack .dt tbody td.dt-mark {
+    display: none;
+  }
+  .pf-stack .dt tbody td.pf-c-rank {
+    grid-column: 1;
+    grid-row: 1;
+    padding-top: 2px !important;
+  }
+  .pf-stack .dt tbody td > div {
+    min-width: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .pf-m-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--au-ink-3, #5a6480);
+  }
+  /* Not ranked: the school, then the missing measures as one short inline
+     list ("Readiness — · Trajectory —"); a measure the school HAS is dropped. */
+  .pf-unranked .dt tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .pf-unranked .dt tbody td:first-child {
+    flex-basis: 100%;
+  }
+  .pf-unranked .dt tbody td:has(> .pf-u-none) {
+    display: none;
+  }
+  .pf-unranked .dt tbody td {
+    font-size: 13px;
+  }
+  .pf-m-label.pf-m-inline {
+    display: inline;
+    margin: 0 4px 0 0;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--au-ink-2, #3d4865);
+  }
+}
+
+/* Portfolio: the server's notes, word for word, inside "How this works". */
+.pf-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Portfolio sections stand on tiles: one short lead line above a grid, one
+   short facts line inside a tile, and the velocity schools as compact rows. */
+.pf-lead {
+  margin: 0 0 12px;
+  max-width: 70ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--au-ink-2, #3d4865);
+}
+.pf-lead-strong {
+  font-weight: 700;
+  color: var(--au-ink-1, #101c3d);
+}
+.pf-facts {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--au-ink-2, #3d4865);
+  font-variant-numeric: tabular-nums;
+}
+.au-tile.pf-prio-on {
+  border-color: color-mix(in srgb, var(--th) 70%, #000);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--th) 70%, #000),
+    0 14px 30px -24px color-mix(in srgb, var(--th) 60%, transparent);
+}
+.pf-unranked-schools .au-tile.pf-u-school {
+  padding: 14px 16px;
+}
+.pf-unranked-schools .au-tile.pf-u-school .au-well {
+  width: 36px;
+  height: 36px;
+}
+.pf-unranked-schools .au-tile.pf-u-school .au-tile-title {
+  font-size: 14.5px;
+}
+.b1-list.pf-vel-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 8px 12px;
+  border-top: 0;
+}
+.b1-list.pf-vel-list > li {
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--au-line, #e3e7f0);
+  border-radius: 14px;
+  background: #fff;
+}
+
+/* ── Mock visit: jump to an act ────────────────────────────────────────────
+   Six compact pills under the band; each anchors to its act (the acts carry
+   scroll-mt-24 so the strip lands below the top bar). */
+.acc-actnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+.acc-actnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--au-h, #d97706) 24%, var(--au-line, #e3e7f0));
+  background: #fff;
+  color: var(--au-ink-1, #101c3d);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.acc-actnav-link:hover {
+  background: color-mix(in srgb, var(--au-h, #d97706) 8%, #fff);
+}
+.acc-actnav-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--au-h, #d97706) 45%, transparent);
+  outline-offset: 2px;
+}
+.acc-actnav-num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--au-h, #d97706) 62%, #000);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.acc-actnav-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--au-h, #d97706) 12%, #fff);
+  color: color-mix(in srgb, var(--au-h, #d97706) 55%, #000);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 639px) {
+  .acc-actnav-link {
+    font-size: 12.5px;
+  }
+  /* Band outline buttons never break mid-label ("Board one- / pager"): a
+     label that does not fit half the row takes its own full-width line. */
+  .acc-hue .au-actions > .au-btn:not(.au-btn-primary) {
+    flex: 1 1 auto;
+    white-space: nowrap;
+  }
+}
+
+/* Act 3: each standard's findings are one ruled, tinted block, 24px apart. */
+.acc-fgroup {
+  padding: 14px 16px 6px;
+  border: 1px solid var(--au-line, #e3e7f0);
+  border-left: 4px solid color-mix(in srgb, var(--au-h, #d97706) 70%, #fff);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--au-h, #d97706) 3%, #fff);
+}
+.acc-fgroup-head [data-testid='group-code'] {
+  font-size: 14.5px;
+}
+@media (max-width: 639px) {
+  .acc-fgroup {
+    padding: 12px 12px 4px;
+  }
+}
+
+/* ── Print: these pieces are screen-only, like the rest of Aurora ─────────── */
+@media print {
+  .acc-actnav,
+  .acc-dial,
+  .acc-steps::before,
+  .acc-here-tag {
+    display: none !important;
+  }
+  .acc-node {
+    background: none !important;
+    color: #000 !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+  .acc-fgroup {
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .acc-next,
+  .acc-fgroup,
+  .acc-row-btn,
+  .au-how.acc-disclose {
+    background: none !important;
+  }
+}
+
+/* ── Band captions: whole words only ──────────────────────────────────────── */
+/* The shared KPI caption hyphenates to avoid a hard break ("be-hind pace" at
+   1440). These captions are short phrases that always fit on whole words, so
+   on the accreditation-family pages they wrap between words instead. */
+.acc-hue .au-kpi .hyphens-auto {
+  hyphens: manual;
+  text-wrap: pretty;
+}
+
+/* Portfolio priorities: the title is the server's frozen headline, and its
+   last words are the count ("…at 1 of 2 schools.") — it is never clamped. */
+.pf-prio .au-tile .au-tile-title {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  overflow: visible;
+}
+
+/* Portfolio on a phone: the school-name tiles (not ranked / not licensed) are
+   compact two-up chips — a full-width row per name was a screen per four. */
+@media (max-width: 639px) {
+  .au-tiles.pf-unranked-schools {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pf-unranked-schools .au-tile.pf-u-school {
+    display: block;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+  .pf-unranked-schools .au-tile.pf-u-school .au-well {
+    display: none;
+  }
+  .pf-unranked-schools .au-tile.pf-u-school .au-tile-title {
+    font-size: 13.5px;
+  }
+}

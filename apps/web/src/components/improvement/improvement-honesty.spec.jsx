@@ -189,7 +189,7 @@ describe('the PROJECTION never becomes the headline', () => {
     const { container } = wrap(<ReadinessHero readiness={READINESS} adopted />)
     expect(container.textContent).toContain('2 in flight')
     // The lift figures still come from the gap itself, unmoved by the work.
-    expect(container.textContent).toContain('+3.6 pts')
+    expect(container.textContent).toContain('+3.6 points')
   })
 })
 
@@ -368,14 +368,14 @@ describe('the recommendation rail states no lift it was not given', () => {
 
   it('prints estimatedLift.points VERBATIM — never rounded, scaled or re-derived', () => {
     const { container } = wrap(<RecommendationRail recommendations={[withLift]} canEdit />)
-    expect(container.textContent).toContain('+1.7 index pts')
-    expect(container.textContent).not.toContain('+2 index pts')
+    expect(container.textContent).toContain('+1.7 points')
+    expect(container.textContent).not.toContain('+2 points')
   })
 
   it('a null lift prints the engine’s literal reason and NO number', () => {
     const { container } = wrap(<RecommendationRail recommendations={[withoutLift]} canEdit />)
     expect(screen.getByTestId('lift-reason').textContent).toBe(withoutLift.estimatedLiftReason)
-    expect(container.textContent).not.toContain('index pts')
+    expect(container.textContent).not.toMatch(/\d points/)
     // The only digits on the card are the ones the server put in the standard code
     // and the rationale — none of them is an invented "+0".
     expect(container.textContent).not.toContain('+0')

@@ -28,9 +28,20 @@
 // panel that says which thing is unavailable — never a white screen.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Building2, Layers, ShieldAlert } from 'lucide-react'
-import { PageHeader, Button } from '../components/ui/surface/index.js'
+import { useReducedMotion } from 'framer-motion'
+import { Activity, AlertTriangle, Building2, HelpCircle, Layers, ListOrdered, ShieldAlert, Target } from 'lucide-react'
 import '../styles/pending/b1-domain.css'
+import '../styles/pending/aurora-accred.css'
+import {
+  AuroraButton,
+  AuroraEmpty,
+  AuroraHero,
+  AuroraSection,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
+import { moduleAccentVars } from '../components/module/moduleAnatomy.js'
+import { bandTone } from '../components/portfolio/AttentionBandChip.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
 import { LensIndicator, LensSwitcher } from '../components/home/LensControls.jsx'
 import PortfolioTable from '../components/portfolio/PortfolioTable.jsx'
@@ -43,33 +54,57 @@ import { portfolioApi } from '../lib/api.js'
 /** The DTO's ArrayMaxSize on `schoolIds` (spec §4.6) — stated, not guessed at. */
 const BULK_ADOPT_MAX_SCHOOLS = 60
 
+// The portfolio is accreditation across the organization, so it wears the
+// Accreditation hue from the ONE registry (never a second palette).
+const ACCENT = moduleAccentVars('accreditation')
+
+/** The band + one designed empty state, for the screens before the portfolio. */
+function PortfolioState({ school = null, verdict, icon, text, sub = null, action = null, busy = false }) {
+  return (
+    <div className="acc-hue au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={ACCENT}>
+      <BackLink />
+      <AuroraHero
+        moduleKey="accreditation"
+        className="mt-3"
+        school={school}
+        eyebrow="Accreditation across the organization"
+        title="Portfolio"
+        verdict={verdict}
+        actions={action}
+        monogram={school ? undefined : false}
+      />
+      <div className="mt-8" aria-busy={busy || undefined}>
+        <AuroraEmpty icon={icon} text={text} sub={sub} />
+      </div>
+    </div>
+  )
+}
+
 /** The org-scope gate. A dead end would be a bug; this is the way in. */
 function ScopeGate({ hasOrg, onSwitch }) {
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <PageHeader
-        eyebrow="Portfolio · Organization"
-        title="The portfolio is an organization view"
-        meta={
-          hasOrg
-            ? 'It ranks every school in your organization side by side, so it only means anything at organization scope.'
-            : 'This account is not part of a multi-school organization, so there is no portfolio to rank.'
-        }
-        actions={
-          hasOrg ? (
-            <Button variant="primary" onClick={onSwitch} icon={<Building2 size={16} aria-hidden />}>
-              Switch to organization
-            </Button>
-          ) : null
-        }
-      />
-    </div>
+    <PortfolioState
+      verdict={hasOrg ? 'The portfolio is an organization view.' : 'There is no organization to rank.'}
+      icon={Layers}
+      text={
+        hasOrg
+          ? 'It ranks every school in your organization side by side.'
+          : 'This account is not part of a multi-school organization.'
+      }
+      action={
+        hasOrg ? (
+          <AuroraButton variant="primary" onClick={onSwitch} icon={<Building2 size={19} aria-hidden="true" />}>
+            Switch to organization
+          </AuroraButton>
+        ) : null
+      }
+    />
   )
 }
 
 // ── The workspace ────────────────────────────────────────────────────────────
 function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
+  const reduce = useReducedMotion()
   // Owner-only "preview as" lens, exactly like the org briefing: the org routes
   // are JwtAuth-only and the SERVER clamps, so this can never widen access.
   const [previewLens, setPreviewLens] = useState(null)
@@ -226,30 +261,122 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
 
   const notes = Array.isArray(portfolio?.notes) ? portfolio.notes : []
 
-  const meta = [
-    Number.isFinite(portfolio?.rankedCount) && Number.isFinite(portfolio?.schoolCount)
-      ? `${portfolio.rankedCount} of ${portfolio.schoolCount} schools ranked`
-      : `${orgSchoolCount} schools`,
-    portfolio?.asOf ? `as of ${portfolio.asOf}` : null,
+  // ── The band: one sentence + four figures, every one the server's ──────────
+  // `needAttention` is a COUNT of rows the server itself banded high/critical
+  // (bandTone), never a new judgement; unranked schools are never counted as
+  // either healthy or weak.
+  const ranked = Array.isArray(portfolio?.ranked) ? portfolio.ranked : []
+  const insufficient = Array.isArray(portfolio?.insufficientData) ? portfolio.insufficientData : []
+  const needAttention = ranked.filter((r) => bandTone(r?.attentionBand) === 'risk').length
+  const rankedCount = Number.isFinite(portfolio?.rankedCount) ? portfolio.rankedCount : ranked.length
+  const schoolCount = Number.isFinite(portfolio?.schoolCount) ? portfolio.schoolCount : orgSchoolCount
+  const totalPriorities = Number.isFinite(standards?.totalPriorities) ? standards.totalPriorities : null
+  const threshold = Number.isFinite(standards?.thresholdScore) ? standards.thresholdScore : null
+
+  const verdict = portfolioLoading ? (
+    <>Assembling the portfolio…</>
+  ) : portfolioError || !portfolio ? (
+    <>The portfolio is unavailable right now.</>
+  ) : rankedCount === 0 ? (
+    <>
+      No school has enough data to rank yet.
+      {insufficient.length > 0 ? (
+        <>
+          {' '}
+          <VerdictEm tone="watch">
+            {insufficient.length} school{insufficient.length === 1 ? ' is' : 's are'}
+          </VerdictEm>{' '}
+          missing data.
+        </>
+      ) : null}
+    </>
+  ) : (
+    <>
+      {needAttention > 0 ? (
+        <>
+          <VerdictEm tone="risk">
+            {needAttention} of {rankedCount} ranked school{rankedCount === 1 ? '' : 's'}
+          </VerdictEm>{' '}
+          need{needAttention === 1 ? 's' : ''} attention.
+        </>
+      ) : (
+        <>
+          None of the <VerdictEm>{rankedCount} ranked</VerdictEm> school{rankedCount === 1 ? ' is' : 's is'} in a high band.
+        </>
+      )}
+      {insufficient.length > 0 ? (
+        <>
+          {' '}
+          <VerdictEm tone="watch">{insufficient.length} more</VerdictEm> can&apos;t be ranked yet.
+        </>
+      ) : null}
+    </>
+  )
+
+  const kpis = [
+    {
+      key: 'ranked',
+      icon: ListOrdered,
+      label: 'Ranked',
+      value: portfolio ? String(rankedCount) : null,
+      unit: portfolio && Number.isFinite(schoolCount) ? `of ${schoolCount}` : null,
+      caption: 'Schools with enough data',
+    },
+    {
+      key: 'attention',
+      icon: AlertTriangle,
+      label: 'Need attention',
+      value: portfolio ? String(needAttention) : null,
+      caption: 'High or critical band',
+      verdict: !portfolio || rankedCount === 0 ? null : needAttention > 0 ? 'risk' : 'good',
+    },
+    {
+      key: 'unranked',
+      icon: HelpCircle,
+      label: "Can't rank yet",
+      value: portfolio ? String(insufficient.length) : null,
+      caption: 'Missing data, named below',
+    },
+    {
+      key: 'shared',
+      icon: Target,
+      label: 'Shared weak standards',
+      value: totalPriorities != null ? String(totalPriorities) : null,
+      caption: threshold != null ? `Self-scored ${threshold} or under` : null,
+    },
   ]
-    .filter(Boolean)
-    .join(' · ')
+
+  // Honour reduced motion, like the Accreditation page's openJourney. Both
+  // targets carry their id in every state (loading, error, loaded).
+  const scrollTo = (id) =>
+    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
 
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+    <div className="acc-hue au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={ACCENT}>
       <BackLink />
 
-      {/* Header — the organization, the count, the owner-only preview lens */}
-      <PageHeader
-        eyebrow="Portfolio · Accreditation across the organization"
-        title={
-          <span className="inline-flex items-center gap-3">
-            <Layers size={26} strokeWidth={1.75} className="shrink-0 text-navy-soft" aria-hidden="true" />
-            {orgName || 'Organization'}
-          </span>
-        }
-        meta={meta}
+      {/* ── The band — the organization, one sentence, the figures; the
+          owner-only "preview as" lens rides in the tools row. ─────────────── */}
+      <AuroraHero
+        moduleKey="accreditation"
+        className="mt-3"
+        school={orgName || 'Organization'}
+        eyebrow={['Accreditation across the organization', portfolio?.asOf ? `as of ${portfolio.asOf}` : null]
+          .filter(Boolean)
+          .join(' · ')}
+        title="Portfolio"
+        verdict={verdict}
         actions={
+          <>
+            <AuroraButton variant="primary" onClick={() => scrollTo('priorities')} icon={<Target size={19} aria-hidden="true" />}>
+              Shared weak standards
+            </AuroraButton>
+            <AuroraButton onClick={() => scrollTo('velocity')} icon={<Activity size={19} aria-hidden="true" />}>
+              Is the work moving?
+            </AuroraButton>
+          </>
+        }
+        tools={
           lens ? (
             <>
               <LensIndicator lens={lens} />
@@ -257,38 +384,17 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
             </>
           ) : null
         }
+        kpis={kpis}
       />
 
-      {/* The server's NOTES — including the mixed-framework sentence. A note that
-          only exists in JSON has not been delivered (spec §7.2). */}
-      {notes.length > 0 && (
-        <ul className="mt-6 space-y-1.5 border-l-2 pl-4" style={{ borderLeftColor: 'rgb(var(--c-watch))' }}>
-          {notes.map((n, i) => (
-            <li key={i} className="max-w-prose text-[13.5px] leading-relaxed text-ink">
-              {n}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* The disclaimer is a first-class PAYLOAD FIELD, printed verbatim — not UI
-          chrome this page composed (the Phase-H rule). */}
-      {portfolio?.disclaimer && (
-        <p className="mt-6 flex max-w-prose items-start gap-2.5 text-[13px] leading-relaxed text-ink2">
-          <ShieldAlert size={16} aria-hidden className="mt-0.5 shrink-0 text-ink2" />
-          {portfolio.disclaimer}
-        </p>
-      )}
-
-      <div className="mt-8">
-      {/* Ranked */}
+      {/* Ranked + not ranked */}
       {portfolioLoading ? (
-        <div className="b1-empty">
-          <p>Assembling the portfolio…</p>
+        <div className="mt-10">
+          <AuroraEmpty icon={ListOrdered} text="Assembling the portfolio…" aria-busy="true" />
         </div>
       ) : portfolioError ? (
-        <div className="b1-empty" role="alert">
-          <p>{portfolioError}</p>
+        <div className="mt-10" role="alert">
+          <AuroraEmpty icon={ListOrdered} text={portfolioError} />
         </div>
       ) : (
         <>
@@ -313,10 +419,18 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
       />
 
       <VelocityPanel data={velocity} loading={velocityLoading} error={velocityError} />
-      </div>
+
+      {/* The disclaimer is a first-class PAYLOAD FIELD, printed verbatim — not UI
+          chrome this page composed (the Phase-H rule). */}
+      {portfolio?.disclaimer && (
+        <p className="mt-10 flex max-w-prose items-start gap-2.5 border-t border-hair pt-3 text-[12.5px] leading-relaxed text-ink2">
+          <ShieldAlert size={15} aria-hidden className="mt-0.5 shrink-0 text-ink2" />
+          {portfolio.disclaimer}
+        </p>
+      )}
 
       {portfolio?.generatedAt && Number.isFinite(new Date(portfolio.generatedAt).getTime()) && (
-        <p className="mt-8 text-[11.5px] text-ink2">
+        <p className="mt-2 text-[11.5px] text-ink2">
           Updated{' '}
           {new Date(portfolio.generatedAt).toLocaleDateString('en-US', {
             month: 'short',
@@ -327,6 +441,34 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
           })}
         </p>
       )}
+
+      <HowThisWorks className="!mt-4">
+        {/* The server's NOTES (including the mixed-framework sentence), word for
+            word. They are context for the numbers, not a decision, so they sit
+            here rather than above the ranking — still delivered, every one
+            (spec §7.2), and the ranked strip's own subtitle already says when
+            index scores are not compared across frameworks. */}
+        {notes.length > 0 ? (
+          <ul className="pf-notes" data-testid="portfolio-notes">
+            {notes.map((n, i) => (
+              <li key={i}>
+                <p>{n}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p>
+          Schools are ordered by the server: attention band first, then urgency, then the attention score, then
+          evidence-backed coverage. Index scores are never compared across different frameworks.
+        </p>
+        <p>
+          A school missing too much data is not ranked at all — not at the bottom, off the list — with what is
+          missing named. Fill the gap and it ranks on the next refresh.
+        </p>
+        <p>
+          Shared weak standards are grouped by the shared catalog standard, never by a code a school can edit.
+        </p>
+      </HowThisWorks>
     </div>
   )
 }
@@ -344,11 +486,7 @@ export default function PortfolioPage() {
   // Never act on a not-yet-resolved org — the mount-gate gotcha that has bitten
   // every org surface in this app.
   if (!orgResolved) {
-    return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <PageHeader eyebrow="Portfolio · Organization" title="Portfolio" meta="Resolving your organization…" />
-      </div>
-    )
+    return <PortfolioState verdict="Resolving your organization…" icon={Layers} text="Finding your schools…" busy />
   }
 
   if (!hasOrg || scope !== 'org') {

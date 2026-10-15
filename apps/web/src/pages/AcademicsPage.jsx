@@ -8,26 +8,29 @@
 //
 // Everything on the dashboard is computed server-side by the pure assessment
 // layer; this page fetches one payload and paints it.
+//
+// AURORA (2026-10-15): every tab opens with the Academics band (AcademicsBand:
+// one plain sentence from the rank and standing, the jobs as buttons, the
+// figures as glass cards); Records is the shared ModuleRegister with two lists
+// (Gradebook · Lesson plans).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, Wrench } from 'lucide-react'
 import ModuleTabs, { ModuleAccent, useModuleTab } from '../components/module/ModuleTabs.jsx'
-import { moduleTabs } from '../components/module/moduleAnatomy.js'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleTabs, moduleHue } from '../components/module/moduleAnatomy.js'
 import { useScope } from '../context/ScopeContext.jsx'
-import ModuleHero from '../components/module/ModuleHero.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard, { VIEWS } from '../components/academics/AssessmentDashboard.jsx'
-import AcademicsOverview from '../components/academics/AcademicsOverview.jsx'
+import AcademicsOverview, { AcademicsBand } from '../components/academics/AcademicsOverview.jsx'
+import { AssessmentBandTools } from '../components/academics/AssessmentFilters.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
 import GradesPanel from '../components/academics/GradesPanel.jsx'
+import { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { academicsApi } from '../lib/api.js'
-import { Section, Panel as SurfacePanel, Button } from '../components/ui/surface/index.js'
-
-const HUE = '#0D9488'
-const EASE = [0.2, 0.8, 0.2, 1]
+import { AuroraEmpty, AuroraLightButton } from '../components/ui/aurora/index.js'
 
 export default function AcademicsPage() {
   const { isMultiSchool } = useScope()
@@ -45,7 +48,7 @@ export default function AcademicsPage() {
   // navigated to the page it was already on and the reader could not get out.
   // Standing is where Analytics lands, not a place below it, and the dashboard
   // clears ?view= for exactly that reason.
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const rawView = searchParams.get('view')
   const viewCrumb =
     activeTab === 'analytics' && rawView ? (VIEWS.find((v) => v.key === rawView)?.label ?? null) : null
@@ -186,18 +189,81 @@ export default function AcademicsPage() {
 
   const level = dashboard?.school?.level
 
+  // Records: two lists in the shared register shell. The tab is page state
+  // (ModuleRegister's contract); "+ New" opens the matching Add-data flow.
+  const [recordsTab, setRecordsTab] = useState('gradebook')
+  const goAdd = useCallback(
+    (option = null) => {
+      const next = new URLSearchParams(searchParams)
+      next.set('tab', 'add')
+      next.delete('view')
+      if (option) next.set('add', option)
+      else next.delete('add')
+      setSearchParams(next)
+    },
+    [searchParams, setSearchParams],
+  )
+
   if (notLicensed) {
     return (
-      <div className="mx-auto max-w-3xl px-5 py-16 text-center">
-        <BookOpen size={26} className="mx-auto mb-3" style={{ color: HUE }} />
-        <h1 className="font-serif text-[26px] font-semibold text-navy">Academics isn&rsquo;t on this plan yet</h1>
-        <p className="mx-auto mt-2 max-w-lg text-[15px] text-muted">
-          Test scores, grades and lesson plans — with every school measured against its peers, grade by grade.
-          Add the Academics module to switch it on.
-        </p>
-      </div>
+      <DomainStatePanel
+        moduleKey="academics"
+        title="Academics"
+        showBack
+        verdict="Academics isn't on this plan yet."
+        icon={BookOpen}
+        text="Test scores, grades and lesson plans — with every school measured against its peers."
+        sub="Add the Academics module to switch it on."
+        action={
+          <AuroraLightButton variant="ghost" to="/settings/billing">
+            See plans
+          </AuroraLightButton>
+        }
+      />
     )
   }
+
+  const band = (tab) => (
+    <AcademicsBand
+      schoolName={activeSchool?.name}
+      level={level}
+      status={status}
+      dashboard={error ? null : dashboard}
+      loading={loading}
+      tab={tab}
+      networkTo={isMultiSchool ? '/academics/network' : null}
+      // The analysis frame (test · year) and lens (grade · subject) ride the
+      // band's tools row on Analytics, as on the Network page — only the
+      // controls that bite on the open view.
+      tools={
+        tab === 'analytics' && !error && dashboard && !dashboard.empty ? (
+          <AssessmentBandTools
+            ctx={dashboard.context}
+            view={VIEWS.some((v) => v.key === rawView) ? rawView : 'standing'}
+            onSelect={onQuery}
+            loading={busy}
+          />
+        ) : null
+      }
+    />
+  )
+
+  // A failed load must never read as an empty school (that invites a duplicate
+  // upload): the band stays, and the body says what happened with one button.
+  const errorPanel = error ? (
+    <div className="mt-8">
+      <AuroraEmpty
+        icon={Wrench}
+        hue="#e11d48"
+        text={error}
+        action={
+          <AuroraLightButton variant="ghost" onClick={() => load(query)}>
+            Try again
+          </AuroraLightButton>
+        }
+      />
+    </div>
+  ) : null
 
   return (
     <ModuleAccent moduleKey="academics">
@@ -206,26 +272,11 @@ export default function AcademicsPage() {
         trail={viewCrumb ? [viewCrumb] : []}
         overview={
           <Panel>
-            <AcademicsHero
-              schoolName={activeSchool?.name}
-              level={level}
-              status={status}
-              dashboard={dashboard}
-              loading={loading}
-            />
-            <div className="mt-5">
-              {/* BEFORE the tab, not after it. A failed load leaves `dashboard`
-                  and `status` null, and OverviewTab renders that as "start with
-                  a scores file" with zeros in the hero — a server error reading
-                  as an empty school, which invites a duplicate upload. */}
-              {error ? (
-                <SurfacePanel tone="attention">
-                  <p className="text-small font-semibold text-risk">{error}</p>
-                  <Button variant="secondary" size="sm" onClick={() => load(query)} className="mt-3">
-                    Try again
-                  </Button>
-                </SurfacePanel>
-              ) : (
+            {band('overview')}
+            {/* BEFORE the tab, not after it. A failed load leaves `dashboard`
+                and `status` null, and the overview renders that as "start with
+                a scores file" — a server error reading as an empty school. */}
+            {errorPanel ?? (
               <AcademicsOverview
                 dashboard={dashboard}
                 status={status}
@@ -234,68 +285,58 @@ export default function AcademicsPage() {
                 onOpenView={(view) => setTab('analytics', view)}
                 onGoAdd={() => setTab('add')}
               />
-              )}
-            </div>
+            )}
           </Panel>
         }
         analytics={
           <Panel>
-            <AcademicsHero
-              schoolName={activeSchool?.name}
-              level={level}
-              status={status}
-              dashboard={dashboard}
-              loading={loading}
-              // The dashboard opens with its own KPI strip 200px below — the
-              // header strip would print the same four figures twice.
-              showStats={false}
-            />
-            <div className="mt-5">
-              {/* A failed fetch used to fall through to a fully rendered
-                  dashboard of em-dashes, which reads as "we measured this and
-                  it is empty" rather than "we could not load it". */}
-              {error ? (
-                <SurfacePanel tone="attention">
-                  <p className="text-small font-semibold text-risk">{error}</p>
-                  <Button variant="secondary" size="sm" onClick={() => load(query)} className="mt-3">
-                    Try again
-                  </Button>
-                </SurfacePanel>
-              ) : loading && !dashboard ? (
-                <p className="text-[13px] text-muted">Loading the comparison…</p>
+            {band('analytics')}
+            {/* A failed fetch used to fall through to a fully rendered
+                dashboard of em-dashes, which reads as "we measured this and
+                it is empty" rather than "we could not load it". */}
+            {errorPanel ??
+              (loading && !dashboard ? (
+                <div className="mt-8 h-40 animate-pulse rounded-2xl bg-ink/[.04]" aria-busy="true" />
               ) : (
-                <AssessmentDashboard
-                  data={dashboard}
-                  onQuery={onQuery}
-                  loading={busy}
-                  cohorts={cohorts}
-                  cohortsLoading={cohortsBusy}
-                  cohortsError={cohortsError}
-                  onCohortQuery={onCohortQuery}
-                />
-              )}
-            </div>
+                <div className="mt-8">
+                  <AssessmentDashboard
+                    data={dashboard}
+                    onQuery={onQuery}
+                    loading={busy}
+                    cohorts={cohorts}
+                    cohortsLoading={cohortsBusy}
+                    cohortsError={cohortsError}
+                    onCohortQuery={onCohortQuery}
+                    onGoAdd={canEdit ? () => setTab('add') : null}
+                  />
+                </div>
+              ))}
           </Panel>
         }
         addData={
-          <Panel>
-            {/* The wizard is the ONE door — it now carries the assessment
-                upload, the gradebook upload, the lesson-plan flow and the SIS
-                card. Rendering the uploader here too put the same dropzone on
-                screen twice and pushed the wizard below the fold. */}
-            <AddDataTab module="academics" onDone={() => load(query)} />
-          </Panel>
+          // The wizard is the ONE door — it carries the assessment upload, the
+          // gradebook upload, the lesson-plan flow and the SIS card.
+          <AddDataTab module="academics" onDone={() => load(query)} />
         }
         records={
-          <Panel>
-            <div>
-              <GradesPanel schoolId={activeId} canEdit={canEdit} />
-              <Section label="Lesson plans">
-                <h3 className="sec-title">The classroom register</h3>
+          <ModuleRegister
+            moduleKey="academics"
+            hue={moduleHue('academics')}
+            tabs={[
+              { key: 'gradebook', label: 'Gradebook' },
+              { key: 'lessons', label: 'Lesson plans' },
+            ]}
+            activeTab={recordsTab}
+            onTabChange={setRecordsTab}
+            onNew={canEdit ? () => goAdd(recordsTab === 'lessons' ? 'lesson-plan' : 'gradebook-file') : undefined}
+            registerTable={
+              recordsTab === 'lessons' ? (
                 <LessonPlanRegister schoolId={activeId} canEdit={canEdit} />
-              </Section>
-            </div>
-          </Panel>
+              ) : (
+                <GradesPanel schoolId={activeId} canEdit={canEdit} />
+              )
+            }
+          />
         }
       />
     </ModuleAccent>
@@ -304,46 +345,5 @@ export default function AcademicsPage() {
 
 /** Each panel brings its own container — the ModuleTabs contract. */
 function Panel({ children }) {
-  return <div className="mx-auto max-w-page px-4 pb-16 sm:px-10">{children}</div>
-}
-
-/** The hero — a live read on the classroom, not a title bar. */
-function AcademicsHero({ schoolName, level, status, dashboard, loading, showStats = true }) {
-  const a = status?.assessments
-  const kpi = dashboard?.kpis
-  const ctx = dashboard?.context
-
-  const stats = useMemo(
-    () => [
-      { k: 'Average', v: kpi?.average?.value != null ? Number(kpi.average.value).toFixed(1) : '—' },
-      { k: 'Rank', v: kpi?.rank?.rank ? `${kpi.rank.rank}/${kpi.rank.of}` : '—' },
-      { k: 'Years on file', v: a?.years?.length ?? 0 },
-      { k: 'Lesson plans', v: status?.lessonPlans?.total ?? 0 },
-    ],
-    [kpi, a, status],
-  )
-
-  return (
-    <ModuleHero
-      module="academics"
-      hue={HUE}
-      eyebrow={
-        <>
-          <BookOpen size={12} /> Academics
-          {level && level !== 'unknown' ? (
-            <span className="pill ml-1">{level}</span>
-          ) : null}
-        </>
-      }
-      title={`${schoolName ?? 'This school'}, measured against its peers.`}
-      subtitle={
-        ctx
-          ? `${(ctx.testType ?? '').toUpperCase()} · ${ctx.year} · ${
-              ctx.scoreType === 'percentile' ? 'national percentile' : 'scale score'
-            } — grade by grade, subject by subject, against the schools around you.`
-          : 'Upload a scores file and this school appears beside every other school in the network.'
-      }
-      stats={!showStats ? [] : loading ? stats.map((st) => ({ ...st, v: '·' })) : stats}
-    />
-  )
+  return <div className="au-scope mx-auto max-w-page px-4 py-6 pb-16 sm:px-10 sm:py-8">{children}</div>
 }

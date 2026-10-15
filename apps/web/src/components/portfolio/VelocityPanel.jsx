@@ -15,17 +15,17 @@
 // Every number here is the server's own count or delta. Nothing is summed,
 // averaged or re-derived on the client.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
-import { Section, StatStrip, Stat } from '../ui/surface/index.js'
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
+import { AuroraEmpty, AuroraSection, AuroraTile, AuroraTileGrid, HowThisWorks } from '../ui/aurora/index.js'
 import '../../styles/pending/b1-domain.css'
 import { humanizeToken } from './AttentionBandChip.jsx'
 
-/** A signed delta in PERCENTAGE POINTS → '+4.0 pts'. null → null, never '0'. */
+/** A signed delta in PERCENTAGE POINTS → '+4.0 points'. null → null, never '0'. */
 export function deltaText(delta) {
   if (delta == null || !Number.isFinite(delta)) return null
   const rounded = Math.round(delta * 10) / 10
   const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '±'
-  return `${sign}${Math.abs(rounded).toFixed(1)} pts`
+  return `${sign}${Math.abs(rounded).toFixed(1)} points`
 }
 
 function DeltaIcon({ delta }) {
@@ -35,11 +35,13 @@ function DeltaIcon({ delta }) {
   return <ArrowRight size={14} aria-hidden className="text-ink2" />
 }
 
-function Tally({ label, value }) {
-  return <Stat label={label} value={Number.isFinite(value) ? value : '—'} />
+function Tally({ icon, label, value }) {
+  return (
+    <AuroraTile icon={icon} art={false} title={label} figure={Number.isFinite(value) ? String(value) : '—'} />
+  )
 }
 
-function SchoolRow({ row }) {
+function SchoolRow({ row, reasonShown = false }) {
   const observed = row?.basis === 'observed'
   const delta = observed ? deltaText(row?.deltaPctPoints) : null
   return (
@@ -56,7 +58,7 @@ function SchoolRow({ row }) {
           <DeltaIcon delta={row?.deltaPctPoints} />
           {delta}
         </span>
-      ) : (
+      ) : reasonShown ? null : (
         // The literal reason. Never a zero, never an em-dash standing in for one.
         <span className="text-[12.5px] text-ink2">
           Not measurable yet — {humanizeToken(row?.reason)?.toLowerCase() ?? 'reason not stated'}
@@ -69,16 +71,16 @@ function SchoolRow({ row }) {
 export default function VelocityPanel({ data = null, loading = false, error = '' }) {
   if (loading) {
     return (
-      <Section label="Improvement velocity">
-        <p className="text-[13.5px] text-ink2">Reading improvement velocity…</p>
-      </Section>
+      <AuroraSection id="velocity" icon={Activity} title="Is the work moving?" subtitle="Improvement velocity across schools">
+        <AuroraEmpty icon={Activity} text="Reading improvement velocity…" aria-busy="true" />
+      </AuroraSection>
     )
   }
   if (error) {
     return (
-      <Section label="Improvement velocity">
-        <p className="text-[13.5px] text-ink2">{error}</p>
-      </Section>
+      <AuroraSection id="velocity" icon={Activity} title="Is the work moving?" subtitle="Improvement velocity across schools">
+        <AuroraEmpty icon={Activity} text={error} />
+      </AuroraSection>
     )
   }
   if (!data) return null
@@ -86,52 +88,72 @@ export default function VelocityPanel({ data = null, loading = false, error = ''
   const org = data.org ?? {}
   const schools = Array.isArray(data.schools) ? data.schools : []
   const notes = Array.isArray(data.notes) ? data.notes : []
+  // When NO school is measurable and every one gives the same reason, say it
+  // once above the list rather than fourteen times beside it. Any observed
+  // row, or any differing reason, keeps the reason per row.
+  const firstReason = schools[0]?.reason ?? null
+  const sharedReason =
+    schools.length > 1 && schools.every((r) => r?.basis !== 'observed' && (r?.reason ?? null) === firstReason)
+      ? (humanizeToken(firstReason)?.toLowerCase() ?? 'reason not stated')
+      : null
 
   return (
-    <Section aria-labelledby="portfolio-velocity" label={<span id="portfolio-velocity">Improvement velocity</span>}>
-      <p className="max-w-prose text-[13px] text-ink2">
-        Movement observed over the last {Number.isFinite(data.windowDays) ? data.windowDays : '—'}{' '}
-        days{data.asOf ? `, as of ${data.asOf}` : ''}. Only initiatives with two readings far
-        enough apart to show movement are counted.
-      </p>
+    <AuroraSection
+      id="velocity"
+      aria-labelledby="portfolio-velocity"
+      icon={Activity}
+      title={<span id="portfolio-velocity">Is the work moving?</span>}
+      subtitle="Improvement velocity across schools"
+      count={Number.isFinite(data.windowDays) ? `Last ${data.windowDays} days` : null}
+    >
+      {/* The four org tallies as tiles; a missing tally is "—", never 0. */}
+      <AuroraTileGrid cols={4} className="pf-tally">
+        <Tally icon={ArrowUpRight} label="Improved" value={org.improved} />
+        <Tally icon={ArrowRight} label="Level" value={org.flat} />
+        <Tally icon={ArrowDownRight} label="Declined" value={org.declined} />
+        <Tally icon={Activity} label="Unresponded findings" value={org.unresponded} />
+      </AuroraTileGrid>
 
-      <StatStrip cols={4} className="stats-compact mt-4">
-        <Tally label="Improved" value={org.improved} />
-        <Tally label="Level" value={org.flat} />
-        <Tally label="Declined" value={org.declined} />
-        <Tally label="Unresponded findings" value={org.unresponded} />
-      </StatStrip>
-
-      {org.basis === 'insufficient' && (
-        <p className="mt-3 text-[12.5px] text-ink2">
-          Organization-wide movement is not measurable yet —{' '}
-          {humanizeToken(org.reason)?.toLowerCase() ?? 'reason not stated'}.
+      {org.basis === 'insufficient' || (Number.isFinite(org.initiativesWithObservations) && Number.isFinite(org.initiatives)) ? (
+        <p className="pf-lead mt-4">
+          {Number.isFinite(org.initiativesWithObservations) && Number.isFinite(org.initiatives)
+            ? `${org.initiativesWithObservations} of ${org.initiatives} initiatives carry observations in this window. `
+            : null}
+          {org.basis === 'insufficient' ? (
+            <>
+              Organization-wide movement is not measurable yet —{' '}
+              {String(humanizeToken(org.reason)?.toLowerCase() ?? 'reason not stated').replace(/\.+$/, '')}.
+            </>
+          ) : null}
         </p>
-      )}
+      ) : null}
 
-      <p className="mt-3 text-[12px] text-ink2">
-        {Number.isFinite(org.initiativesWithObservations) && Number.isFinite(org.initiatives)
-          ? `${org.initiativesWithObservations} of ${org.initiatives} initiatives carry observations in this window.`
-          : null}
-      </p>
+      {sharedReason ? (
+        <p className="pf-lead pf-lead-strong" data-testid="velocity-shared-reason">
+          Not measurable yet for any school — {sharedReason}
+        </p>
+      ) : null}
 
       {schools.length > 0 && (
-        <ul className="b1-list mt-3">
+        <ul className="b1-list pf-vel-list mt-3">
           {schools.map((row) => (
-            <SchoolRow key={row?.schoolId ?? row?.name} row={row} />
+            <SchoolRow key={row?.schoolId ?? row?.name} row={row} reasonShown={Boolean(sharedReason)} />
           ))}
         </ul>
       )}
 
-      {notes.length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {notes.map((n, i) => (
-            <li key={i} className="text-[12.5px] leading-snug text-ink2">
-              {n}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
+      {/* The method and the server's notes, word for word, behind one closed
+          disclosure — delivered, not dropped, and off the main read. */}
+      <HowThisWorks inline className="mt-4" title="How movement is counted">
+        <p>
+          Movement observed over the last {Number.isFinite(data.windowDays) ? data.windowDays : '—'} days
+          {data.asOf ? `, as of ${data.asOf}` : ''}. Only initiatives with two readings far enough apart to
+          show movement are counted.
+        </p>
+        {notes.map((n, i) => (
+          <p key={i}>{n}</p>
+        ))}
+      </HowThisWorks>
+    </AuroraSection>
   )
 }

@@ -25,10 +25,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
-import { AlertTriangle, CalendarClock, Check, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, Flag, TrendingDown, TrendingUp } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { VerdictEm } from '../components/ui/aurora/index.js'
 import RecordFlow from '../components/recordwizard/RecordFlow.jsx'
 import RecommendationRail from '../components/improvement/RecommendationRail.jsx'
 import InitiativeList from '../components/improvement/InitiativeList.jsx'
@@ -44,22 +44,24 @@ import {
 } from '../components/improvement/improvementMeta.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useImprovement } from '../hooks/useImprovement.js'
-import { PageHeader } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
+import '../styles/pending/aurora-accred.css'
 
 const TABS = [{ key: 'initiatives', label: 'Initiatives' }]
 
 // ── Gate: a plain page header on the ground (same shape as /strategy's) ─────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={improvementAccentVars()}>
-      <BackLink />
-      <PageHeader
-        eyebrow="Improvement"
-        title={notLicensed ? 'Improvement rides on Accreditation or Strategic Planning' : 'Your subscription is paused'}
-        meta={
+    <div style={improvementAccentVars()}>
+      <DomainStatePanel
+        showBack
+        title="Improvement"
+        hue={IMPROVEMENT_HUE}
+        verdict={notLicensed ? 'Improvement rides on Accreditation or Strategic Planning.' : 'Your subscription is paused.'}
+        icon={Flag}
+        text={
           notLicensed
-            ? 'It isn\u2019t a separate module. Adding either one turns your readiness gaps and early warnings into owned, dated work whose progress is computed from your own numbers.'
+            ? 'Add either one to turn your gaps and warnings into owned, dated work.'
             : 'Resume your plan to manage your improvement initiatives.'
         }
       />
@@ -161,6 +163,7 @@ function ImprovementWorkspace() {
     return [
       {
         label: 'Work in flight',
+        icon: Flag,
         value: String(inFlight),
         status: inFlight > 0 ? 'good' : 'neutral',
         sub: {
@@ -171,8 +174,10 @@ function ImprovementWorkspace() {
       },
       {
         label: 'Overdue',
+        icon: CalendarClock,
         value: String(summary.overdue ?? 0),
-        status: (summary.overdue ?? 0) > 0 ? 'risk' : 'good',
+        // Nothing to be overdue → no verdict (never "Good" about nothing).
+        status: (summary.overdue ?? 0) > 0 ? 'risk' : (summary.total ?? 0) === 0 ? 'neutral' : 'good',
         sub:
           (summary.overdue ?? 0) > 0
             ? { icon: CalendarClock, text: 'past their due date', tone: 'bad' }
@@ -180,8 +185,9 @@ function ImprovementWorkspace() {
       },
       {
         label: 'Behind pace',
+        icon: TrendingDown,
         value: String(summary.behind ?? 0),
-        status: (summary.behind ?? 0) > 0 ? 'risk' : 'good',
+        status: (summary.behind ?? 0) > 0 ? 'risk' : (summary.total ?? 0) === 0 ? 'neutral' : 'good',
         sub:
           (summary.behind ?? 0) > 0
             ? { icon: TrendingDown, text: 'measured under pace', tone: 'bad' }
@@ -194,7 +200,8 @@ function ImprovementWorkspace() {
       {
         // meanProgressPct is null — never 0 — when nothing is measured. An em dash
         // says "we have not measured this"; 0% would say "measured, and at zero".
-        label: 'Mean progress',
+        label: 'Average progress',
+        icon: TrendingUp,
         value: mean ?? '—',
         status: 'neutral',
         sub:
@@ -210,6 +217,45 @@ function ImprovementWorkspace() {
   }, [counts, summary])
 
   // ── Needs attention (client-derived from the payload; actions open the drawer) ─
+  // AURORA: the band's one plain sentence, from the same summary the cards read.
+  const verdict = useMemo(() => {
+    const total = summary.total ?? 0
+    const inFlight = (counts.planned ?? 0) + (counts.in_progress ?? 0) + (counts.blocked ?? 0)
+    const overdue = summary.overdue ?? 0
+    const behind = summary.behind ?? 0
+    const ideas = recommendations.length
+    if (total === 0) {
+      return ideas > 0 ? (
+        <>
+          No work started yet. <VerdictEm>{ideas} idea{ideas === 1 ? ' is' : 's are'}</VerdictEm> ready to pick up.
+        </>
+      ) : (
+        <>No work started yet.</>
+      )
+    }
+    return (
+      <>
+        <VerdictEm>
+          {inFlight} initiative{inFlight === 1 ? '' : 's'}
+        </VerdictEm>{' '}
+        in flight.
+        {overdue > 0 ? (
+          <>
+            {' '}
+            <VerdictEm tone="risk">{overdue} overdue</VerdictEm>.
+          </>
+        ) : null}
+        {behind > 0 ? (
+          <>
+            {' '}
+            <VerdictEm tone="risk">{behind} behind pace</VerdictEm>.
+          </>
+        ) : null}
+        {overdue === 0 && behind === 0 ? <> Nothing is overdue.</> : null}
+      </>
+    )
+  }, [summary, counts, recommendations])
+
   const attentionItems = useMemo(() => {
     const raw = []
     for (const it of initiatives) {
@@ -250,11 +296,15 @@ function ImprovementWorkspace() {
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
   if (loading) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={improvementAccentVars()}>
-        <PageHeader
-          eyebrow={`Improvement · ${activeSchool?.name ?? 'School'}`}
+      <div style={improvementAccentVars()}>
+        <DomainStatePanel
+          showBack
           title="Improvement"
-          meta="Loading your initiatives…"
+          hue={IMPROVEMENT_HUE}
+          verdict="Loading your initiatives…"
+          icon={Flag}
+          text="Reading your initiatives and recommendations…"
+          busy
         />
       </div>
     )
@@ -300,9 +350,25 @@ function ImprovementWorkspace() {
       {errorBanner}
       <DomainCommandCenter
         showBack
-        eyebrow={`Improvement · ${activeSchool?.name ?? 'School'}`}
+        eyebrow={dataAsOf ? `Data as of ${shortDate(dataAsOf) ?? dataAsOf}` : null}
         title="Improvement"
-        Icon={TrendingUp}
+        hue={IMPROVEMENT_HUE}
+        verdict={verdict}
+        newLabel="New initiative"
+        registerSubtitle="Owned, dated work — click one to open it"
+        registerIcon={Flag}
+        howItWorks={
+          <>
+            <p>
+              Recommendations come from your accreditation gaps, unmet must-pass checks and open warnings. A lift in
+              index points is shown only when the readiness engine can attribute one.
+            </p>
+            <p>
+              Progress is computed from each initiative&apos;s own measure. An initiative that reports status only
+              never shows a percentage.
+            </p>
+          </>
+        }
         attentionCount={attentionItems.length}
         kpis={kpis}
         tabs={TABS}
@@ -313,13 +379,6 @@ function ImprovementWorkspace() {
           <InitiativeList initiatives={initiatives} onOpen={(it) => setOpenId(it.id)} reduce={reduce} />
         }
         attentionItems={attentionItems}
-        headerAside={
-          dataAsOf ? (
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-ink2">
-              <CalendarClock size={12} aria-hidden /> Data as of {shortDate(dataAsOf) ?? dataAsOf}
-            </span>
-          ) : null
-        }
         beforeBody={
           <RecommendationRail
             recommendations={recommendations}
@@ -352,7 +411,7 @@ function ImprovementWorkspace() {
 
 export default function ImprovementPage() {
   return (
-    <div className="min-h-screen">
+    <div className="acc-hue min-h-screen">
       <BillingBanner />
       <ImprovementWorkspace />
     </div>

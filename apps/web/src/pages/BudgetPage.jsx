@@ -18,14 +18,28 @@
 // only setState-in-effect is the established microtask-deferred sync-on-key
 // (selected period) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Wallet, Scale, Building2, Landmark } from 'lucide-react'
+import { Wallet, Scale, Building2, Landmark, ArrowDownLeft, ArrowUpRight, Target, CalendarRange } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
-import { PageHeader } from '../components/ui/surface/index.js'
 import '../styles/pending/b2-finance.css'
-import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
+import {
+  AuroraButton,
+  AuroraEmpty,
+  AuroraLightButton,
+  AuroraSection,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
+import {
+  FinanceSubPage,
+  FinanceSubBand,
+  FinanceMore,
+  FinancePeriodSwitch,
+  yearName,
+} from '../components/statements/financeSub.jsx'
+import { budgetTotals } from '../components/budget/budgetTotals.js'
+import { money, moneyShort, periodClosed } from '../components/finance/financeAurora.js'
+import { formatShortDate } from '../lib/format.js'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import OrgRollup from '../components/budget/OrgRollup.jsx'
 import OrgStatements from '../components/budget/OrgStatements.jsx'
@@ -67,10 +81,13 @@ export default function BudgetPage() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
-  const { periods, hydrating } = usePersistence()
+  const { periods, hydrating, activePeriod } = usePersistence()
 
   // Selected period — seeded from the persisted list, kept in sync on change via
-  // a microtask-deferred update (no synchronous setState in effect).
+  // a microtask-deferred update (no synchronous setState in effect). With no
+  // valid remembered choice it opens on the SAME year Statements opens on (the
+  // hydrated period — the newest one that holds numbers), then the newest year
+  // with statements, never an empty future year just because it sorts first.
   const [selectedPeriodId, setSelectedPeriodId] = useState(
     () => localStorage.getItem('finrep_active_period') || null,
   )
@@ -82,15 +99,17 @@ export default function BudgetPage() {
       if (list.length === 0) {
         setSelectedPeriodId((cur) => (cur === null ? cur : null))
       } else {
-        setSelectedPeriodId((cur) =>
-          list.some((p) => p.id === cur) ? cur : list[0].id,
-        )
+        const fallback =
+          (activePeriod && list.some((p) => p.id === activePeriod.id) ? activePeriod.id : null) ??
+          list.find((p) => p.hasSnapshot)?.id ??
+          list[0].id
+        setSelectedPeriodId((cur) => (list.some((p) => p.id === cur) ? cur : fallback))
       }
     })
     return () => {
       cancelled = true
     }
-  }, [periods])
+  }, [periods, activePeriod])
 
   const [activeTab, setActiveTab] = useState('budget')
 
@@ -147,6 +166,17 @@ export default function BudgetPage() {
   const fiscalYearStart =
     spread?.fiscalYearStart?.slice(0, 7) ||
     deriveFiscalYearStart(selectedPeriod?.periodEndDate)
+  const periodName = selectedPeriod ? yearName(selectedPeriod.label) : null
+  // A budget "exists" if it has a spread or rev/exp lines (BudgetSetup's rule).
+  const hasBudget = !!(budget?.lines && (budget.lines.spread || budget.lines.revenue || budget.lines.expense))
+
+  // Budget vs. actual totals — the SAME derivation BudgetVsActual's table uses.
+  const totals = useMemo(() => budgetTotals(budget, metrics), [budget, metrics])
+  const netVar = totals.netAct != null && !totals.noBudget ? totals.netAct - totals.netBud : null
+  // Half-entered budget (one side still $0): the net comparison would only
+  // measure the missing side — say so, never "Behind plan".
+  const oneSided =
+    totals.budExpTotal === 0 ? 'No spending in this budget yet' : totals.budRevTotal === 0 ? 'No income in this budget yet' : null
 
   // Only fetch the roll-up while the roll-up tab is active (cheap + avoids an
   // org query on every page visit). Passing a null orgId no-ops the hook.
@@ -182,27 +212,25 @@ export default function BudgetPage() {
   const renderBudget = () => {
     if (!selectedPeriodId) {
       return (
-        <div key="budget" className="b2-note">
-          <p className="b2-note-title">Select a period to view its budget.</p>
-          <p className="mx-auto max-w-md">
-            No periods yet? Add your first trial balance from the{' '}
-            <Link to="/finance" className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
-              Finance page
-            </Link>
-            . A budget attaches to a period.
-          </p>
-        </div>
+        <AuroraEmpty
+          key="budget"
+          icon={CalendarRange}
+          text="No saved years yet."
+          sub="A budget attaches to a year. Add your first trial balance on the Finance page."
+          action={
+            <AuroraLightButton variant="ghost" to="/finance">
+              Go to Finance
+            </AuroraLightButton>
+          }
+        />
       )
     }
     if (budgetLoading) {
-      return (
-        <div key="budget" className="b2-note" aria-busy="true">
-          <p>Loading your budget…</p>
-        </div>
-      )
+      return <AuroraEmpty key="budget" icon={Wallet} text="Loading your budget…" aria-busy="true" />
     }
     return (
       <div key="budget">
+        <AuroraSection first icon={Wallet} title="Your budget" subtitle="Set it up, or change it" count={periodName} />
         <BudgetSetup
           schoolId={schoolId}
           periodId={selectedPeriodId}
@@ -218,11 +246,7 @@ export default function BudgetPage() {
 
   const renderBva = () => {
     if (!selectedPeriodId) {
-      return (
-        <div key="bva" className="b2-note">
-          <p className="b2-note-title">Select a period to compare budget vs. actual.</p>
-        </div>
-      )
+      return <AuroraEmpty key="bva" icon={Scale} text="Pick a year to compare budget vs. actual." />
     }
     return (
       <div key="bva">
@@ -239,12 +263,14 @@ export default function BudgetPage() {
 
   const renderRollup = () => (
     <div key="rollup">
+      <AuroraSection first icon={Building2} title="Organization roll-up" subtitle="Every school’s budget, added up" />
       <OrgRollup rollup={rollup} loading={rollupLoading} error={rollupError} />
     </div>
   )
 
   const renderOrgStatements = () => (
     <div key="orgStatements">
+      <AuroraSection first icon={Landmark} title="Consolidated statements" subtitle="Every school’s statements, combined" />
       <OrgKpiStrip metrics={orgMetrics} loading={orgMetricsLoading} error={orgMetricsError} />
       <OrgStatements rollup={stmtRollup} loading={stmtLoading} error={stmtError} />
     </div>
@@ -264,37 +290,138 @@ export default function BudgetPage() {
     }
   }
 
-  const eyebrow = ['Finance', activeSchool?.name, 'Budget'].filter(Boolean).join(' · ')
+  // ── The band: eyebrow (the year), ONE sentence, the plan figures ──────────
+  const closed = periodClosed(selectedPeriod?.periodEndDate)
+  const eyebrow = selectedPeriod?.periodEndDate
+    ? `${closed ? 'Year ended' : 'Year ends'} ${formatShortDate(selectedPeriod.periodEndDate)}`
+    : null
+
+  let verdict = null
+  if (!hydrating && !(periods || []).length) {
+    verdict = <>Add a year&rsquo;s numbers first. A budget attaches to a year.</>
+  } else if (selectedPeriodId && !budgetLoading) {
+    if (!totals.hasLines) {
+      verdict = hasBudget ? (
+        <>
+          The <VerdictEm>{periodName}</VerdictEm> budget is set. Budget vs. actual opens once that year has statements.
+        </>
+      ) : (
+        <>
+          <VerdictEm>{periodName}</VerdictEm> has no budget yet.
+        </>
+      )
+    } else if (totals.noBudget) {
+      verdict = (
+        <>
+          <VerdictEm>{periodName}</VerdictEm> has no budget yet.{canEdit ? ' Set one up in a few minutes.' : ''}
+        </>
+      )
+    } else if (netVar != null && oneSided) {
+      verdict = (
+        <>
+          The <VerdictEm>{periodName}</VerdictEm> budget is half set up. {oneSided}.
+        </>
+      )
+    } else if (netVar != null) {
+      verdict = (
+        <>
+          {periodName} {closed ? 'finished' : 'is running'}{' '}
+          <VerdictEm tone={netVar >= 0 ? null : 'risk'}>
+            {money(Math.abs(netVar))} {netVar >= 0 ? 'ahead of' : 'behind'}
+          </VerdictEm>{' '}
+          its budget.
+        </>
+      )
+    } else {
+      verdict = <>The {periodName} budget is set. Actuals appear once that year&rsquo;s numbers are in.</>
+    }
+  }
+
+  const kpis =
+    selectedPeriodId && !budgetLoading && totals.hasLines && !totals.noBudget
+      ? [
+          { key: 'bin', icon: ArrowDownLeft, label: 'Budgeted income', value: moneyShort(totals.budRevTotal), caption: `Planned for ${periodName}` },
+          { key: 'bout', icon: ArrowUpRight, label: 'Budgeted spending', value: moneyShort(totals.budExpTotal), caption: `Planned for ${periodName}` },
+          {
+            key: 'bnet',
+            icon: Scale,
+            label: 'Planned left over',
+            value: `${totals.netBud >= 0 ? '+' : ''}${moneyShort(totals.netBud)}`,
+            caption: 'Income minus spending',
+          },
+          netVar != null
+            ? {
+                key: 'var',
+                icon: Target,
+                label: 'Against budget',
+                value: `${netVar >= 0 ? '+' : ''}${moneyShort(netVar)}`,
+                caption: oneSided ?? 'What was left over vs. plan',
+                // A SIGN, not a band: ahead or behind the school's own plan —
+                // and no sign at all while one side of the budget is empty.
+                verdict: oneSided ? null : netVar >= 0 ? 'good' : 'risk',
+                verdictLabel: oneSided ? null : netVar >= 0 ? 'Ahead of plan' : 'Behind plan',
+              }
+            : { key: 'var', icon: Target, label: 'Against budget', value: null, caption: 'Actuals not in yet' },
+        ]
+      : null
+
+  // The band's ONE main job, from what the year needs next.
+  const focusSetup = () => {
+    setActiveTab('budget')
+    if (typeof window === 'undefined') return
+    // After the Budget view mounts: bring the guided setup into view and put
+    // focus on its first control.
+    window.setTimeout(() => {
+      const el = document.getElementById('budget-setup-panel')
+      if (!el) return
+      el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+      el.querySelector('button:not([disabled]), input:not([disabled]), select:not([disabled])')?.focus({ preventScroll: true })
+    }, 260)
+  }
+  const noYears = !hydrating && !(periods || []).length
+  let primary = null
+  if (noYears) {
+    primary = (
+      <AuroraButton variant="primary" to="/finance" icon={<CalendarRange size={19} aria-hidden="true" />}>
+        Add a year&rsquo;s numbers
+      </AuroraButton>
+    )
+  } else if (selectedPeriodId && !budgetLoading && !hasBudget && canEdit) {
+    primary = (
+      <AuroraButton variant="primary" onClick={focusSetup} icon={<Wallet size={19} aria-hidden="true" />}>
+        Set up the budget
+      </AuroraButton>
+    )
+  } else if (totals.hasLines && !totals.noBudget && activeTab !== 'bva') {
+    primary = (
+      <AuroraButton variant="primary" onClick={() => setActiveTab('bva')} icon={<Scale size={19} aria-hidden="true" />}>
+        Compare to actual
+      </AuroraButton>
+    )
+  } else if (selectedPeriodId && activeTab !== 'budget') {
+    primary = (
+      <AuroraButton variant="primary" onClick={() => setActiveTab('budget')} icon={<Wallet size={19} aria-hidden="true" />}>
+        Open the budget
+      </AuroraButton>
+    )
+  }
+
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
-        <BackLink className="mb-2" />
-        {/* Page header (Premium UI P4): eyebrow FINANCE · SCHOOL · BUDGET, the
-            Garamond title, the period selector on the hairline. The school is
-            read-only here — switch it in the sidebar (one switcher, one value). */}
-        <PageHeader
+      <FinanceSubPage crumb="Budget">
+        <FinanceSubBand
           eyebrow={eyebrow}
-          title="Budget workspace"
-          meta="Set up a budget the guided way or the advanced way, compare it to actuals, and consolidate across your organization."
-          hue="37 99 235"
-          actions={
-            periods && periods.length > 0 ? (
-              <div className="flex min-w-0 max-w-full flex-col gap-1">
-                <span className="toolbar-label">Period</span>
-                <PeriodSelector
-                  periods={periods}
-                  activeId={selectedPeriodId}
-                  onSelect={setSelectedPeriodId}
-                  light
-                />
-              </div>
-            ) : null
-          }
+          title="Budget"
+          verdict={verdict}
+          actions={primary}
+          aside={<FinancePeriodSwitch periods={periods} activeId={selectedPeriodId} onSelect={setSelectedPeriodId} />}
+          kpis={kpis}
         />
 
-        {/* Tab bar (id anchors Penny's budget-workspace glide). */}
-        <div id="budgetpage-driver-tab" className="mb-6 mt-4">
+        {/* The page's four views as one switch under the band (the id anchors
+            Penny's budget-workspace glide). */}
+        <div id="budgetpage-driver-tab" className="fsub-nav">
           <BudgetTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
         </div>
 
@@ -304,7 +431,7 @@ export default function BudgetPage() {
           role="tabpanel"
           aria-labelledby={`budget-tab-${activeTab}`}
           tabIndex={0}
-          className="rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
+          className="mt-2 rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
         >
           <motion.div
             key={activeTab}
@@ -315,15 +442,21 @@ export default function BudgetPage() {
             {hydrating &&
             activeTab !== 'rollup' &&
             activeTab !== 'orgStatements' ? (
-              <div className="b2-note" aria-busy="true">
-                <p>Loading your periods…</p>
-              </div>
+              <AuroraEmpty icon={CalendarRange} text="Loading your saved years…" aria-busy="true" />
             ) : (
               renderActivePanel()
             )}
           </motion.div>
         </div>
-      </div>
+
+        <FinanceMore current="budget" />
+
+        <HowThisWorks>
+          <p>Set up a budget the guided way (a few questions) or the advanced way (line by line, or upload a spreadsheet).</p>
+          <p>Budget vs. Actual compares it with this year&rsquo;s statements. Budget figures are your school&rsquo;s own plan — not a standard.</p>
+          <p>Organizational Roll-up and Consolidated Statements add every school in your organization together.</p>
+        </HowThisWorks>
+      </FinanceSubPage>
     </div>
   )
 }

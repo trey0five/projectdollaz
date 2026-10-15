@@ -17,17 +17,27 @@
 // trial-balance chooser — copy said budget, destination said something else.
 // The gear (owner/accountant only) edits WHICH of the 10 canonical expense lines
 // (EXPENSE_LINE_KEYS from @finrep/analytics) count as facilities money.
+//
+// AURORA (2026-10-15): an AuroraSection "Budget" strip over ONE white AuroraCard
+// — a one-line answer ("$12,000 left" / "$4,000 over budget") and vertical
+// columns (budget dashed, spent, committed, left) — or a designed AuroraEmpty
+// (one line + one button) when there is nothing to inherit yet.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { Settings2, ArrowRight, Check } from 'lucide-react'
+import { useReducedMotion } from 'framer-motion'
+import { Settings2, ArrowRight, Check, Wallet } from 'lucide-react'
 import { EXPENSE_LINE_KEYS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
 import EntityFormModal from '../ui/EntityFormModal.jsx'
 import { useUiV2 } from '../../context/UiFlagContext.jsx'
 import { addDataHref } from '../../lib/dataDestinations.js'
-import { Section, StatStrip, Stat, Pill, Button } from '../ui/surface/index.js'
-import '../../styles/pending/b1-domain.css'
+import {
+  AuroraSection,
+  AuroraCard,
+  AuroraColumns,
+  AuroraEmpty,
+  AuroraLightButton,
+  fyLabel,
+} from '../ui/aurora/index.js'
 
 function fmtMoney(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
@@ -117,84 +127,35 @@ function BudgetConfigModal({ open, mappedKeys, onClose, onSave, reduce }) {
   )
 }
 
-// ── The burn rule: actual (solid ink) + committed (hatched ink) vs budget ────
-const INK = 'rgb(var(--c-ink))'
-const HATCH = `repeating-linear-gradient(135deg, ${INK} 0 3px, rgb(var(--c-ink) / 0.35) 3px 6px)`
-
-function BurnBar({ budgetTotal, committed, actual, overBudget, reduce }) {
-  const spent = Math.max(committed, 0) + Math.max(actual, 0)
-  const scale = Math.max(budgetTotal, spent, 1)
-  const pct = (v) => `${Math.max(0, Math.min(100, (v / scale) * 100))}%`
-  const budgetPct = (Math.max(budgetTotal, 0) / scale) * 100
-  const grow = (delay = 0) =>
-    reduce ? {} : { initial: { scaleX: 0 }, animate: { scaleX: 1 }, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1], delay } }
-
+// The section strip every state shares: medallion, title, one short line.
+function BudgetSection({ count = null, aside = null, children }) {
   return (
-    <div>
-      <div
-        className="relative h-1.5 w-full bg-hair/[.12]"
-        role="img"
-        aria-label={`Actual ${fmtMoney(actual)}, committed ${fmtMoney(committed)} of a ${fmtMoney(budgetTotal)} budget`}
-      >
-        <motion.div className="absolute inset-y-0 left-0 origin-left" style={{ width: pct(actual), background: INK }} {...grow()} />
-        <motion.div
-          className="absolute inset-y-0 origin-left"
-          style={{ left: pct(actual), width: pct(committed), backgroundImage: HATCH }}
-          {...grow(0.1)}
-        />
-        {overBudget && spent > budgetTotal ? (
-          <div className="absolute inset-y-0 bg-risk" style={{ left: pct(budgetTotal), width: pct(spent - budgetTotal) }} />
-        ) : null}
-        {budgetPct > 0 && budgetPct < 100 ? (
-          <div aria-hidden className="absolute -inset-y-1 w-px bg-ink" style={{ left: pct(budgetTotal) }} />
-        ) : null}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] font-semibold text-ink2">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-3" style={{ background: INK }} />
-          Actual
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-3" style={{ backgroundImage: HATCH }} />
-          Committed
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-px bg-ink" />
-          Budget
-        </span>
-        {overBudget ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-3 bg-risk" />
-            Over budget
-          </span>
-        ) : null}
-      </div>
-    </div>
+    <AuroraSection icon={Wallet} title="Budget" subtitle="Your Finance budget for upkeep" count={count} aside={aside}>
+      {children}
+    </AuroraSection>
   )
 }
 
-// ── The empty state (no budget yet / no category lines yet): a ruled row ─────
+// ── The empty state (no budget yet / no category lines yet): one line + one button
 function EmptyBudget({ reason }) {
   const uiV2 = useUiV2()
   return (
-    <Section label="Facilities budget" aside={<span>Inherited from Finance</span>}>
-      <div className="b1-empty">
-        <p className="b1-empty-title">No budget to inherit yet</p>
-        <p>
-          {reason === 'no_lines'
-            ? 'Your budget has no category lines yet. Import or edit it in Finance.'
-            : 'Set up your budget in Finance and Facilities inherits it automatically.'}
-        </p>
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-          <Button variant="primary" size="sm" to={addDataHref(uiV2, { add: 'budget' })} icon={<ArrowRight size={14} />}>
+    <BudgetSection>
+      <AuroraEmpty
+        icon={Wallet}
+        text={reason === 'no_lines' ? 'Your budget has no category lines yet.' : 'No budget to show yet.'}
+        sub="Facilities reads it from Finance."
+        action={
+          <AuroraLightButton
+            variant="ghost"
+            to={addDataHref(uiV2, { add: 'budget' })}
+            icon={<ArrowRight size={15} aria-hidden="true" />}
+          >
             Set up the budget
-          </Button>
-          <Button size="sm" to="/budget">
-            View in Finance
-          </Button>
-        </div>
-      </div>
-    </Section>
+          </AuroraLightButton>
+        }
+      />
+    </BudgetSection>
   )
 }
 
@@ -204,9 +165,9 @@ export default function FacilitiesBudgetCard({ budget, loading, canEdit, onSaveC
 
   if (loading && !budget) {
     return (
-      <Section label="Facilities budget">
-        <p className="text-[13px] text-ink2">Loading the facilities budget…</p>
-      </Section>
+      <BudgetSection>
+        <AuroraEmpty icon={Wallet} text="Loading the facilities budget…" aria-busy="true" />
+      </BudgetSection>
     )
   }
   if (!budget) return null
@@ -242,68 +203,73 @@ export default function FacilitiesBudgetCard({ budget, loading, canEdit, onSaveC
     resolvedMissingActualCount = 0,
   } = budget
 
-  const money = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fmtMoney(v))
+  const fin = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const bars = [
+    { key: 'budget', label: 'Budget', value: fin(budgetTotal), display: fmtMoney(budgetTotal), dashed: true },
+    { key: 'actual', label: 'Spent', value: fin(actual), display: fmtMoney(actual), color: 'var(--au-h)' },
+    { key: 'committed', label: 'Committed', value: fin(committed), display: fmtMoney(committed), color: 'var(--au-h2)' },
+    {
+      key: 'remaining',
+      label: overBudget ? 'Over' : 'Left',
+      value: fin(remaining),
+      display: fmtMoney(remaining),
+      color: overBudget ? 'var(--au-risk-h)' : 'var(--au-good-h)',
+    },
+  ]
 
   return (
     <>
-      <Section
-        label="Facilities budget"
+      <BudgetSection
+        count={period?.label ? fyLabel(period.label) : null}
         aside={
-          <>
-            {overBudget ? (
-              <Pill variant="status" tone="risk">
-                Over budget
-              </Pill>
-            ) : null}
-            <span>Inherited from Finance{period?.label ? ` · ${period.label}` : ''}</span>
-            {canEdit ? (
-              <button
-                type="button"
-                onClick={() => setConfigOpen(true)}
-                aria-label="Edit budget mapping"
-                title="Which expense lines count as facilities money"
-                className="b1-icon-act"
-              >
-                <Settings2 size={15} />
-              </button>
-            ) : null}
-            <Link to="/budget" className="sec-more !mt-0">
-              View in Finance
-              <ArrowRight size={14} />
-            </Link>
-          </>
+          canEdit ? (
+            <AuroraLightButton
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfigOpen(true)}
+              aria-label="Edit budget mapping"
+              title="Which expense lines count as facilities money"
+              icon={<Settings2 size={15} aria-hidden="true" />}
+            >
+              Lines
+            </AuroraLightButton>
+          ) : null
         }
       >
-        <StatStrip cols={4} className="stats-compact">
-          <Stat label="Budget" value={money(budgetTotal)} format="currency" />
-          <Stat label="Committed" value={money(committed)} format="currency" />
-          <Stat label="Actual (this FY)" value={money(actual)} format="currency" />
-          <Stat label="Remaining" value={money(remaining)} format="currency" status={overBudget ? 'risk' : 'good'} />
-        </StatStrip>
-
-        <div className="mt-4">
-          <BurnBar
-            budgetTotal={budgetTotal}
-            committed={committed}
-            actual={actual}
-            overBudget={overBudget}
-            reduce={reduce}
+        <AuroraCard
+          title="Budget vs. spending"
+          subtitle="Spent and committed against what Finance set aside"
+          verdict={overBudget ? 'risk' : 'good'}
+          verdictLabel={overBudget ? 'Over budget' : 'Within budget'}
+          big={overBudget ? `${fmtMoney(Math.abs(remaining))} over budget` : `${fmtMoney(remaining)} left`}
+          bigTone={overBudget ? 'risk' : 'good'}
+          footer={
+            <AuroraLightButton to="/budget" icon={<ArrowRight size={15} aria-hidden="true" />}>
+              View in Finance
+            </AuroraLightButton>
+          }
+        >
+          <AuroraColumns
+            ariaLabel={`Facilities budget ${fmtMoney(budgetTotal)}: spent ${fmtMoney(actual)}, committed ${fmtMoney(committed)}, ${overBudget ? 'over by' : 'left'} ${fmtMoney(Math.abs(remaining))}`}
+            bars={bars}
           />
-        </div>
-
-        {mappedLines.length ? (
-          <p className="sec-note">
-            Counts {mappedLines.map((l) => `${l.label} (${fmtMoney(l.amount)})`).join(' · ')}
-          </p>
-        ) : null}
-        {resolvedMissingActualCount > 0 ? (
-          <p className="sec-note">
-            {resolvedMissingActualCount} resolved item
-            {resolvedMissingActualCount === 1 ? ' has' : 's have'} no actual cost. Add actuals so
-            this year&apos;s spend is complete.
-          </p>
-        ) : null}
-      </Section>
+          {mappedLines.length || resolvedMissingActualCount > 0 ? (
+            <div className="mt-3 space-y-1">
+              {mappedLines.length ? (
+                <p className="text-[12.5px] text-ink2">
+                  Counts {mappedLines.map((l) => `${l.label} (${fmtMoney(l.amount)})`).join(' · ')}
+                </p>
+              ) : null}
+              {resolvedMissingActualCount > 0 ? (
+                <p className="text-[12.5px] text-ink2">
+                  {resolvedMissingActualCount} finished repair
+                  {resolvedMissingActualCount === 1 ? ' has' : 's have'} no actual cost yet.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </AuroraCard>
+      </BudgetSection>
       {configModal}
     </>
   )

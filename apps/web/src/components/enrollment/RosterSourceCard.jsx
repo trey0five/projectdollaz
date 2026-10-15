@@ -37,9 +37,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronRight, Download, FileSpreadsheet, Plug, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, FileStack, Plug, Trash2, Upload, Users } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
-import { Panel, Button, Section, Pill } from '../ui/surface/index.js'
+import { Button, Pill } from '../ui/surface/index.js'
+import { AuroraSection, AuroraTile, AuroraTileGrid, AuroraLightButton } from '../ui/aurora/index.js'
 import { schoolYearLabel } from './enrollmentAnalyticsKit.jsx'
 
 function fmtDay(iso) {
@@ -149,6 +150,30 @@ function ReceiptRow({ imp, superseded, canEdit, busyId, downloadId, onRemove, on
   )
 }
 
+/**
+ * THE DIAGNOSIS, as one tile: a counted headcount over an empty register. The
+ * page drops it into its "Needs a look" section; the default card below still
+ * renders it on its own when the page does not (diagnosis defaults on).
+ */
+export function RosterDiagnosisTile({ headcount, canEdit, onAddData }) {
+  return (
+    <AuroraTile
+      icon={Users}
+      tone="watch"
+      title="You have a headcount, but no student records."
+      desc={`${headcount.toLocaleString('en-US')} students were counted, but the list is empty. Upload the same file again to build it.`}
+      tip={`${headcount.toLocaleString('en-US')} students were counted and the register is empty — so Waitlist, Support flags and New this year have nothing to read. That happens when the file was counted before we started saving per-student rows, or when it carried totals only. Uploading the same file again builds the register.`}
+      foot={
+        canEdit && onAddData ? (
+          <AuroraLightButton size="sm" hue="#b45309" onClick={onAddData} icon={<Upload size={14} aria-hidden="true" />}>
+            Upload it again
+          </AuroraLightButton>
+        ) : null
+      }
+    />
+  )
+}
+
 export default function RosterSourceCard({
   schoolId,
   canEdit,
@@ -156,6 +181,7 @@ export default function RosterSourceCard({
   rosterCount = null,
   onAddData,
   refreshToken = 0,
+  diagnosis = true,
 }) {
   const [imports, setImports] = useState(null)
   const [error, setError] = useState('')
@@ -252,44 +278,29 @@ export default function RosterSourceCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 240, damping: 24 }}
     >
-      {countedButEmpty ? (
-        <Panel tone="attention" className="panel-watch mt-6">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="min-w-0 flex-1 basis-[18rem]">
-              <p className="break-words text-body font-semibold leading-snug text-ink">
-                You have a headcount, but no student records.
-              </p>
-              <p className="mt-1 break-words text-small leading-snug text-ink2">
-                {headcount.toLocaleString('en-US')} students were counted, and the register is
-                empty — so Waitlist, Support flags and New this year have nothing to read. That
-                happens when the file was counted before we started saving per-student rows, or when
-                it carried totals only. Uploading the same file again builds the register.
-              </p>
-            </div>
-            {canEdit && onAddData ? (
-              <Button variant="primary" onClick={onAddData} icon={<Upload size={14} />} className="shrink-0">
-                Upload it again
-              </Button>
-            ) : null}
-          </div>
-        </Panel>
+      {countedButEmpty && diagnosis ? (
+        <AuroraTileGrid cols={2} className="mt-6">
+          <RosterDiagnosisTile headcount={headcount} canEdit={canEdit} onAddData={onAddData} />
+        </AuroraTileGrid>
       ) : null}
 
       {imports != null && imports.length > 0 ? (
         /* Collapsed by default: provenance is metadata, not a primary surface.
            One summary line; the grouped history renders only on request. */
-        <Section
-          label="Where this came from"
+        <AuroraSection
+          icon={FileStack}
+          title="Where the numbers came from"
+          subtitle="Every file and sync, by school year"
           aside={
-            <button
-              type="button"
+            <AuroraLightButton
+              variant="ghost"
+              size="sm"
               onClick={() => setHistoryOpen((v) => !v)}
               aria-expanded={historyOpen}
-              className="sec-more !mt-0"
+              icon={<ChevronRight size={14} className={`transition-transform ${historyOpen ? 'rotate-90' : ''}`} aria-hidden="true" />}
             >
               {historyOpen ? 'Hide history' : 'View history'}
-              <ChevronRight size={13} className={`transition-transform ${historyOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
-            </button>
+            </AuroraLightButton>
           }
         >
           <p className="text-small text-ink2">
@@ -297,7 +308,7 @@ export default function RosterSourceCard({
             year{groups.length === 1 ? '' : 's'}
           </p>
           {historyOpen ? (
-          <div className="mt-3 space-y-4">
+          <div className="au-card au-card-flat mt-3 space-y-4">
             {groups.map(({ year, latest, earlier }) => {
               const expanded = expandedYears.has(year)
               return (
@@ -360,14 +371,14 @@ export default function RosterSourceCard({
           </div>
           ) : null}
           {historyOpen ? (
-          <p className="sec-note">
+          <p className="mt-2 text-[12px] leading-snug text-ink2">
             Removing an entry clears it from this list and deletes its retained original file — it
             never deletes students. Students are edited and removed in{' '}
             <span className="font-semibold text-ink">Records</span>. Past files keep the names they
             were imported with, even after a student is later deleted from the register.
           </p>
           ) : null}
-        </Section>
+        </AuroraSection>
       ) : null}
 
       {error ? <p className="mt-3 break-words text-small text-risk">{error}</p> : null}

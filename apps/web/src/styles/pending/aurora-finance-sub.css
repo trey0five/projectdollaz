@@ -1,0 +1,487 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   aurora-finance-sub.css — slice-local glue for the Finance sub-pages on the
+   Aurora look (Statements, Analytics, Budget, Cash Forecast, Reports,
+   Supporting Schedules, Readiness). Imported by components/statements/
+   financeSub.jsx only. Every rule is scoped under `.fsub` (the sub-page root)
+   so nothing reaches another module, the home, the sidebar or a print route.
+   Screen only: nothing here applies under @media print.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media screen {
+  /* A ledger Toolbar dropped into the band's tools row: drop its hairlines and
+     ground padding so it reads as one glass row. */
+  .fsub .au-hero .au-tools .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .fsub .au-hero .au-tools .toolbar-aside {
+    margin-left: 0;
+  }
+  .fsub .au-hero .au-tools .toolbar-label {
+    color: rgba(255, 255, 255, 0.82);
+  }
+  .fsub .au-hero .au-tools .seg {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    padding: 4px;
+  }
+  .fsub .au-hero .au-tools .seg-btn {
+    color: #fff;
+    border-radius: 9px;
+  }
+  .fsub .au-hero .au-tools .seg-btn[aria-pressed='true'],
+  .fsub .au-hero .au-tools .seg-btn[aria-selected='true'] {
+    background: #fff;
+    color: var(--au-deep, #1d3fa8);
+  }
+  .fsub .au-hero .au-tools .swatch {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+  .fsub .au-hero .au-tools .pop {
+    color: var(--au-ink-1, #101c3d);
+  }
+
+  /* An ink tab strip that sits directly under a section strip (a workspace's
+     own sections: Budget tabs, schedule tabs, cash tabs). */
+  .fsub .fsub-nav.fsub-nav-in {
+    margin-top: 0;
+  }
+
+  /* The aside's view switch keeps one line on a phone and scrolls inside
+     itself rather than the page. */
+  .fsub .au-aside-body .au-switch {
+    max-width: 100%;
+  }
+
+  /* An ink tab strip (role=tablist — Budget's four views, Cash Forecast's two,
+     Analytics' three) placed ON the band becomes one glass segmented switch:
+     the same look as AuroraSwitch, the tab semantics and ids unchanged. */
+  .fsub .au-hero .tabs-ink {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+  }
+  .fsub .au-hero .tab-ink {
+    flex-direction: row;
+    align-items: center;
+    padding: 7px 14px;
+    border-radius: 9px;
+    color: #fff;
+    font-size: 13.5px;
+    line-height: 1.35;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+  }
+  .fsub .au-hero .tab-ink:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+  .fsub .au-hero .tab-ink[aria-selected='true'],
+  .fsub .au-hero .tab-ink[aria-selected='true']:hover {
+    background: #fff;
+    color: var(--au-deep, #1d3fa8);
+  }
+  .fsub .au-hero .tab-ink :is(.text-ink, .text-ink2, svg) {
+    color: inherit;
+  }
+  .fsub .au-hero .tab-ink-cap,
+  .fsub .au-hero .tab-ink-rule {
+    display: none;
+  }
+  .fsub .au-hero .tab-ink:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.75);
+    outline-offset: 1px;
+  }
+  .fsub .au-hero .b2-hscroll-fade[data-overflow='x']::after {
+    display: none;
+  }
+  .fsub .au-hero .fsub-bandtabs {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* ── The view switch UNDER the band (`.fsub-nav`): a page's own tabs —
+     Budget's four views, Cash Forecast's two, Analytics' three, the three
+     schedules — as one light segmented control in the module hue. The tab
+     semantics, ids and keyboard model are the component's own. */
+  .fsub .fsub-nav {
+    margin-top: 26px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .fsub .fsub-nav .tabs-ink {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 5px;
+    border: 1px solid var(--au-line, #e3e7f0);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 24px -18px rgba(16, 28, 61, 0.35);
+  }
+  .fsub .fsub-nav .tab-ink {
+    flex-direction: row;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    color: var(--au-ink-2, #3d4865);
+    font-size: 14px;
+    line-height: 1.3;
+    white-space: nowrap;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .fsub .fsub-nav .tab-ink:hover {
+    background: color-mix(in srgb, var(--au-h, #2563eb) 8%, #fff);
+    color: var(--au-ink-1, #101c3d);
+  }
+  .fsub .fsub-nav .tab-ink[aria-selected='true'],
+  .fsub .fsub-nav .tab-ink[aria-selected='true']:hover {
+    background: linear-gradient(135deg, var(--au-h, #2563eb), var(--au-h2, #7c3aed));
+    color: #fff;
+  }
+  .fsub .fsub-nav .tab-ink :is(.text-ink, .text-ink2, svg) {
+    color: inherit;
+  }
+  .fsub .fsub-nav .tab-ink-cap,
+  .fsub .fsub-nav .tab-ink-rule {
+    display: none;
+  }
+  .fsub .fsub-nav .tab-ink:focus-visible {
+    outline: 2px solid var(--au-h, #2563eb);
+    outline-offset: 2px;
+  }
+  .fsub .fsub-nav .b2-hscroll-fade[data-overflow='x']::after {
+    display: none;
+  }
+
+  /* ── Analytics: the view switch + the "whose numbers" toolbar share one row
+     under the band; the toolbar drops its hairline there. ─────────────── */
+  .fsub .fsub-navrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+    margin-top: 26px;
+  }
+  .fsub .fsub-navrow > .fsub-nav {
+    margin-top: 0;
+  }
+  .fsub .fsub-navrow > div:last-child {
+    margin-bottom: 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .fsub .fsub-navrow .toolbar {
+    border-bottom: 0;
+    padding: 0;
+  }
+
+  /* ── Charts and tables inside a section sit in white rounded cards (the
+     analytics ChartCard is a ledger Section, shared with Enrollment, so the
+     card is drawn HERE, only under a Finance sub-page root). ──────────── */
+  .fsub .au-sec .sec-chart,
+  .fsub .fsub-tables .dt-wrap {
+    padding: 18px 20px 20px;
+    border: 1px solid var(--au-line, #e3e7f0);
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 18px 40px -30px rgba(16, 28, 61, 0.35);
+  }
+  .fsub .au-sec .sec-chart {
+    margin-top: 0;
+  }
+  @media (max-width: 639px) {
+    .fsub .au-sec .sec-chart,
+    .fsub .fsub-tables .dt-wrap {
+      padding: 14px 12px 16px;
+      border-radius: 16px;
+    }
+  }
+  .fsub .fsub-tables .dt-wrap[data-overflow='x']::after {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 80%);
+  }
+
+  /* "More in Finance": compact row doors (icon + name + one line), four to a
+     row on a desktop — a short closing strip, not two rows of big tiles. */
+  .fsub .fsub-more .au-tile.au-tile-row {
+    gap: 12px;
+    padding: 14px 16px;
+    min-height: 0;
+  }
+  .fsub .fsub-more .au-tile-row .au-well {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .fsub .fsub-more .au-tile-row .au-well svg {
+    width: 19px;
+    height: 19px;
+  }
+  .fsub .fsub-more .au-tile-row .au-tile-title {
+    margin: 0 0 2px;
+    font-size: 15px;
+  }
+  .fsub .fsub-more .au-tile-row .au-tile-desc {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .fsub .fsub-more .au-tile-row .au-tile-foot {
+    display: none;
+  }
+
+  /* On a phone: a two-up grid of doors (icon + name only). */
+  @media (max-width: 639px) {
+    .fsub .fsub-more .au-tiles {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .fsub .fsub-more .au-tile.au-tile-row {
+      align-items: center;
+      padding: 12px;
+      gap: 10px;
+    }
+    .fsub .fsub-more .au-tile-row .au-well {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+    }
+    .fsub .fsub-more .au-tile-desc,
+    .fsub .fsub-more .au-art,
+    .fsub .fsub-more .au-tile-foot {
+      display: none;
+    }
+    .fsub .fsub-more .au-tile-row .au-tile-title {
+      font-size: 14px;
+    }
+  }
+
+  @media (max-width: 639px) {
+    /* The scope switch (My school · Compare · All schools · Peers) wraps on a
+       phone rather than running under the page edge. */
+    .fsub .fsub-navrow .toolbar .seg {
+      flex-wrap: wrap;
+    }
+    /* Exact dollar figures (a cash forecast prints them to the dollar) get a
+       touch smaller on the band so "$171,000" fits a half-width glass card. */
+    .fsub .au-hero.fsub-tight .au-kpi-val {
+      font-size: 21px;
+    }
+  }
+
+  @media (max-width: 639px) {
+    /* A page's view switch on a phone: an even grid of equal buttons, two to a
+       row (an odd last button spans the row), every view in sight and no
+       ragged wrap. */
+    .fsub .fsub-nav .tabs-ink,
+    .fsub .fsub-nav .tabs-ink.min-w-max {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      min-width: 0;
+    }
+    .fsub .fsub-nav {
+      width: 100%;
+    }
+    .fsub .fsub-nav .tab-ink {
+      justify-content: center;
+      min-width: 0;
+      padding: 9px 10px;
+      white-space: normal;
+      text-align: center;
+    }
+    .fsub .fsub-nav .tab-ink > span {
+      white-space: normal;
+      justify-content: center;
+    }
+    .fsub .fsub-nav .tab-ink:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+    .fsub .fsub-nav.overflow-x-auto,
+    .fsub .fsub-nav .overflow-x-auto {
+      overflow: visible;
+    }
+  }
+
+  /* ── The band's year switch: segmented ≥640px; one glass select on a phone
+     when there are more than three years (FinancePeriodSwitch). ────────── */
+  .fsub .fsub-pswitch-narrow {
+    display: none;
+  }
+  @media (max-width: 639px) {
+    .fsub .fsub-pswitch-wide {
+      display: none;
+    }
+    .fsub .fsub-pswitch-narrow {
+      display: block;
+    }
+  }
+  .fsub .fsub-pswitch-narrow select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-width: 9.5rem;
+    max-width: 100%;
+    padding: 9px 38px 9px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 12px;
+    background-color: rgba(0, 0, 0, 0.22);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .fsub .fsub-pswitch-narrow select:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.8);
+    outline-offset: 2px;
+  }
+  .fsub .fsub-pswitch-narrow option {
+    color: #101c3d;
+    background: #fff;
+  }
+
+  /* ── Supporting Schedules: each schedule table sits in a white rounded card
+     with a plain bold heading; the totals become small tinted stat tiles; the
+     explainer moves behind "How this works" (`.fsub-sched` wraps the editor on
+     the Schedules page only — the data hub's embed is untouched). ─────── */
+  .fsub .fsub-sched .sched-head-title,
+  .fsub .fsub-sched .sched-head-body,
+  .fsub .fsub-sched .sched-head > svg {
+    display: none;
+  }
+  .fsub .fsub-sched .sched-head {
+    justify-content: flex-end;
+  }
+  .fsub .fsub-sched .sec:not(.sched-total) {
+    margin-top: 18px;
+    padding: 16px 20px 18px;
+    border: 1px solid var(--au-line, #e3e7f0);
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 18px 40px -30px rgba(16, 28, 61, 0.35);
+  }
+  .fsub .fsub-sched .sec-head {
+    margin-bottom: 10px;
+  }
+  .fsub .fsub-sched .sec-label {
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--au-ink-1, #101c3d);
+  }
+  .fsub .fsub-sched .sec-label input {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 14px;
+  }
+  .fsub .fsub-sched .sec-rule {
+    opacity: 0;
+  }
+  .fsub .fsub-sched .sched-total {
+    margin-top: 22px;
+  }
+  /* The tiles are self-contained cards, so the ledger strip's flush-row trick
+     (surface.css: a negative margin-left + left clip on phones) must not apply —
+     it clipped the first tile's left edge at 390. */
+  .fsub .fsub-sched .sched-total .stats {
+    gap: 12px;
+    border-bottom: 0;
+    margin-left: 0;
+    clip-path: none;
+  }
+  .fsub .fsub-sched .sched-total .stat,
+  .fsub .fsub-sched .sched-total .stat + .stat {
+    position: relative;
+    padding: 14px 16px;
+    border: 1px solid color-mix(in srgb, var(--au-h, #2563eb) 16%, #fff);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--au-h, #2563eb) 7%, #fff);
+  }
+  .fsub .fsub-sched .sched-total .stat:nth-child(2) {
+    border-color: color-mix(in srgb, var(--au-h2, #7c3aed) 16%, #fff);
+    background: color-mix(in srgb, var(--au-h2, #7c3aed) 7%, #fff);
+  }
+  .fsub .fsub-sched .sched-total .stat:nth-child(3) {
+    border-color: color-mix(in srgb, var(--au-h3, #0891b2) 16%, #fff);
+    background: color-mix(in srgb, var(--au-h3, #0891b2) 7%, #fff);
+  }
+  .fsub .fsub-sched .sched-total .sec-label {
+    font-family: var(--font-serif, 'EB Garamond', serif);
+    font-size: 19px;
+    font-weight: 600;
+  }
+  @media (max-width: 639px) {
+    .fsub .fsub-sched .sec:not(.sched-total) {
+      padding: 14px 12px 16px;
+      border-radius: 16px;
+    }
+    .fsub .fsub-sched .sched-total .stats {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+    }
+  }
+
+  /* ── Readiness: on a phone the five-step strip shows numbered dots and only
+     the CURRENT step's name ("4 Corrective"), never five cut labels. ───── */
+  @media (max-width: 639px) {
+    .fsub .b2-steps[role='tablist'] {
+      display: flex;
+      gap: 6px;
+    }
+    .fsub [role='tablist'] > .b2-step {
+      flex: 0 0 30px;
+    }
+    .fsub [role='tablist'] > .b2-step[aria-selected='true'] {
+      flex: 1 1 auto;
+    }
+    .fsub .b2-step:not([aria-selected='true']) .b2-step-label > .truncate {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    .fsub .b2-step[aria-selected='true'] .b2-step-label > .truncate {
+      overflow: visible;
+      white-space: nowrap;
+    }
+  }
+
+  /* A table's sideways fade on a phone stays inside the card's padding, so it
+     hints "more to the right" without fading the last digits of a value. */
+  @media (max-width: 639px) {
+    .fsub .fsub-tables .dt-wrap[data-overflow='x']::after {
+      width: 12px;
+    }
+  }
+
+  /* ── Budget bridge: a real waterfall (floating swings, connector rules). */
+  .fsub .fsub-bridge-link {
+    stroke: #94a3b8;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+}

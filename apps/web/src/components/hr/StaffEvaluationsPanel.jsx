@@ -30,6 +30,7 @@ import DatePicker from '../ui/DatePicker.jsx'
 import { governancePeopleApi, isModuleNotLicensed } from '../../lib/api.js'
 import { shortDate } from '../../lib/dates.js'
 import { DataTable, Pill, Button } from '../ui/surface/index.js'
+import { AuroraEmpty, AuroraLightButton } from '../ui/aurora/index.js'
 import '../../styles/pending/b1-domain.css'
 import {
   STAFF_EVALUATION_STATUSES,
@@ -344,19 +345,18 @@ export default function StaffEvaluationsPanel({
          the date it was COMPLETED, not by the existence of a scheduled one.
          Saying only "record your cycle here" made the promise unkeepable for
          every school that recorded a cycle and left it open. */
-      <StateRow
-        title="No staff evaluations recorded yet"
+      <AuroraEmpty
+        icon={ClipboardCheck}
+        text="No staff evaluations yet."
+        sub="Once one has a completed date, it counts as accreditation proof."
         action={
           canEdit && onAdd ? (
-            <Button variant="primary" size="sm" onClick={onAdd} icon={<Plus size={14} />} className="mt-1">
+            <AuroraLightButton variant="ghost" onClick={onAdd} icon={<Plus size={15} aria-hidden="true" />}>
               Add evaluation
-            </Button>
+            </AuroraLightButton>
           ) : null
         }
-      >
-        Record your evaluation cycle here, and once an evaluation carries the date it was completed,
-        your accreditation evidence for it answers itself — we never ask you to enter it twice.
-      </StateRow>
+      />
     )
 
   const columns = [

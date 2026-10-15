@@ -51,6 +51,28 @@ import '../../../styles/pending/a2-carry.css'
 export const BAND_QUALIFIER = 'Projected band'
 
 /**
+ * MIRROR of @finrep/compliance BELOW_THRESHOLD_LABEL (accreditation-readiness.ts):
+ * the engine's own floor sentinel, which `bandForIndex` returns when the index
+ * sits below every status band. The visit payload carries the band string but
+ * not the readiness read's `belowThreshold` flag, so this is how the Mock Visit
+ * reaches the SAME judgement the Accreditation band's "Projected score" card
+ * makes from that flag. apps/web cannot import the package; visit-honesty.spec
+ * reads its source and pins this string to it.
+ */
+export const BELOW_THRESHOLD_LABEL = 'Below accreditation threshold'
+
+/**
+ * The projected score's verdict, judged exactly as /accreditation judges it:
+ * below every band → 'risk', landed in a band → 'good', no band → null (no pill).
+ * The framework's OWN bands are the verdict; nothing is inferred from a band's
+ * wording beyond the engine's floor sentinel.
+ */
+export function projectedBandVerdict(band) {
+  if (typeof band !== 'string' || band === '') return null
+  return band === BELOW_THRESHOLD_LABEL ? 'risk' : 'good'
+}
+
+/**
  * A server figure for a Stat: integers count up, anything else (a decimal index,
  * null) is handed over as-is — a null becomes the Stat's em dash, never a zero,
  * and a decimal is never rounded by the count-up.

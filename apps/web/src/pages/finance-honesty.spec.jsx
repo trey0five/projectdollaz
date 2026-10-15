@@ -39,6 +39,15 @@ describe('the claim follows the numbers', () => {
     expect(page).toMatch(/One step left — tell us what these accounts are/)
   })
 
+  it('the Aurora band above the first-run card follows the same signal', () => {
+    // Saved-but-unreadable must not say "Your first year is in" — the card
+    // right below it asks the user to sort the accounts, so the band would be
+    // inviting them to an overview built from zeros.
+    expect(page).toMatch(
+      /savedPeriods\.length > 0\s*\?\s*statementsHaveNumbers\s*\?\s*'Your first year is in\. Open your overview whenever you like\.'\s*:\s*'Your books are saved, but we can’t read them yet\./,
+    )
+  })
+
   it('the hero explains the fix rather than just withholding praise', () => {
     // "We can't read this" with no next step is a dead end, not honesty.
     expect(page).toMatch(/categorise the accounts below and your statements fill in/i)

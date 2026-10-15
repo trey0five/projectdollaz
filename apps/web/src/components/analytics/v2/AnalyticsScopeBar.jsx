@@ -100,6 +100,9 @@ export default function AnalyticsScopeBar({
   onFocus,
   dims,
   onDims,
+  // Aurora: the school year moves to the band's period switch, so the host
+  // can drop it from this toolbar.
+  hideFy = false,
 }) {
   const rosterIndex = (id) => roster.findIndex((r) => r.id === id)
   const tabRefs = useRef([])
@@ -124,7 +127,7 @@ export default function AnalyticsScopeBar({
       <Toolbar
         aria-label="Whose numbers"
         aside={
-          fyOptions.length > 0 ? (
+          !hideFy && fyOptions.length > 0 ? (
             <label className="flex items-center gap-2">
               <span className="toolbar-label hidden sm:inline">School year</span>
               <select className="sel" value={fiscalYearStart ?? ''} onChange={(e) => onFy(e.target.value || null)} aria-label="School year">

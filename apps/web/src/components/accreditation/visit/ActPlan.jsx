@@ -43,7 +43,7 @@ function LiftChip({ lift }) {
   if (!lift || lift.points == null) return null
   return (
     <Pill variant="count" className="shrink-0">
-      +{lift.points} index pts
+      +{lift.points} points
     </Pill>
   )
 }

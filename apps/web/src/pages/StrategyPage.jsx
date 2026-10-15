@@ -22,11 +22,18 @@ import {
   Plus,
   Compass,
   Pencil,
+  Gauge,
+  Target,
+  CreditCard,
+  Flag,
+  Layers,
+  Rocket,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, HowThisWorks, VerdictEm } from '../components/ui/aurora/index.js'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
 import { moduleLabel } from '../components/module/moduleAnatomy.js'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
@@ -45,7 +52,7 @@ import {
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useStrategy } from '../hooks/useStrategy.js'
-import { PageHeader, Section, Button } from '../components/ui/surface/index.js'
+import { Button } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
 const TABS = [
@@ -64,78 +71,62 @@ function shortDate(iso) {
 // Overall pace → the KPI card status token (good=gold, watch, risk).
 const PACE_TO_STATUS = { on_track: 'good', achieved: 'good', at_risk: 'watch', behind: 'risk', no_data: 'neutral' }
 
-// ── Gate / empty: a plain page header on the ground, never a hero card ───────
-// The same Dashboard › Strategic Planning trail the populated page (ModuleTabs)
-// renders, so the empty, gate and loading states speak one navigation grammar.
-function StrategyTrail() {
-  return (
-    <div className="mb-2">
-      <ModuleBreadcrumb crumbs={[{ label: 'Dashboard', to: '/app' }, { label: moduleLabel('strategy') }]} />
-    </div>
-  )
-}
-
+// ── Gate / empty: the Aurora band + one line + one button ────────────────────
 function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <StrategyTrail />
-      <PageHeader
-        eyebrow="Strategic Planning"
-        title={notLicensed ? 'Strategic Planning isn\u2019t on your plan yet' : 'Your subscription is paused'}
-        meta={
-          notLicensed
-            ? 'Add the Strategic Planning module to turn your board\u2019s plan into a living scorecard: goals that measure themselves against your live financials, and their slice of the briefing here.'
-            : 'Resume your plan to manage the strategic-plan register.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="strategy"
+      title={moduleLabel('strategy')}
+      Icon={Compass}
+      icon={Compass}
+      verdict={notLicensed ? 'Strategic Planning isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          {notLicensed ? 'See plans' : 'Resume your plan'}
+        </AuroraButton>
+      }
+      text={
+        notLicensed
+          ? 'Add Strategic Planning to turn your plan into goals that measure themselves.'
+          : 'Resume your plan to manage your strategic plan.'
+      }
+    />
   )
 }
 
-function EmptyPlanPanel({ schoolName, canEdit, onCreate }) {
+// No plan yet — the screen a new school lands on. The Aurora band (one plain
+// sentence + the one job) over a designed empty state; the "how goals measure
+// themselves" explanation sits behind How this works.
+function EmptyPlanPanel({ canEdit, onCreate }) {
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <StrategyTrail />
-      <PageHeader
-        eyebrow={`Strategic Planning · ${schoolName ?? 'School'}`}
-        title={
-          <span className="inline-flex items-center gap-3">
-            <Compass size={26} strokeWidth={1.75} className="shrink-0 text-navy-soft" aria-hidden="true" />
-            Strategic Planning
-          </span>
-        }
-        meta="No strategic plan yet"
-      />
-      <Section label="Start the plan">
-        <div className="b1-empty b1-empty-left">
-          <p className="b1-empty-title">Create your plan, add a few pillars, then bind goals to the metrics you already track.</p>
-          <p>
-            Days cash on hand, operating margin, enrollment: a goal bound to a live metric measures itself, so the
-            scorecard is never typed in.
-          </p>
-          {canEdit ? (
-            <Button variant="primary" onClick={onCreate} icon={<Plus size={15} />} className="mt-1">
-              Create strategic plan
-            </Button>
-          ) : (
-            <p>An owner or accountant can create the plan.</p>
-          )}
-        </div>
-      </Section>
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="strategy"
+      title={moduleLabel('strategy')}
+      Icon={Compass}
+      icon={Compass}
+      verdict="No strategic plan yet. Start one and its goals measure themselves."
+      primaryAction={
+        canEdit ? (
+          <AuroraButton variant="primary" onClick={onCreate} icon={<Plus size={19} aria-hidden="true" />}>
+            Create strategic plan
+          </AuroraButton>
+        ) : null
+      }
+      text="Create the plan, add a few pillars, then link goals to numbers you already track."
+      sub={canEdit ? null : 'An owner or accountant can create the plan.'}
+    />
   )
 }
 
 /** A ruled state row inside a register tab (empty / none yet). */
-function StateRow({ title, children }) {
-  return (
-    <div className="b1-empty">
-      {title ? <p className="b1-empty-title">{title}</p> : null}
-      {children ? <p>{children}</p> : null}
-    </div>
-  )
-}
-
 // ═══════════════════════════ Register tab bodies ════════════════════════════
 function PlansBody({ plan, pillars, canEdit, onEditPlan, onNewPillar, onEditPillar, onDeletePillar }) {
   return (
@@ -155,7 +146,7 @@ function PlansBody({ plan, pillars, canEdit, onEditPlan, onNewPillar, onEditPill
       </dl>
 
       {pillars.length === 0 ? (
-        <StateRow title="No pillars yet">Add a pillar to group your goals under a strategic theme.</StateRow>
+        <RegisterEmpty icon={Layers} text="No pillars yet." sub="A pillar groups goals under one theme." actionLabel="Add a pillar" />
       ) : (
         <div className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
           {pillars.map((p) => (
@@ -175,7 +166,9 @@ function PlansBody({ plan, pillars, canEdit, onEditPlan, onNewPillar, onEditPill
 
 function GoalsBody({ goals, canEdit, onEdit, onDelete }) {
   if (goals.length === 0) {
-    return <StateRow title="No goals yet">Bind a goal to a live metric and it starts measuring itself.</StateRow>
+    return (
+      <RegisterEmpty icon={Target} text="No goals yet." sub="Link one to a number you track." actionLabel="Add a goal" />
+    )
   }
   return (
     <ul className="b1-list">
@@ -190,7 +183,9 @@ function GoalsBody({ goals, canEdit, onEdit, onDelete }) {
 
 function InitiativesBody({ initiatives, canEdit, onEdit, onDelete }) {
   if (initiatives.length === 0) {
-    return <StateRow title="No initiatives yet">Add the projects that will move your goals forward.</StateRow>
+    return (
+      <RegisterEmpty icon={Rocket} text="No initiatives yet." sub="The projects that move a goal." actionLabel="Add an initiative" />
+    )
   }
   return (
     <ul className="b1-list">
@@ -251,6 +246,8 @@ function StrategyWorkspace() {
   }
 
   // ── KPIs (from the computed summary / plan) ────────────────────────────────
+  // Pace is each goal's OWN target and date; with no goals bound there is
+  // nothing to judge, so the cards show plain figures and no pill.
   const kpis = useMemo(() => {
     const gc = plan?.goalCounts ?? {}
     const pct = Math.round((plan?.overallProgressPct ?? 0) * 100)
@@ -258,43 +255,64 @@ function StrategyWorkspace() {
     const behind = summary.behindPaceGoalCount ?? gc.behind ?? 0
     const atRisk = summary.atRiskGoalCount ?? gc.atRisk ?? 0
     const total = gc.total ?? 0
+    // A goal with no data (no actuals yet, or target = baseline) is never
+    // judged: every pill and "on pace" word is gated on MEASURED goals.
+    const measured = Math.max(0, total - (gc.noData ?? 0))
     const reviewDate = summary.nextReviewDate ?? plan?.nextReviewDate ?? null
 
     return [
       {
         label: 'Overall progress',
-        value: `${pct}%`,
-        status: PACE_TO_STATUS[plan?.overallPaceStatus] ?? 'neutral',
+        icon: Gauge,
+        value: measured ? `${pct}%` : '—',
+        status: measured ? (PACE_TO_STATUS[plan?.overallPaceStatus] ?? 'neutral') : 'neutral',
+        sub: !total
+          ? { icon: Target, text: 'no goals linked yet', tone: 'neutral' }
+          : !measured
+            ? { icon: Clock, text: 'no goal has data yet', tone: 'neutral' }
+            : {
+              icon: plan?.overallPaceStatus === 'behind' ? TrendingDown : TrendingUp,
+              text:
+                plan?.overallPaceStatus === 'behind'
+                  ? 'behind pace overall'
+                  : plan?.overallPaceStatus === 'at_risk'
+                    ? 'slipping overall'
+                    : 'on pace overall',
+              tone:
+                plan?.overallPaceStatus === 'behind' ? 'bad' : plan?.overallPaceStatus === 'at_risk' ? 'neutral' : 'good',
+            },
+      },
+      {
+        label: 'Goals on track',
+        icon: Target,
+        value: String(onTrack),
+        unit: total ? `of ${total}` : null,
+        status: measured && onTrack ? 'good' : 'neutral',
         sub: {
-          icon: plan?.overallPaceStatus === 'behind' ? TrendingDown : TrendingUp,
-          text:
-            plan?.overallPaceStatus === 'behind'
-              ? 'behind pace overall'
-              : plan?.overallPaceStatus === 'at_risk'
-                ? 'at risk overall'
-                : 'on pace overall',
-          tone: plan?.overallPaceStatus === 'behind' ? 'bad' : plan?.overallPaceStatus === 'at_risk' ? 'neutral' : 'good',
+          icon: Check,
+          text: !total ? 'add a goal to start' : measured ? 'on pace or achieved' : 'waiting for data',
+          tone: 'neutral',
         },
       },
       {
-        label: 'On-track goals',
-        value: String(onTrack),
-        status: total && onTrack === total ? 'good' : onTrack ? 'good' : 'neutral',
-        sub: { icon: Check, text: `of ${total} goal${total === 1 ? '' : 's'}`, tone: 'good' },
-      },
-      {
         label: 'Behind pace',
+        icon: TrendingDown,
         value: String(behind),
-        status: behind > 0 ? 'risk' : 'good',
+        status: !measured ? 'neutral' : behind > 0 ? 'risk' : 'good',
         sub:
           behind > 0
             ? { icon: TrendingDown, text: 'goals under pace', tone: 'bad' }
             : atRisk > 0
-              ? { icon: Clock, text: `${atRisk} at risk`, tone: 'neutral' }
-              : { icon: Check, text: 'all goals on pace', tone: 'good' },
+              ? { icon: Clock, text: `${atRisk} slipping`, tone: 'neutral' }
+              : !total
+                ? { icon: Check, text: 'nothing to judge yet', tone: 'neutral' }
+                : !measured
+                  ? { icon: Clock, text: 'no goal has data yet', tone: 'neutral' }
+                  : { icon: Check, text: gc.noData ? 'measured goals on pace' : 'all goals on pace', tone: 'neutral' },
       },
       {
         label: 'Next review',
+        icon: CalendarClock,
         value: reviewDate ? (shortDate(reviewDate) ?? '—') : '—',
         status: summary.reviewDueThisMonth ? 'watch' : 'neutral',
         sub: summary.reviewDueThisMonth
@@ -302,6 +320,48 @@ function StrategyWorkspace() {
           : { icon: CalendarClock, text: reviewDate ? 'on schedule' : 'not scheduled', tone: 'neutral' },
       },
     ]
+  }, [plan, summary])
+
+  // ── The band's one sentence (real figures only; worst thing first) ────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    const gc = plan?.goalCounts ?? {}
+    const total = gc.total ?? 0
+    if (!plan) return null
+    if (!total) return <>Link a goal to a number you already track and the plan starts measuring itself.</>
+    const noData = gc.noData ?? 0
+    if (noData >= total) {
+      return (
+        <>
+          None of the <VerdictEm>{plural(total, 'goal', 'goals')}</VerdictEm> has data yet.
+        </>
+      )
+    }
+    const pct = Math.round((plan.overallProgressPct ?? 0) * 100)
+    const behind = summary.behindPaceGoalCount ?? gc.behind ?? 0
+    const atRisk = summary.atRiskGoalCount ?? gc.atRisk ?? 0
+    const stale = (summary.staleInitiatives ?? []).length
+    const issues = [
+      behind && { tone: 'risk', text: `${plural(behind, 'goal is', 'goals are')} behind pace.` },
+      atRisk && { tone: 'watch', text: `${plural(atRisk, 'goal is', 'goals are')} slipping.` },
+      stale && { tone: 'watch', text: `${plural(stale, 'initiative has', 'initiatives have')} stalled.` },
+      summary.reviewDueThisMonth && { tone: 'watch', text: 'The plan review is due this month.' },
+    ].filter(Boolean)
+    const top = issues[0]
+    return (
+      <>
+        The plan is <VerdictEm>{pct}% of the way</VerdictEm> across{' '}
+        <VerdictEm>{plural(total, 'goal', 'goals')}</VerdictEm>.{' '}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : noData ? (
+          <VerdictEm tone="good">The measured goals are on pace.</VerdictEm>
+        ) : (
+          <VerdictEm tone="good">Every goal is on pace.</VerdictEm>
+        )}
+        {noData ? <> {plural(noData, 'goal has', 'goals have')} no data yet.</> : null}
+      </>
+    )
   }, [plan, summary])
 
   // ── Needs-attention (client-derived from summary; navigational actions) ────
@@ -323,7 +383,7 @@ function StrategyWorkspace() {
         tone: 'watch',
         sortKey: 1,
         title: `${it.title} has stalled`,
-        why: `No movement in ${it.staleDays ?? 60}+ days · ${it.ownerName ?? 'unassigned'}`,
+        why: `No movement in ${it.staleDays ?? 60}+ days. Owner: ${it.ownerName ?? 'nobody yet'}.`,
         actions: [{ label: 'View initiatives', primary: false, onClick: () => setTab('initiatives') }],
       })
     }
@@ -345,10 +405,18 @@ function StrategyWorkspace() {
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
   if (loading) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <StrategyTrail />
-        <PageHeader eyebrow={`Strategic Planning · ${activeSchool?.name ?? 'School'}`} title="Strategic Planning" meta="Loading the plan…" />
-      </div>
+      <ModuleAccent moduleKey="strategy">
+        <DomainStatePanel
+          showBack
+          moduleKey="strategy"
+          title={moduleLabel('strategy')}
+          Icon={Compass}
+          icon={Compass}
+          verdict="Loading the plan…"
+          text="Reading your pillars, goals and initiatives."
+          busy
+        />
+      </ModuleAccent>
     )
   }
   if (!hasPlan) {
@@ -356,7 +424,6 @@ function StrategyWorkspace() {
       <>
         <ModuleAccent moduleKey="strategy">
           <EmptyPlanPanel
-            schoolName={activeSchool?.name}
             canEdit={canEdit}
             onCreate={() => setModal({ type: 'plan', entity: null })}
           />
@@ -520,23 +587,46 @@ function StrategyWorkspace() {
     </div>
   ) : null
 
+  // What needs a decision comes first (register + Needs attention); the plan's
+  // arc — the module's numbers — follows, then How this works.
   const commandCenter = (
-    <DomainCommandCenter
-      showAddData
-      moduleKey="strategy"
-      eyebrow={`Strategic Planning · ${activeSchool?.name ?? 'School'}`}
-      title="Strategic Planning"
-      Icon={Compass}
-      attentionCount={attentionItems.length}
-      kpis={kpis}
-      tabs={TABS}
-      activeTab={tab}
-      onTabChange={setTab}
-      onNew={onNew}
-      registerTable={registerTable}
-      attentionItems={attentionItems}
-      beforeBody={<StrategyHorizon plan={plan} pillars={pillars} summary={summary} />}
-    />
+    <>
+      <DomainCommandCenter
+        showAddData
+        moduleKey="strategy"
+        eyebrow={
+          plan?.fyStartYear
+            ? `FY ${plan.fyStartYear}${plan.fyEndYear && plan.fyEndYear !== plan.fyStartYear ? `–${plan.fyEndYear}` : ''}`
+            : null
+        }
+        title="Strategic Planning"
+        Icon={Compass}
+        verdict={verdict}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={onNew}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
+        registerSubtitle="Pillars, goals and the projects behind them"
+        registerIcon={Flag}
+      />
+      <div className="au-scope mx-auto max-w-page px-4 pb-8 sm:px-10">
+        <StrategyHorizon plan={plan} pillars={pillars} summary={summary} />
+        <HowThisWorks>
+          <p>
+            A goal linked to a number you already track (cash, margin, enrollment) reads it live, so its progress is
+            never typed in.
+          </p>
+          <p>
+            Pace compares each goal&rsquo;s progress with how much time is left before its own target date. An
+            initiative counts as stalled after 60 days with no movement.
+          </p>
+        </HowThisWorks>
+      </div>
+    </>
   )
 
   if (uiV2) {

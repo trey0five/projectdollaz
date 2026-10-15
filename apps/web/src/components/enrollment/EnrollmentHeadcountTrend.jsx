@@ -195,7 +195,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
               textAnchor="end"
               fontSize="10"
               fontWeight={t === 0 ? '700' : '600'}
-              fill={t === 0 ? '#64748B' : '#94A3B8'}
+              fill="#64748B"
               className="tabular-nums"
             >
               {fmtCount(t)}
@@ -350,10 +350,10 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
         ))}
 
         {/* Date axis — the ends always, so the span is readable at a glance. */}
-        <text x={X(t0)} y={VB.h - 10} textAnchor="start" fontSize="10" fill="#94A3B8">
+        <text x={X(t0)} y={VB.h - 10} textAnchor="start" fontSize="10" fill="#64748B">
           {fmtDateShort(series[0].observedOn)}
         </text>
-        <text x={X(t1)} y={VB.h - 10} textAnchor="end" fontSize="10" fill="#94A3B8">
+        <text x={X(t1)} y={VB.h - 10} textAnchor="end" fontSize="10" fill="#64748B">
           {fmtDateShort(latest.observedOn)}
         </text>
 

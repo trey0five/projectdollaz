@@ -40,19 +40,21 @@ import {
 } from 'lucide-react'
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
 import ColumnChart from '../analytics/charts/ColumnChart.jsx'
-import AcademicsHeatmap from './AcademicsHeatmap.jsx'
+import AcademicsHeatmap, { HeatmapExplainer } from './AcademicsHeatmap.jsx'
 import { DIVERGING_INK } from '../analytics/charts/heatScales.js'
 import { subjectLabelOf } from '@finrep/analytics'
 import { ChartDefs, INK, fitScale, shortName, spreadLabels } from './chartKit.jsx'
-import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
-import { Section } from '../module/SectionHeader.jsx'
+import { WhatThisMeasures, MeasureKey, axisUnitOf } from './MeasureNote.jsx'
+import { Section } from './AcademicsCard.jsx'
 import { StatStrip, Stat, Pill } from '../ui/surface/index.js'
 import useDtOverflow from '../ui/surface/useDtOverflow.js'
-import AssessmentFilters from './AssessmentFilters.jsx'
+import { PeerNamesToggle } from './AssessmentFilters.jsx'
 import CohortLongitudinal from './CohortLongitudinal.jsx'
+import { moduleHue } from '../module/moduleAnatomy.js'
+import { AuroraSection, AuroraEmpty, AuroraLightButton } from '../ui/aurora/index.js'
 
 const EASE = [0.2, 0.8, 0.2, 1]
-const HUE = '#0D9488'
+const HUE = moduleHue('academics')
 
 // One map, in the semantic layer, so the chart axis and the sentence beside it
 // can never disagree about what a subject is called.
@@ -84,39 +86,20 @@ export const VIEWS = [
   { key: 'network', label: 'Network' },
 ]
 
+/** The view strips — one medallion heading per door (plain words). */
+const VIEW_STRIP = {
+  standing: { icon: Gauge, title: 'Where you stand', subtitle: 'Every school, ranked, subject by subject' },
+  classroom: { icon: Users2, title: 'Inside the classroom', subtitle: 'Where students actually sit' },
+  time: { icon: LineChart, title: 'Are we moving?', subtitle: 'The trend, and growth against achievement' },
+  cohorts: { icon: Footprints, title: 'Follow the same children', subtitle: 'One group, tracked forward' },
+  network: { icon: Network, title: 'Board-ready', subtitle: 'Every school, both years, and the table' },
+}
+
 const STANDING_TONE = {
   strong: { text: 'text-emerald-700', bg: 'bg-emerald-500/12', ring: 'ring-emerald-500/30', dot: '#059669' },
   below: { text: 'text-rose-700', bg: 'bg-rose-500/12', ring: 'ring-rose-500/30', dot: '#e11d48' },
   average: { text: 'text-navy/70', bg: 'bg-navy/[0.06]', ring: 'ring-navy/15', dot: '#64748b' },
   unknown: { text: 'text-muted', bg: 'bg-navy/[0.04]', ring: 'ring-navy/10', dot: '#cbd5e1' },
-}
-
-/** A variance chip — the "-45 points vs network" the whole deck hangs on. A
- *  status Pill: the mark carries the standing, the text stays ink. */
-function VarianceChip({ variance, standing, unit = '' }) {
-  const tone = standing === 'strong' ? 'good' : standing === 'below' ? 'risk' : 'neutral'
-  const Icon = standing === 'strong' ? TrendingUp : standing === 'below' ? TrendingDown : null
-  return (
-    <Pill variant="status" tone={tone}>
-      {Icon ? <Icon size={11} aria-hidden="true" /> : null}
-      {signed(variance)}
-      {unit} vs peers
-    </Pill>
-  )
-}
-
-// ── KPI strip ────────────────────────────────────────────────────────────────
-
-/**
- * A metric Stat (Premium UI P4): label / Garamond value / the context line /
- * the variance Pill — on the ground, in a StatStrip, no card, no bloom.
- */
-function KpiCard({ title, value, sub, chip }) {
-  return (
-    <Stat label={title} value={value} note={sub} className={typeof value === 'string' && /[a-z]/i.test(value) ? 'stat-text' : ''}>
-      {chip ? <div className="mt-2">{chip}</div> : null}
-    </Stat>
-  )
 }
 
 // ── Ranked schools ───────────────────────────────────────────────────────────
@@ -210,7 +193,7 @@ function SubjectDivergence({ subjects }) {
       {/* The zero line is the network average — the thing every column is
           measured from, so it is named, not left as an unlabelled axis. */}
       <p className="mt-2 text-[11px] text-muted">
-        The baseline is each subject&apos;s own network average: a column above it is ahead, one below it is behind.
+        Zero is each subject&apos;s network average — above is ahead, below is behind.
       </p>
     </div>
   )
@@ -690,10 +673,10 @@ function TrendChart({ points, national, range, reduce }) {
         </text>
       ))}
 
-      <text x={PAD.l - 6} y={PAD.t + 6} fontSize="9" textAnchor="end" fill="#94a3b8">
+      <text x={PAD.l - 6} y={PAD.t + 6} fontSize="10" textAnchor="end" fill="#64748b">
         {Math.round(hi)}
       </text>
-      <text x={PAD.l - 6} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
+      <text x={PAD.l - 6} y={H - PAD.b} fontSize="10" textAnchor="end" fill="#64748b">
         {Math.round(lo)}
       </text>
       {last ? null : null}
@@ -908,7 +891,6 @@ function priorGradeLabel(grade) {
 export default function AssessmentDashboard({
   data,
   onQuery,
-  loading,
   // The cohort view reads its own route, so its payload arrives beside the
   // dashboard's rather than inside it: four view-local controls would otherwise
   // refetch the whole ~200KB payload that seven other tabs share.
@@ -916,6 +898,7 @@ export default function AssessmentDashboard({
   cohortsLoading = false,
   cohortsError = '',
   onCohortQuery,
+  onGoAdd = null,
 }) {
   const reduce = useReducedMotion()
   const [anonymous, setAnonymous] = useState(false)
@@ -953,95 +936,56 @@ export default function AssessmentDashboard({
 
   if (data?.empty) {
     return (
-      <div className="border-y border-hair py-10 text-center">
-        <Sparkles size={20} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
-        <p className="font-serif text-title font-medium text-ink">No assessment results yet</p>
-        <p className="mx-auto mt-1.5 max-w-md text-small text-ink2">
-          Upload a scores file — a diocesan summary or a student-level export — and this school appears
-          beside its peers, grade by grade and subject by subject.
-        </p>
-      </div>
+      <AuroraEmpty
+        icon={Sparkles}
+        text="No test scores yet."
+        sub="Upload a scores file and this school appears beside its peers, grade by grade."
+        action={onGoAdd ? <AuroraLightButton variant="ghost" onClick={onGoAdd}>Add academic data</AuroraLightButton> : null}
+      />
     )
   }
 
   return (
     <div className="space-y-4">
-      {/* ── Scope bar ── */}
-      <AssessmentFilters
-        ctx={ctx}
-        view={view}
-        onSelect={select}
-        loading={loading}
-        anonymous={Boolean(data?.hidePeerNames ?? anonymous)}
-        onAnonymous={(on) => {
-          setAnonymous(on)
-          select({ hidePeerNames: on ? true : null })
-        }}
-      />
-
-      {/* ── KPI strip ── */}
-      <StatStrip cols={4} className="stats-wrap grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          title="Average score"
-          value={fmt(kpis?.average?.value)}
-          sub={`Network ${fmt(peerAvg)} · ${unitLabelOf(ctx)}`}
-          chip={<VarianceChip variance={kpis?.average?.variance} standing={kpis?.average?.standing} />}
-        />
-        <KpiCard
-          title="Rank in network"
-          value={rankText}
-          sub={`${ctx?.peerCount ?? 0} peer school${ctx?.peerCount === 1 ? '' : 's'}`}
-        />
-        <KpiCard
-          title="Year over year"
-          value={signed(kpis?.yoy)}
-          sub={data?.trendDirection ? `Trend: ${data.trendDirection}` : null}
-        />
-        <KpiCard
-          title="Participation"
-          value={kpis?.participation?.rate === null || kpis?.participation?.rate === undefined ? '—' : `${Math.round(kpis.participation.rate * 100)}%`}
-          sub={
-            kpis?.participation?.comparable
-              ? 'In line with peers — comparison is fair'
-              : kpis?.participation?.peerRate
-                ? `Peers ${Math.round(kpis.participation.peerRate * 100)}% — read with care`
-                : null
-          }
-        />
-      </StatStrip>
-
-      {/* ── Key insight — the one sentence, as prose on the ground ── */}
-      {data?.keyInsight ? (
-        <motion.p
-          initial={reduce ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: EASE, delay: 0.22 }}
-          className="flex max-w-[72ch] gap-2.5 font-serif text-heading leading-relaxed text-ink"
-        >
-          <Sparkles size={15} className="mt-1 shrink-0 text-ink2" aria-hidden="true" />
-          <span>{data.keyInsight}</span>
-        </motion.p>
-      ) : null}
+      {/* ── The figures, the one-sentence read AND the scope controls (test ·
+          year · grade · subject) live in the Academics band above — the same
+          payload, so they follow every filter there. ── */}
 
       {/* ── The five reads ──────────────────────────────────────────────────
-          One scroll held every chart on the page, which meant the cohort panel
-          and the network table were three screens below the fold and nobody
-          knew they existed. These are five DIFFERENT QUESTIONS, not five slices
-          of one, so each gets its own door — and the KPI strip and the insight
-          stay above them, because those answer "how are we doing" regardless of
-          which question you came for. */}
-      <div className="tabs-ink overflow-x-auto" role="tablist" aria-label="Analysis">
-        {VIEWS.map((v) => {
-          const on = view === v.key
-          return (
-            <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)} className="tab-ink">
-              {v.label}
-              {on ? <motion.span layoutId="academics-view-underline" className="tab-ink-rule" aria-hidden="true" /> : null}
-            </button>
-          )
-        })}
+          Five DIFFERENT QUESTIONS, not five slices of one, so each gets its own
+          door — hue pills, the same vocabulary as every Records tab. The
+          peer-names switch is presentation, not filtering: it sits apart, at
+          the right of the same row. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="au-tabs !mb-0" role="tablist" aria-label="Analysis">
+          {VIEWS.map((v) => {
+            const on = view === v.key
+            return (
+              <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)} className="au-tab">
+                {v.label}
+              </button>
+            )
+          })}
+        </div>
+        <div className="ml-auto">
+          <PeerNamesToggle
+            anonymous={Boolean(data?.hidePeerNames ?? anonymous)}
+            onAnonymous={(on) => {
+              setAnonymous(on)
+              select({ hidePeerNames: on ? true : null })
+            }}
+          />
+        </div>
       </div>
 
+      <AuroraSection
+        first
+        icon={VIEW_STRIP[view].icon}
+        title={VIEW_STRIP[view].title}
+        subtitle={VIEW_STRIP[view].subtitle}
+        count={ctx?.testType ? `${String(ctx.testType).toUpperCase()} · ${ctx.year}` : null}
+      >
+      <div className="acad-view">
       {/* ── Standing ── */}
       {view === 'standing' ? (
       <>
@@ -1052,15 +996,18 @@ export default function AssessmentDashboard({
         aside={
           <Pill variant="count">Rank {rankText}</Pill>
         }
+        info={
+          <WhatThisMeasures
+            mode="popover"
+            chart="standing"
+            ctx={ctx}
+            example={kpis?.average?.value}
+            peerAvg={peerAvg}
+            refs={['national', 'network']}
+          />
+        }
       >
-        <WhatThisMeasures
-          chart="standing"
-          ctx={ctx}
-          example={kpis?.average?.value}
-          peerAvg={peerAvg}
-          refs={['national', 'network']}
-          reduce={reduce}
-        />
+        <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['national', 'network']} />
         <RankedSchools
           schools={data?.schools ?? []}
           anonymous={anonymous ? data?.peersAnonymous : null}
@@ -1074,18 +1021,26 @@ export default function AssessmentDashboard({
 
       {/* ── Subjects + heatmap ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section eyebrow="By subject" title="Where the gap actually is" icon={BookOpen} reduce={reduce}>
-          <WhatThisMeasures chart="subjects" ctx={ctx} reduce={reduce} />
+        <Section
+          eyebrow="By subject"
+          title="Where the gap actually is"
+          icon={BookOpen}
+          reduce={reduce}
+          info={<WhatThisMeasures mode="popover" chart="subjects" ctx={ctx} />}
+        >
           <SubjectDivergence subjects={data?.subjects} />
         </Section>
 
-        <Section eyebrow="Grade by grade" title="Where instruction is landing" icon={Grid3x3} reduce={reduce} delay={0.05}>
-          <AcademicsHeatmap cells={data?.heatmap ?? []} subjects={subjects} unit={unit} reduce={reduce} />
-          <p className="mt-2 text-[11px] text-muted">
-            Each cell compares that grade with the SAME grade at other schools — the only comparison that means
-            anything. A grade with fewer than five scored students shows a hatched cell — hidden, not zero: the gate
-            nulls its values before they reach this chart, so there is no number here to shade.
-          </p>
+        <Section
+          eyebrow="Grade by grade"
+          title="Where instruction is landing"
+          icon={Grid3x3}
+          reduce={reduce}
+          delay={0.05}
+          info={<HeatmapExplainer unit={unit} />}
+          infoLabel="How to read this heat map"
+        >
+          <AcademicsHeatmap cells={data?.heatmap ?? []} subjects={subjects} unit={unit} reduce={reduce} explain={false} />
         </Section>
       </div>
 
@@ -1105,13 +1060,24 @@ export default function AssessmentDashboard({
       {/* ── Classroom ── */}
       {view === 'classroom' ? (
       <>
-        <Section eyebrow="The spread" title="Where students actually sit" icon={BarChart3} reduce={reduce}>
-          <WhatThisMeasures chart="distribution" ctx={ctx} reduce={reduce} />
+        <Section
+          eyebrow="The spread"
+          title="Where students actually sit"
+          icon={BarChart3}
+          reduce={reduce}
+          info={<WhatThisMeasures mode="popover" chart="distribution" ctx={ctx} />}
+        >
           <Distribution slices={data?.distribution ?? []} reduce={reduce} />
         </Section>
 
-        <Section eyebrow="Subgroups" title="Who the average is hiding" icon={Users2} reduce={reduce} delay={0.05}>
-          <WhatThisMeasures chart="subgroups" ctx={ctx} reduce={reduce} />
+        <Section
+          eyebrow="Subgroups"
+          title="Who the average is hiding"
+          icon={Users2}
+          reduce={reduce}
+          delay={0.05}
+          info={<WhatThisMeasures mode="popover" chart="subgroups" ctx={ctx} />}
+        >
           <SubgroupBars groups={data?.subgroups} range={ctx?.scoreRange} reduce={reduce} />
         </Section>
 
@@ -1132,14 +1098,16 @@ export default function AssessmentDashboard({
       {view === 'time' ? (
       <>
       <div className="grid gap-4">
-        <Section eyebrow="Across the years" title="Are we moving?" icon={LineChart} reduce={reduce}>
-          <WhatThisMeasures
-            chart="trend"
-            ctx={ctx}
-            example={kpis?.average?.value}
-            refs={['national']}
-            reduce={reduce}
-          />
+        <Section
+          eyebrow="Across the years"
+          title="Are we moving?"
+          icon={LineChart}
+          reduce={reduce}
+          info={
+            <WhatThisMeasures mode="popover" chart="trend" ctx={ctx} example={kpis?.average?.value} refs={['national']} />
+          }
+        >
+          <MeasureKey ctx={ctx} refs={['national']} />
           <TrendChart
             points={data?.trend ?? []}
             national={ctx?.nationalReference}
@@ -1162,8 +1130,15 @@ export default function AssessmentDashboard({
           about 180px each and every label landed on top of its own dot, so it
           takes a full row of its own. */}
       <div className="grid gap-4">
-        <Section eyebrow="Behind and falling" title="Growth against achievement" icon={Crosshair} reduce={reduce} delay={0.05}>
-          <WhatThisMeasures chart="quadrant" ctx={ctx} peerAvg={peerAvg} refs={['network']} reduce={reduce} />
+        <Section
+          eyebrow="Behind and falling"
+          title="Growth against achievement"
+          icon={Crosshair}
+          reduce={reduce}
+          delay={0.05}
+          info={<WhatThisMeasures mode="popover" chart="quadrant" ctx={ctx} peerAvg={peerAvg} refs={['network']} />}
+        >
+          <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['network']} />
           <GrowthQuadrant
             movements={(data?.movements ?? []).map((m) => ({ ...m, isFocus: m.schoolId === data?.school?.id }))}
             peerAvg={peerAvg}
@@ -1242,15 +1217,18 @@ export default function AssessmentDashboard({
             aside={
               <span>{ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}</span>
             }
+            info={
+              <WhatThisMeasures
+                mode="popover"
+                chart="network"
+                ctx={ctx}
+                example={kpis?.average?.value}
+                peerAvg={peerAvg}
+                refs={['national', 'network']}
+              />
+            }
           >
-            <WhatThisMeasures
-              chart="network"
-              ctx={ctx}
-              example={kpis?.average?.value}
-              peerAvg={peerAvg}
-              refs={['national', 'network']}
-              reduce={reduce}
-            />
+            <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['national', 'network']} />
             <BoardReportBars
               rows={data.table}
               national={ctx?.nationalReference}
@@ -1292,6 +1270,8 @@ export default function AssessmentDashboard({
         </div>
       </>
       ) : null}
+      </div>
+      </AuroraSection>
     </div>
   )
 }
@@ -1526,10 +1506,10 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
           )
         })}
 
-        <text x={PAD.l - 6} y={PAD.t + 4} fontSize="9" textAnchor="end" fill="#94a3b8">
+        <text x={PAD.l - 6} y={PAD.t + 4} fontSize="10" textAnchor="end" fill="#64748b">
           +{Math.round(yMag)}
         </text>
-        <text x={PAD.l - 6} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
+        <text x={PAD.l - 6} y={H - PAD.b} fontSize="10" textAnchor="end" fill="#64748b">
           −{Math.round(yMag)}
         </text>
         <text x={(PAD.l + W - PAD.r) / 2} y={H - 8} fontSize="9.5" textAnchor="middle" fill="#64748b">
@@ -1688,8 +1668,8 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
             </g>
           ))}
 
-        <text x={PAD.l - 6} y={PAD.t + 5} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(hi)}</text>
-        <text x={PAD.l - 6} y={floor} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(lo)}</text>
+        <text x={PAD.l - 6} y={PAD.t + 5} fontSize="10" textAnchor="end" fill="#64748b">{Math.round(hi)}</text>
+        <text x={PAD.l - 6} y={floor} fontSize="10" textAnchor="end" fill="#64748b">{Math.round(lo)}</text>
       </svg>
       </div>
 

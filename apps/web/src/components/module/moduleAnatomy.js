@@ -169,5 +169,129 @@ export function moduleAccentVars(key) {
     '--grad-cta-0': rgbHex(mixRgb(rgb, WHITE, 0.45)),
     '--grad-cta-1': rgbHex(rgb),
     '--grad-cta-2': rgbHex(mixRgb(rgb, BLACK, 0.18)),
+    // The Aurora band palette rides along, so every Aurora primitive inside a
+    // module page (ModuleTabs / ModuleAccent root) is hue-themed with no prop.
+    ...auroraVarsFromHue(moduleHue(key)),
   }
 }
+
+// ── Aurora band palette (the approved "Aurora" module look) ───────────────────
+// Every Aurora surface (components/ui/aurora/*, styles/aurora.css) is painted
+// from ONE module hue — the locked HOME_TILES hue above. Nothing here is a second
+// palette: the deep band stops are the hue darkened, and the two companion
+// hues are the hue turned round the colour wheel, so a module added to
+// HOME_TILES gets its band for free.
+//
+// TWO GUARDS make the band readable for EVERY hue (review 2026-10-15):
+//   1. Companion turn by FAMILY. Cool hues turn +28° / −22° (Finance's blue →
+//      violet + cyan, Enrollment's sky → indigo + teal — the mockup pairings).
+//      A fixed +28° on a WARM hue walks into yellow-green (Accreditation's amber
+//      became chartreuse), so warm hues (≈15–70°) turn both companions toward
+//      red/orange instead (−12° / −24°) — amber → orange + red-orange, the
+//      mockup's glow.
+//   2. White text must stay ≥4.5:1 over anything on the band. The blobs drift,
+//      so any word can end up over any blob: each GLOW colour (--au-g1..g3) is
+//      darkened until white over the blob (70% opacity over the lightest band
+//      stop) clears 4.5:1, and the band stops and --au-deep (the white button's
+//      label colour) get the same floor. A blue band is untouched; amber and
+//      orange deepen toward brown — the approved accreditation band.
+const rgbHsl = ([r, g, b]) => {
+  const [R, G, B] = [r / 255, g / 255, b / 255]
+  const max = Math.max(R, G, B)
+  const min = Math.min(R, G, B)
+  const l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h
+  if (max === R) h = (G - B) / d + (G < B ? 6 : 0)
+  else if (max === G) h = (B - R) / d + 2
+  else h = (R - G) / d + 4
+  return [h * 60, s, l]
+}
+const hslRgb = ([h, s, l]) => {
+  const k = (n) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  return [f(0), f(8), f(4)].map((v) => Math.round(v * 255))
+}
+const turn = (rgb, deg) => {
+  const [h, s, l] = rgbHsl(rgb)
+  return hslRgb([(h + deg + 360) % 360, s, l])
+}
+const rgba = (rgb, a) => `rgba(${rgb.join(',')},${a})`
+
+/** WCAG relative luminance of an sRGB triplet. */
+export function luminance(rgb) {
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+/** WCAG contrast of white text over an sRGB triplet. */
+export function whiteContrast(rgb) {
+  return 1.05 / (luminance(rgb) + 0.05)
+}
+// The blob's peak opacity (styles/aurora.css .au-blob) and the floor we hold.
+export const BLOB_ALPHA = 0.7
+/** A blob of `glow` at `alpha` over `base` — what white text actually sits on. */
+export const overBand = (glow, base, alpha = BLOB_ALPHA) => mixRgb(base, glow, alpha)
+const MIN_WHITE = 4.6 // a hair over AA 4.5 so rounding never lands under it
+
+/** Darken `rgb` toward black just until `test(candidate)` passes. */
+const deepenUntil = (rgb, test) => {
+  for (let t = 0; t <= 1.0001; t += 0.02) {
+    const c = mixRgb(rgb, BLACK, t)
+    if (test(c)) return c
+  }
+  return BLACK
+}
+
+/** Is this a warm hue (red-orange through amber/yellow) on the colour wheel? */
+const isWarm = (rgb) => {
+  const [h, s] = rgbHsl(rgb)
+  return s > 0.2 && h >= 15 && h <= 70
+}
+
+/** Aurora custom properties for ONE hue (hex). Consumed by styles/aurora.css. */
+export function auroraVarsFromHue(hex) {
+  const rgb = hexRgb(hex || '#2563EB')
+  const warm = isWarm(rgb)
+  const two = turn(rgb, warm ? -12 : 28)
+  const three = turn(rgb, warm ? -24 : -22)
+  // A warm band leans its dark stops a touch toward red so amber deepens to
+  // brown (the mockup's #92400e family), not to mustard.
+  const base = warm ? turn(rgb, -8) : rgb
+  // Band stops: the hue darkened — and never so light that white fails on it.
+  const d0 = deepenUntil(mixRgb(base, BLACK, 0.3), (c) => whiteContrast(c) >= MIN_WHITE)
+  const d1 = mixRgb(base, BLACK, 0.58)
+  const d2 = mixRgb(base, BLACK, 0.8)
+  const glow = (c) => deepenUntil(c, (g) => whiteContrast(overBand(g, d0)) >= MIN_WHITE)
+  const g1 = glow(mixRgb(base, WHITE, 0.12))
+  const deep = deepenUntil(mixRgb(base, BLACK, 0.25), (c) => whiteContrast(c) >= MIN_WHITE)
+  return {
+    '--au-h': rgbHex(rgb),
+    '--au-h2': rgbHex(two),
+    '--au-h3': rgbHex(three),
+    '--au-b1': rgbHex(g1),
+    '--au-g1': rgbHex(g1),
+    '--au-g2': rgbHex(glow(two)),
+    '--au-g3': rgbHex(glow(three)),
+    '--au-d0': rgbHex(d0),
+    '--au-d1': rgbHex(d1),
+    '--au-d2': rgbHex(d2),
+    '--au-deep': rgbHex(deep),
+    '--au-ink': rgbHex(mixRgb(rgb, [11, 16, 32], 0.5)),
+    '--au-veil': rgba(d2, 0.5),
+    '--au-shadow': rgba(d0, 0.6),
+  }
+}
+
+/** Aurora custom properties for a module key (its locked HOME_TILES hue). */
+export function moduleAuroraVars(key) {
+  return auroraVarsFromHue(moduleHue(key))
+}
+
+/** Exposed for the contrast spec: hex → [r, g, b]. */
+export const hexToRgb = hexRgb

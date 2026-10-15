@@ -8,18 +8,21 @@
 // existing self-contained panel; only the active step renders.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
+  CloudUpload,
   FileDown,
+  HandCoins,
+  ListChecks,
   PenLine,
   Scale,
   ShieldCheck,
   Wrench,
+  AlertTriangle,
 } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
@@ -31,7 +34,6 @@ import { useReconciliation } from '../../hooks/useReconciliation.js'
 import { sectionTitle } from '../../lib/complianceMeta.js'
 import MetricSection from '../analytics/MetricSection.jsx'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
-import ContextBar from '../analytics/ContextBar.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
 import DisclaimerBanner from './DisclaimerBanner.jsx'
 import ReadinessSummary from './ReadinessSummary.jsx'
@@ -40,11 +42,26 @@ import ScholarshipReconciliationSection from './reconciliation/ScholarshipReconc
 import CorrectiveActionPlanSection from './cap/CorrectiveActionPlanSection.jsx'
 import YearEndChecklistSection from './checklist/YearEndChecklistSection.jsx'
 import RuleRow from './RuleRow.jsx'
-import BackLink from '../ui/BackLink.jsx'
-import { PageHeader, Button } from '../ui/surface/index.js'
+import { Button } from '../ui/surface/index.js'
 import '../../styles/pending/b2-finance.css'
-import ReadinessWizardHero from './wizard/ReadinessWizardHero.jsx'
 import ReadinessStepper from './wizard/ReadinessStepper.jsx'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import { addDataHref } from '../../lib/dataDestinations.js'
+import {
+  AuroraButton,
+  AuroraEmpty,
+  AuroraLightButton,
+  AuroraSection,
+  HowThisWorks,
+  VerdictEm,
+} from '../ui/aurora/index.js'
+import {
+  FinanceSubPage,
+  FinanceSubBand,
+  FinanceMore,
+  FinancePeriodSwitch,
+  yearName,
+} from '../statements/financeSub.jsx'
 
 // ── Step catalog. `key` also selects the panel; `title`/`why` drive the intro. ──
 const STEPS = [
@@ -54,7 +71,7 @@ const STEPS = [
     hint: 'Enter & attest',
     Icon: PenLine,
     title: 'Enter your numbers',
-    why: 'The $250k trigger, your program tiers, and a few Yes/No attestations. Every readiness check below is computed from what you enter here.',
+    why: 'Scholarship funds, program tiers and a few Yes/No answers. Every check is worked out from these.',
   },
   {
     key: 'reconciliation',
@@ -62,7 +79,7 @@ const STEPS = [
     hint: 'Match funds',
     Icon: Scale,
     title: 'Reconcile your scholarships',
-    why: 'Upload the Step Up For Students disbursement detail and match it against the scholarship revenue recorded on your books.',
+    why: 'Match the Step Up For Students payments to the scholarship income on your books.',
   },
   {
     key: 'findings',
@@ -70,23 +87,23 @@ const STEPS = [
     hint: 'Review findings',
     Icon: ShieldCheck,
     title: 'Review your readiness',
-    why: 'How each AUP procedure looks against your data. Green passes; amber and red need attention before your CPA engagement.',
+    why: 'How each review step looks against your data. Amber and red need attention first.',
   },
   {
     key: 'cap',
     label: 'Corrective',
-    hint: 'Resolve issues',
+    hint: 'Fix what was found',
     Icon: Wrench,
-    title: 'Resolve exceptions',
-    why: 'For anything reportable or material, record a corrective action plan your CPA can rely on.',
+    title: 'Fix what was found',
+    why: 'For any serious finding or item to report, record how you will fix it.',
   },
   {
     key: 'checklist',
     label: 'Checklist',
     hint: 'Attest & export',
     Icon: ClipboardCheck,
-    title: 'Complete the checklist & export',
-    why: 'Attest the remaining procedures, gather the supporting documents, then export the workpapers packet for your CPA.',
+    title: 'Finish the checklist and export',
+    why: 'Confirm the last steps, gather documents, then export the packet for your CPA.',
   },
 ]
 const STEP_ORDER = STEPS.map((s) => s.key)
@@ -112,19 +129,12 @@ function intakeComplete(inputs) {
   return true
 }
 
-// The page header (Premium UI P4): BackLink + PageHeader on the hairline.
-function ReadinessHeader({ schoolName }) {
-  return (
-    <div className="mb-2">
-      <BackLink className="mb-2" />
-      <PageHeader
-        eyebrow={['Finance', schoolName, 'Review readiness'].filter(Boolean).join(' · ')}
-        title="Review readiness"
-        meta="A guided self-check against the Florida scholarship AUP — before your CPA engagement."
-        hue="37 99 235"
-      />
-    </div>
-  )
+const usd = (n) => `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+
+// The Readiness band for the early screens (gate, no saved year): title, one
+// sentence, no figures.
+function ReadinessBand({ verdict }) {
+  return <FinanceSubBand eyebrow="Florida scholarship review" title="Readiness" verdict={verdict} />
 }
 
 export default function ReviewReadinessPanel() {
@@ -135,6 +145,7 @@ export default function ReviewReadinessPanel() {
   const { periods, hydrating } = usePersistence()
 
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
+  const uiV2 = useUiV2()
 
   const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
 
@@ -189,10 +200,12 @@ export default function ReviewReadinessPanel() {
   // ── Entitlement gate ───────────────────────────────────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-        <ReadinessHeader schoolName={activeSchool?.name} />
-        <EntitlementPausedPanel />
-      </div>
+      <FinanceSubPage crumb="Readiness">
+        <ReadinessBand verdict="Readiness is paused on this plan." />
+        <div className="mt-8">
+          <EntitlementPausedPanel />
+        </div>
+      </FinanceSubPage>
     )
   }
 
@@ -201,18 +214,21 @@ export default function ReviewReadinessPanel() {
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!initialLoading && savedPeriods.length === 0) {
     return (
-      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-        <ReadinessHeader schoolName={activeSchool?.name} />
-        <div className="b2-note mt-8">
-          <p className="b2-note-title">No saved statements yet.</p>
-          <p>Generate and save a period on the dashboard to begin your readiness check.</p>
-          <div className="pt-2">
-            <Link to="/app" className="btn btn-primary">
-              Go to dashboard
-            </Link>
-          </div>
+      <FinanceSubPage crumb="Readiness">
+        <ReadinessBand verdict={<>Save a year&rsquo;s numbers to start your readiness check.</>} />
+        <div className="mt-8">
+          <AuroraEmpty
+            icon={ShieldCheck}
+            text="No saved statements yet."
+            sub="Add a trial balance and save the year to begin."
+            action={
+              <AuroraLightButton to={addDataHref(uiV2, { add: 'tb' })} icon={<CloudUpload size={15} aria-hidden="true" />}>
+                Add this year&rsquo;s numbers
+              </AuroraLightButton>
+            }
+          />
         </div>
-      </div>
+      </FinanceSubPage>
     )
   }
 
@@ -261,22 +277,133 @@ export default function ReviewReadinessPanel() {
         exit: { opacity: 0, y: -8 },
       }
 
-  return (
-    <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-      <ReadinessHeader schoolName={activeSchool?.name} />
+  // ── The band: ONE sentence from the $250k test, the next step as the button,
+  //    the four figures that say how ready you are. ─────────────────────────
+  const material = counts.material ?? 0
+  const reportable = counts.reportable ?? 0
+  const passCount = counts.pass ?? 0
+  const totalChecks = Object.values(counts).reduce((a, n) => a + (Number(n) || 0), 0)
+  // Checks that CAN pass: not-applicable ones never will, so they are not in
+  // the "of N" — and a manual check is the school's own call, not a pass.
+  const applicable = totalChecks - (Number(counts.not_applicable) || 0) - (Number(counts.manual) || 0)
+  const needsData = Number(counts.needs_data) || 0
+  const watching = Number(counts.watch) || 0
+  // "Nothing serious found" is only true once every check has run on real
+  // numbers: checks still waiting on data (or on watch) earn no Good pill.
+  const selPeriod = savedPeriods.find((p) => p.id === selectedPeriodId) ?? null
+  const periodName = selPeriod ? yearName(selPeriod.label) : null
 
-      {!showSkeleton && savedPeriods.length > 0 && (
-        <div className="mb-4">
-          <ContextBar
-            periods={savedPeriods}
-            activePeriodId={selectedPeriodId}
-            onSelectPeriod={setSelectedPeriodId}
-          />
-        </div>
-      )}
+  let verdict = null
+  if (!showSkeleton) {
+    if (!hasFigure) {
+      verdict = <>Let&rsquo;s get you ready for the scholarship review. Start with your numbers.</>
+    } else if (requiresAup) {
+      verdict = (
+        <>
+          <VerdictEm>{usd(inputs.scholarshipFundsReceived)}</VerdictEm> received — over $250,000, so a CPA review (AUP)
+          is required. <VerdictEm tone="watch">Report due September 15.</VerdictEm>
+        </>
+      )
+    } else {
+      verdict = (
+        <>
+          <VerdictEm>{usd(inputs.scholarshipFundsReceived)}</VerdictEm> received — $250,000 or less, so{' '}
+          <VerdictEm tone="good">no CPA review is required</VerdictEm> this year.
+        </>
+      )
+    }
+  }
+
+  const kpis = showSkeleton
+    ? null
+    : [
+        {
+          key: 'funds',
+          icon: HandCoins,
+          label: 'Scholarship funds',
+          value: hasFigure ? usd(inputs.scholarshipFundsReceived) : null,
+          caption: hasFigure
+            ? requiresAup
+              ? 'CPA review required' // the verdict line above already names the $250,000 line
+              : 'At or under the $250,000 line'
+            : 'Not entered yet',
+          // The statute's $250,000 line is a real threshold. The pill keeps the
+          // band's three words (Good / Watch); the caption says what it means.
+          verdict: hasFigure ? (requiresAup ? 'watch' : 'good') : null,
+        },
+        {
+          key: 'steps',
+          icon: ListChecks,
+          label: 'Steps done',
+          value: `${doneCount} of ${STEP_ORDER.length}`,
+          caption: allDone ? 'Ready to export' : nextIncompleteTitle ? `Next: ${STEPS.find((x) => x.key === nextIncomplete)?.label}` : null,
+          verdict: allDone ? 'good' : null,
+          verdictLabel: allDone ? 'Done' : null,
+        },
+        {
+          key: 'pass',
+          icon: CheckCircle2,
+          label: 'Checks passing',
+          value: applicable > 0 ? String(passCount) : null,
+          caption: applicable > 0 ? `of ${applicable} that apply` : 'No checks yet',
+        },
+        {
+          key: 'fix',
+          icon: AlertTriangle,
+          label: 'To fix',
+          value: totalChecks ? String(material + reportable) : null,
+          caption: totalChecks
+            ? [material ? `${material} serious` : null, reportable ? `${reportable} to report` : null].filter(Boolean).join(' · ') ||
+              (needsData ? `${needsData} still need${needsData === 1 ? 's' : ''} your numbers` : watching ? `${watching} to keep an eye on` : 'Nothing serious found')
+            : null,
+          // Serious finding → at risk; item to report → watch; none → good,
+          // but ONLY when no check is still waiting on data or on watch (a
+          // school that has not entered its numbers has not "passed"). No
+          // checks → no pill.
+          verdict: !totalChecks
+            ? null
+            : material
+              ? 'risk'
+              : reportable
+                ? 'watch'
+                : needsData === 0 && watching === 0
+                  ? 'good'
+                  : null,
+        },
+      ]
+
+  return (
+    <FinanceSubPage crumb="Readiness">
+      <FinanceSubBand
+        eyebrow={periodName ? `${periodName} · Florida scholarship review` : 'Florida scholarship review'}
+        title="Readiness"
+        verdict={verdict}
+        actions={
+          showSkeleton ? null : (
+            <>
+              <AuroraButton
+                variant="primary"
+                onClick={goNextIncomplete}
+                icon={allDone ? <CheckCircle2 size={19} aria-hidden="true" /> : <ArrowRight size={19} aria-hidden="true" />}
+              >
+                {allDone ? 'Export workpapers for your CPA' : nextIncompleteTitle ? `Continue — ${nextIncompleteTitle}` : 'Review'}
+              </AuroraButton>
+              {!allDone ? (
+                <AuroraButton onClick={openExport} icon={<FileDown size={19} aria-hidden="true" />}>
+                  Export workpapers
+                </AuroraButton>
+              ) : null}
+            </>
+          )
+        }
+        aside={<FinancePeriodSwitch periods={savedPeriods} activeId={selectedPeriodId} onSelect={setSelectedPeriodId} />}
+        kpis={kpis}
+      />
+
+      <DisclaimerBanner />
 
       {showSkeleton ? (
-        <div className="space-y-6">
+        <div className="mt-8 space-y-6">
           <HeadlineSkeleton />
           <div className="grid grid-cols-1 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -285,23 +412,12 @@ export default function ReviewReadinessPanel() {
           </div>
         </div>
       ) : (
-        <div className="mt-6 space-y-6">
-          {/* ── HERO: verdict + progress + next action ── */}
-          <ReadinessWizardHero
-            hasFigure={hasFigure}
-            requiresAup={requiresAup}
-            scholarshipFunds={inputs?.scholarshipFundsReceived}
-            doneCount={doneCount}
-            totalSteps={STEP_ORDER.length}
-            allDone={allDone}
-            nextLabel={nextIncompleteTitle ? `Continue — ${nextIncompleteTitle}` : 'Review'}
-            onNext={goNextIncomplete}
-            rulesetVersion={data?.rulesetVersion}
-            statuteYear={data?.statuteYear}
-          />
-
-          <DisclaimerBanner />
-
+        <AuroraSection
+          icon={ShieldCheck}
+          title="Your steps"
+          subtitle="Five steps to be ready for your CPA"
+          count={`${doneCount} of ${STEP_ORDER.length} done`}
+        >
           {/* ── STEPPER ── */}
           <div className="sticky top-14 z-10 lg:top-0">
             <ReadinessStepper
@@ -384,9 +500,8 @@ export default function ReviewReadinessPanel() {
                       <div className="b2-callout b2-good">
                         <CheckCircle2 size={14} aria-hidden="true" />
                         <p>
-                          <span className="font-semibold">No exceptions to correct.</span> Nothing
-                          you entered is reportable or material — there's no corrective action plan
-                          required for this engagement.
+                          <span className="font-semibold">Nothing to fix.</span> No serious findings
+                          or items to report, so no corrective action plan is needed.
                         </p>
                       </div>
                     )}
@@ -455,8 +570,27 @@ export default function ReviewReadinessPanel() {
               )}
             </div>
           </div>
-        </div>
+        </AuroraSection>
       )}
-    </div>
+
+      <FinanceMore current="readiness" />
+
+      <HowThisWorks>
+        <p>
+          This mirrors the Step Up For Students AUP template and the governing Florida statutes so you can check
+          yourself before your CPA engagement.
+        </p>
+        <p>
+          It is not the official Agreed-Upon-Procedures report and not legal or audit advice. Your engaged CPA performs
+          the official AUP.
+        </p>
+        <p>Schools that receive more than $250,000 in scholarship funds need a CPA review; the report is due September 15.</p>
+        {data?.rulesetVersion ? (
+          <p>
+            Checks follow the FL scholarship AUP ruleset v{data.rulesetVersion} (statute {data.statuteYear}).
+          </p>
+        ) : null}
+      </HowThisWorks>
+    </FinanceSubPage>
   )
 }

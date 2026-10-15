@@ -37,15 +37,19 @@ import {
   AlertTriangle,
   User,
   ChevronRight,
+  FileSignature,
+  CreditCard,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
+import { AuroraButton, VerdictEm } from '../components/ui/aurora/index.js'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useTasks } from '../hooks/useTasks.js'
 import { memberLabel, memberName } from '../lib/memberLabels.js'
-import { PageHeader, Pill, Button } from '../components/ui/surface/index.js'
+import { Pill, Button } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
 const STATUSES = ['open', 'in_progress', 'done', 'cancelled']
@@ -457,10 +461,26 @@ function ChainProgress({ task, members }) {
 
 // ── Entitlement gate: a plain page header on the ground ──────────────────────
 function GatePanel() {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <PageHeader eyebrow="Tasks" title="Your subscription is paused" meta="Resume your plan to manage tasks." />
-    </div>
+    <DomainStatePanel
+      showBack
+      title="Tasks"
+      Icon={ListChecks}
+      icon={ListChecks}
+      verdict="Your subscription is paused."
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          Resume your plan
+        </AuroraButton>
+      }
+      text="Resume your plan to manage tasks."
+    />
   )
 }
 
@@ -566,7 +586,7 @@ function TasksList({ tasks, loading, error, canEdit, emptyLabel, onOpenDetail, o
   if (loading) return <StateRow>Loading tasks…</StateRow>
   if (error) return <StateRow error>{error}</StateRow>
   if (tasks.length === 0)
-    return <StateRow title={emptyLabel}>Add a task, or spawn one from an attention item on your briefing.</StateRow>
+    return <RegisterEmpty icon={ListChecks} text={emptyLabel} sub="Add one, or make one from any warning." actionLabel="Add a task" />
 
   return (
     <ul className="b1-list">
@@ -788,7 +808,7 @@ const TABS = [
 ]
 
 const EMPTY_LABEL = {
-  all: 'No tasks here.',
+  all: 'No tasks yet.',
   mine: 'Nothing assigned to you.',
   signoffs: 'No sign-offs waiting on you.',
 }
@@ -900,6 +920,7 @@ function TasksWorkspace() {
       t.status !== 'cancelled')
 
   // ── KPIs (computed over the whole list) ────────────────────────────────────
+  // With no tasks at all there is nothing to judge: plain zeros, no pills.
   const kpis = useMemo(() => {
     const openCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
     const inProgress = tasks.filter((t) => t.status === 'in_progress').length
@@ -908,42 +929,83 @@ function TasksWorkspace() {
     const mySignoffs = tasks.filter(
       (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
     ).length
+    const none = tasks.length === 0
 
     return [
       {
         label: 'Open tasks',
+        icon: ListChecks,
         value: String(openCount),
-        status: openCount === 0 ? 'good' : inProgress > 0 ? 'watch' : 'neutral',
+        status: none ? 'neutral' : openCount === 0 ? 'good' : inProgress > 0 ? 'watch' : 'neutral',
         sub:
-          openCount === 0
-            ? { icon: Check, text: 'all clear', tone: 'good' }
-            : { icon: Clock, text: `${inProgress} in progress`, tone: 'neutral' },
+          none
+            ? { icon: ListChecks, text: 'nothing added yet', tone: 'neutral' }
+            : openCount === 0
+              ? { icon: Check, text: 'all clear', tone: 'good' }
+              : { icon: Clock, text: `${inProgress} in progress`, tone: 'neutral' },
       },
       {
         label: 'Overdue',
+        icon: AlertTriangle,
         value: String(overdue),
-        status: overdue > 0 ? 'risk' : 'good',
+        status: overdue > 0 ? 'risk' : openCount === 0 ? 'neutral' : 'good',
         sub:
           overdue > 0
             ? { icon: TrendingDown, text: 'past due date', tone: 'bad' }
-            : { icon: Check, text: 'on schedule', tone: 'good' },
+            : { icon: Check, text: openCount === 0 ? 'nothing open' : 'on schedule', tone: 'neutral' },
       },
       {
         label: 'Due soon',
+        icon: Clock,
         value: String(dueSoon),
         status: dueSoon > 0 ? 'watch' : 'neutral',
         sub: { icon: Clock, text: 'within 7 days', tone: 'neutral' },
       },
       {
-        label: 'Awaiting your sign-off',
+        label: 'Waiting on your sign-off',
+        icon: FileSignature,
         value: String(mySignoffs),
-        status: mySignoffs > 0 ? 'risk' : 'good',
+        status: mySignoffs > 0 ? 'risk' : 'neutral',
         sub:
           mySignoffs > 0
             ? { icon: AlertTriangle, text: 'your decision', tone: 'bad' }
-            : { icon: Check, text: 'none pending', tone: 'good' },
+            : { icon: Check, text: 'none pending', tone: 'neutral' },
       },
     ]
+  }, [tasks, currentUserId])
+
+  // ── The band's one sentence (real counts only; worst thing first) ─────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    if (tasks.length === 0) return <>No tasks yet. Add one, or make one from any warning.</>
+    const openCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
+    const overdue = tasks.filter(isOverdue).length
+    const dueSoon = tasks.filter((t) => t.urgency === 'due-soon').length
+    const mySignoffs = tasks.filter(
+      (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
+    ).length
+    const issues = [
+      mySignoffs && { tone: 'risk', text: `${plural(mySignoffs, 'waits', 'wait')} on your sign-off.` },
+      overdue && { tone: 'risk', text: `${plural(overdue, 'is', 'are')} overdue.` },
+      dueSoon && { tone: 'watch', text: `${plural(dueSoon, 'is', 'are')} due this week.` },
+    ].filter(Boolean)
+    const top = issues[0]
+    return (
+      <>
+        {openCount > 0 ? (
+          <>
+            <VerdictEm>{plural(openCount, 'task is', 'tasks are')} open</VerdictEm>.{' '}
+          </>
+        ) : (
+          <>Every task is done. </>
+        )}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : openCount > 0 ? (
+          <VerdictEm tone="good">Nothing is overdue.</VerdictEm>
+        ) : null}
+      </>
+    )
   }, [tasks, currentUserId])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
@@ -960,7 +1022,7 @@ function TasksWorkspace() {
         tone: 'risk',
         sortKey: 0,
         title: `${t.title} awaits your sign-off`,
-        why: 'You are the approver',
+        why: 'You are the approver.',
         actions: canEdit
           ? [
               {
@@ -984,7 +1046,7 @@ function TasksWorkspace() {
         tone: 'risk',
         sortKey: 1,
         title: `${t.title} is overdue`,
-        why: days != null ? `${days} day${days === 1 ? '' : 's'} past due` : 'Past its due date',
+        why: days != null ? `${days} day${days === 1 ? '' : 's'} past due.` : 'Past its due date.',
         actions: canEdit
           ? [{ label: 'Complete', primary: false, onClick: () => complete(t.id) }]
           : [],
@@ -1007,7 +1069,7 @@ function TasksWorkspace() {
             : days != null
               ? `${t.title} is due in ${days} day${days === 1 ? '' : 's'}`
               : `${t.title} is due soon`,
-        why: 'Coming up within the next 7 days',
+        why: 'Due within the next 7 days.',
         actions: [],
       })
     }
@@ -1044,9 +1106,10 @@ function TasksWorkspace() {
     <>
       <DomainCommandCenter
         showBack
-        eyebrow={`Tasks · ${activeSchool?.name ?? 'School'}`}
+        eyebrow={null}
         title="Tasks"
         Icon={ListChecks}
+        verdict={verdict}
         attentionCount={attentionItems.length}
         kpis={kpis}
         tabs={TABS}
@@ -1054,7 +1117,18 @@ function TasksWorkspace() {
         onTabChange={setTab}
         onNew={canEdit ? openAdd : null}
         registerTable={registerTable}
+        registerSubtitle="Everything your team has to do"
+        registerIcon={ListChecks}
         attentionItems={attentionItems}
+        howItWorks={
+          <>
+            <p>Tasks come from your team, or from a warning, policy or standard someone turned into a task.</p>
+            <p>
+              Due soon means due within 7 days. A task that needs sign-off waits on each approver in turn; the ones
+              waiting on you show first.
+            </p>
+          </>
+        }
       />
 
       <TaskFormModal

@@ -32,6 +32,7 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { DataTable, Section } from '../ui/surface/index.js'
+import InfoPopover from '../ui/InfoPopover.jsx'
 import {
   CELL_MASKED,
   EASE,
@@ -205,9 +206,28 @@ export default function EnrollmentGradeTable({ ladder, vsPlan, gradeByYear, minC
       as={motion.section}
       label="Every grade, in figures"
       aside={
-        <span className="tabular-nums">
-          {fmtCount(ladder.total)} students · counted {fmtDate(ladder.observedOn) ?? ladder.observedOn}
-        </span>
+        <>
+          <span className="tabular-nums">
+            {fmtCount(ladder.total)} students · counted {fmtDate(ladder.observedOn) ?? ladder.observedOn}
+          </span>
+          {/* How to read the table — behind an ⓘ, the same disclosure every
+              chart card on this page uses, so the table leads with figures. */}
+          <InfoPopover label="How to read this table">
+            <div className="space-y-2 text-small leading-snug text-ink">
+              {ladder.narrowestRung ? (
+                <p>The narrowest rung is the year that sets the ceiling for the grade above it next year.</p>
+              ) : null}
+              {hasPrior ? (
+                <p>
+                  The last column is the same GRADE a year earlier, not the same children — a rung, refilled. No
+                  change is taken across it for that reason; to follow one class as it moves up, read the cohort
+                  panels.
+                </p>
+              ) : null}
+              <p>Grades with fewer than {minCell} students are hidden, never shown as zero.</p>
+            </div>
+          </InfoPopover>
+        </>
       }
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -230,17 +250,10 @@ export default function EnrollmentGradeTable({ ladder, vsPlan, gradeByYear, minC
           <p className="sec-note">
             Narrowest rung:{' '}
             <span className="font-semibold text-ink">{gradeLabelOf(ladder.narrowestRung.grade)}</span> at{' '}
-            <span className="font-semibold tabular-nums text-ink">{fmtCount(ladder.narrowestRung.count)}</span> students —
-            the year that sets the ceiling for the grade above it next year.
+            <span className="font-semibold tabular-nums text-ink">{fmtCount(ladder.narrowestRung.count)}</span> students.
           </p>
         ) : ladder.narrowestRungWithheldReason ? (
           <p className="sec-note">{ladder.narrowestRungWithheldReason}</p>
-        ) : null}
-        {hasPrior ? (
-          <p className="sec-note">
-            The last column is the same GRADE a year earlier, not the same children — a rung, refilled. No change is
-            taken across it for that reason; to follow one class as it moves up, read the cohort panels.
-          </p>
         ) : null}
       </div>
     </Section>

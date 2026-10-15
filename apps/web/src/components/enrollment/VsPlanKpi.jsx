@@ -1,59 +1,60 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// VsPlanKpi — the headline enrollment-vs-plan detail. Reads the /summary response
-// ({ latest, vsPlan }) and shows actual headcount, the plan, and the gap with a
-// good/watch/risk band matching the enrollment_vs_plan metric (good ≥ -2%, watch
-// down to -5%, risk below). Purely presentational (no fetch).
+// VsPlanKpi — the enrollment-vs-plan summary tile. Reads the /summary response
+// ({ latest, vsPlan }) and states the gap against the plan with a good/watch/
+// risk verdict matching the enrollment_vs_plan metric (good ≥ -2%, watch down
+// to -5%, risk below). Purely presentational (no fetch).
 //
-// PREMIUM UI P4: three `Stat`s in a `StatStrip` on the ground — the SHARED
-// surface vocabulary, never a per-page card fork (card contract §5). Status is
-// the Stat's 2px mark + a status Pill; the text stays ink. Labels wrap, never
-// truncate.
+// AURORA (2026-10-15): one row tile in the "Students by grade" stack — the
+// gap as the title, the share and the plan as one short line, the verdict
+// pill in the foot. The band above carries the same figures as glass cards;
+// this tile is the gap said in words beside the grades that carry it. Status
+// is tone + pill (word + icon); the text stays ink. Labels wrap, never truncate.
 // ─────────────────────────────────────────────────────────────────────────────
+import { Target } from 'lucide-react'
 import { healthStatus, bandsFor } from '@finrep/analytics'
 import { formatMetricValue } from '../../lib/metricMeta.js'
-import { StatStrip, Stat, Section } from '../ui/surface/index.js'
-import { fmtDay } from './EnrollmentHero.jsx'
+import { AuroraTile } from '../ui/aurora/index.js'
+import { StatStrip, Stat } from '../ui/surface/index.js'
 
 // Band comes from the CANONICAL enrollment_vs_plan registry bands (good ≥ -2%, watch
-// to -5%, risk below) via healthStatus — never hardcoded here, so this strip can
-// never disagree with the dashboard/briefing when the band is re-tuned.
-const BAND_LABEL = {
-  good: 'On plan',
-  watch: 'Below plan',
-  risk: 'Well below plan',
-  neutral: 'No plan set',
-}
+// to -5%, risk below) via healthStatus — never hardcoded here, so this tile can
+// never disagree with the dashboard/briefing when the band is re-tuned. The
+// pill speaks the band's own vocabulary (Good / Watch / At risk) — the same
+// word the band's "Gap to plan" card prints for the same metric.
 
 export default function VsPlanKpi({ summary }) {
-  const latest = summary?.latest ?? null
   const vsPlan = summary?.vsPlan ?? null
-  const actual = latest?.totalEnrolled ?? null
   const gap = vsPlan?.gap ?? null
   const gapPct = vsPlan?.gapPct ?? null
+  const planTotal = vsPlan?.planTotal ?? null
   const band = healthStatus(gapPct, bandsFor('enrollment_vs_plan'), gapPct != null)
   const tone = band === 'neutral' ? null : band
 
-  return (
-    <Section label="Against plan">
-      <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
-        <Stat
-          label="Enrollment now"
-          value={actual !== null ? actual : '—'}
-          note={latest?.observedOn ? `As of ${fmtDay(latest.observedOn) ?? latest.observedOn}` : 'No roster yet'}
-        />
-        <Stat
-          label="Plan"
-          value={vsPlan?.planTotal != null ? vsPlan.planTotal : '—'}
-          note={vsPlan?.planTotal != null ? 'From your budget / enrollment plan' : 'Set a plan in Budget or Enrollment & aid'}
-        />
-        <Stat
-          label={BAND_LABEL[band] ?? 'vs plan'}
-          value={gapPct != null ? formatMetricValue(gapPct, 'percent') : '—'}
-          status={tone}
-          delta={gap != null ? { text: `${gap > 0 ? '+' : ''}${gap.toLocaleString('en-US')} vs plan`, tone: tone ?? 'neutral' } : null}
-          note={gap == null ? 'Needs a roster and a plan' : null}
-        />
+  // No gap to state: the shared Stat's honest em-dash + why, never a zero.
+  if (gap == null || planTotal == null) {
+    return (
+      <StatStrip cols={1} className="stats-wrap !grid-cols-1">
+        <Stat label="Against plan" value="—" note="Needs a roster and a plan" />
       </StatStrip>
-    </Section>
+    )
+  }
+
+  const sign = gap > 0 ? '+' : gap < 0 ? '−' : ''
+  const share = gapPct != null ? formatMetricValue(Math.abs(gapPct), 'percent') : null
+  const where = gap < 0 ? 'below' : gap > 0 ? 'above' : 'on'
+  return (
+    <AuroraTile
+      row
+      art={false}
+      icon={Target}
+      tone={tone}
+      title={`${sign}${Math.abs(gap).toLocaleString('en-US')} vs plan`}
+      desc={
+        gap === 0
+          ? `Right on the plan of ${planTotal.toLocaleString('en-US')}`
+          : `${share ? `${share} ` : ''}${where} the plan of ${planTotal.toLocaleString('en-US')}`
+      }
+      verdict={tone}
+    />
   )
 }

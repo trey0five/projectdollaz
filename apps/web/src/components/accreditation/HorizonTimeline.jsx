@@ -157,6 +157,8 @@ function Lane({ plot, index, reduce }) {
   )
 }
 
+const reasonOf = (f) => f?.horizon?.reason ?? 'No horizon was computed for this finding.'
+
 export default function HorizonTimeline({ findings = [], now = null, loading = false }) {
   const reduce = useReducedMotion()
   const base = parseDay(now)
@@ -219,6 +221,12 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
     return { plotted: dated, undated: none }
   }, [findings, base])
 
+  const sharedReason = useMemo(() => {
+    if (undated.length < 2) return null
+    const first = reasonOf(undated[0])
+    return undated.every((f) => reasonOf(f) === first) ? first : null
+  }, [undated])
+
   const ticks = useMemo(() => {
     if (!base) return []
     return Array.from({ length: TICKS }, (_, i) => tickLabel(base, i * (MONTHS / TICKS)))
@@ -248,9 +256,12 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
         </p>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* ── LEFT: the axis and its lanes ─────────────────────────────────── */}
-        <div className="min-w-0 lg:col-span-2">
+      {/* AURORA: the axis runs the full width and the undated column sits
+          UNDER it as a grid — side by side, a long undated list left the axis
+          beside a tall empty gap. Same two halves, same order of reading. */}
+      <div className="space-y-6">
+        {/* ── The axis and its lanes ───────────────────────────────────────── */}
+        <div className="min-w-0">
           {plotted.length === 0 ? (
             <div className="border-y border-hair px-4 py-8 text-center">
               <p className="text-[13px] font-semibold text-navy">
@@ -285,7 +296,7 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
           )}
         </div>
 
-        {/* ── RIGHT: the column that is the point of this component ─────────── */}
+        {/* ── The column that is the point of this component ───────────────── */}
         <div className="min-w-0">
           <h4 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
             <HelpCircle size={13} aria-hidden />
@@ -295,8 +306,17 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
             <p className="mt-2 text-[12.5px] text-muted">
               Every open finding carries a date.
             </p>
-          ) : (
-            <ul className="mt-2 border-t border-hair">
+          ) : null}
+          {/* When EVERY undated finding has the same reason, it is said once as
+              the group's caption instead of under each row — same words, same
+              meaning, sixteen fewer repeats. Differing reasons stay per row. */}
+          {sharedReason ? (
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted" data-testid="horizon-shared-reason">
+              {sharedReason}
+            </p>
+          ) : null}
+          {undated.length === 0 ? null : (
+            <ul className="mt-2 grid gap-x-6 border-t border-hair sm:grid-cols-2 xl:grid-cols-3">
               {undated.map((f) => (
                 <li
                   key={f.findingKey ?? f.factKey}
@@ -308,9 +328,9 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
                   </div>
                   <p className="mt-1 text-[13px] font-semibold leading-snug text-navy">{f.title}</p>
                   {/* The engine's own reason, verbatim. Never a guessed date. */}
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-                    {f.horizon?.reason ?? 'No horizon was computed for this finding.'}
-                  </p>
+                  {sharedReason ? null : (
+                    <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{reasonOf(f)}</p>
+                  )}
                 </li>
               ))}
             </ul>

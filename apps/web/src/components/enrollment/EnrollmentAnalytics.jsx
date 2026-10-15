@@ -49,16 +49,26 @@
 // those are different claims about the world.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, BarChart3 } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { useReducedMotion } from 'framer-motion'
+import { BarChart3, CircleDollarSign, GraduationCap, LayoutGrid, LineChart, TrendingUp, Users, Wrench } from 'lucide-react'
 import '../../styles/analytics-v2.css'
+import '../../styles/pending/aurora-enroll-acad.css'
 import ChartCard from '../analytics/v2/ChartCard.jsx'
-import Sparkline from '../analytics/charts/Sparkline.jsx'
 import { formatMetric, formatMetricDeltaOf } from '../analytics/v2/helpers.js'
-import { DELTA_TONE, MARK } from '../analytics/v2/statusStyle.js'
-import { deltaTone } from '../../lib/metricMeta.js'
-import { Section, StatStrip, Stat, Button, Panel } from '../ui/surface/index.js'
+import { AddDataCta, RecordsCta } from '../module/ModuleCtas.jsx'
+import { DomainStatePanel } from '../domain/DomainCommandCenter.jsx'
+import {
+  AuroraHero,
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+  AuroraButton,
+  AuroraLightButton,
+  VerdictEm,
+  toVerdict,
+  fyLabel,
+} from '../ui/aurora/index.js'
 import { useEnrollmentAnalytics } from '../../hooks/useEnrollmentAnalytics.js'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import EnrollmentHeadcountTrend from './EnrollmentHeadcountTrend.jsx'
@@ -89,47 +99,6 @@ import {
 
 const COHORT_MOVE_FLOOR = 3
 
-/** The vitals — a Section label row (with the as-of stamp as the aside) over a
- *  StatStrip. Each Stat is ONE registry tile: the pre-formatted value, a 2px
- *  status mark, the delta Pill, and the headcount's sparkline under it. */
-function VitalsStrip({ tiles, asOf, sparkFor }) {
-  return (
-    <Section label="Enrollment vitals" aside={asOf} className="!mt-0" aria-label="Enrollment vitals">
-      {tiles.length ? (
-        <StatStrip cols={Math.min(tiles.length, 4)} className="stats-wrap grid-cols-2 lg:grid-cols-4">
-          {tiles.map((t) => {
-            const spark = (sparkFor(t.key) ?? []).filter((v) => Number.isFinite(v))
-            const dt = formatMetricDeltaOf(t)
-            const tone = t.periodOverPeriodDelta == null || t.periodOverPeriodDelta === 0 ? 'neutral' : DELTA_TONE[deltaTone(t.periodOverPeriodDelta, t.goodDirection)] ?? 'neutral'
-            return (
-              <Stat
-                key={t.key}
-                label={t.boardLabel ?? t.label}
-                // PRE-FORMATTED by the canonical formatter, so a Stat here and
-                // the same metric on the scorecard print the same string.
-                value={formatMetric(t)}
-                status={MARK[t.status] ?? null}
-                delta={dt != null ? { text: dt, tone } : null}
-              >
-                {spark.length >= 2 ? (
-                  <div className="mt-2 h-8">
-                    <Sparkline vals={spark} color={ENROLL_HUE} h={32} fill stretch />
-                  </div>
-                ) : null}
-              </Stat>
-            )
-          })}
-        </StatStrip>
-      ) : (
-        <p className="text-small leading-relaxed text-ink2">
-          No period-anchored figures yet. Once a fiscal year holds an enrollment headcount, the vitals appear here —
-          the same numbers your briefing and board pack quote.
-        </p>
-      )}
-    </Section>
-  )
-}
-
 /**
  * Q6 — WHAT THE GAP COSTS, rendered from the briefing item VERBATIM.
  *
@@ -141,36 +110,58 @@ function VitalsStrip({ tiles, asOf, sparkFor }) {
  * There is deliberately NO CHART here: it is one sentence and two numbers, and a
  * chart would decorate a claim that is already fully stated.
  */
-function ImpactStrip({ items, reduce }) {
+function ImpactStrip({ items }) {
   if (!items.length) return null
   return (
-    <Section
-      as={motion.section}
-      label="What this means for the budget"
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+    <AuroraSection
+      icon={CircleDollarSign}
+      hue="var(--au-h2)"
+      title="What it means for the budget"
+      subtitle="Tuition and cash, from your briefing"
       aria-label="What this means for the budget"
     >
-      <ul className="divide-y divide-hair border-y border-hair">
+      <AuroraTileGrid cols={Math.min(3, Math.max(2, items.length))}>
         {items.map((it) => (
-          <li key={it.id} className="py-3">
-            <p className="text-small font-semibold leading-snug text-ink">{it.title}</p>
-            {it.why ? <p className="mt-1 text-small leading-relaxed text-ink2">{it.why}</p> : null}
-            {it.link ? (
-              <Link to={it.link} className="sec-more">
-                Take a look <ArrowRight size={12} aria-hidden="true" />
-              </Link>
-            ) : null}
-          </li>
+          <AuroraTile
+            key={it.id}
+            icon={CircleDollarSign}
+            tone={toVerdict(it.severity ?? it.tone) ?? null}
+            title={it.title}
+            desc={it.why ? firstSentence(it.why) : null}
+            tip={it.why ?? undefined}
+            verdict={toVerdict(it.severity ?? it.tone)}
+            to={it.link ?? undefined}
+          />
         ))}
-      </ul>
-    </Section>
+      </AuroraTileGrid>
+    </AuroraSection>
   )
 }
 
-export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = false, onGoToAddData = null }) {
+/** The first sentence of a server-authored line (the full text rides the tooltip). */
+function firstSentence(text) {
+  const m = String(text).match(/^.+?[.!?](\s|$)/)
+  return m ? m[0].trim() : String(text)
+}
+
+/** The view strips: one medallion heading per door. */
+const VIEW_STRIP = {
+  trend: { icon: LineChart, title: 'How it moved', subtitle: 'The whole school, over time' },
+  grades: { icon: GraduationCap, title: 'Where the miss is', subtitle: 'Grade by grade, against plan' },
+  cohorts: { icon: Users, title: 'Following a class', subtitle: 'One class, up the grades' },
+  who: { icon: LayoutGrid, title: "Who's here", subtitle: 'The mix behind the counts' },
+}
+
+export default function EnrollmentAnalytics({
+  schoolId,
+  periodId,
+  rosterMode = false,
+  onGoToAddData = null,
+  schoolName = null,
+  periodLabel = null,
+}) {
   const reduce = useReducedMotion()
+  const { pathname } = useLocation()
   const [view, setView] = useEnrollmentAnalyticsView()
   // The cohort ladder LENGTH is a URL setting and a REQUEST parameter: the set
   // of cohorts that exist at four grades is not a filter over the set that
@@ -189,37 +180,55 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
 
   if (loading && !data) {
     return (
-      <div className="mx-auto max-w-page space-y-4 px-4 py-8 sm:px-10">
-        <div className="h-28 animate-pulse rounded-lg bg-ink/[.04]" />
-        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
-      </div>
+      <DomainStatePanel
+        moduleKey="enrollment"
+        title="Enrollment"
+        eyebrow="Analytics"
+        verdict="Loading the analysis…"
+        icon={BarChart3}
+        text="Fetching trends, grades and cohorts."
+        busy
+      />
     )
   }
 
   if (notLicensed || notEntitled) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <Panel className="text-center">
-          <p className="text-body text-ink2">
-            {notLicensed
-              ? 'Enrollment analytics come with the Enrollment module.'
-              : 'Your subscription is paused, so this analysis is unavailable.'}
-          </p>
-        </Panel>
-      </div>
+      <DomainStatePanel
+        moduleKey="enrollment"
+        title="Enrollment"
+        eyebrow="Analytics"
+        verdict={notLicensed ? 'Analytics come with the Enrollment module.' : 'Your subscription is paused.'}
+        icon={BarChart3}
+        text={
+          notLicensed
+            ? 'Enrollment analytics come with the Enrollment module.'
+            : 'Your subscription is paused, so this analysis is unavailable.'
+        }
+        action={
+          <AuroraLightButton variant="ghost" to="/settings/billing">
+            See plans
+          </AuroraLightButton>
+        }
+      />
     )
   }
 
   if (error) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <Panel tone="attention" className="text-center">
-          <p className="text-body text-risk">{error}</p>
-          <Button variant="secondary" onClick={reload} className="mt-4">
+      <DomainStatePanel
+        moduleKey="enrollment"
+        title="Enrollment"
+        eyebrow="Analytics"
+        verdict="We couldn't load the analysis just now."
+        icon={Wrench}
+        text={error}
+        action={
+          <AuroraLightButton variant="ghost" onClick={reload}>
             Try again
-          </Button>
-        </Panel>
-      </div>
+          </AuroraLightButton>
+        }
+      />
     )
   }
 
@@ -251,10 +260,93 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
       )}`
     : 'No reading on file'
 
-  // The headcount tile gets a real series under it — the same dated readings E1
-  // draws, so the sparkline and the chart cannot tell different stories.
-  const trendVals = (trend?.points ?? []).map((p) => p.total)
-  const sparkFor = (key) => (key === 'enrollment_headcount' && trendVals.length >= 2 ? trendVals : null)
+  // ── The band: eyebrow, verdict and glass figures from the registry tiles ──
+  const bandEyebrow =
+    [
+      periodLabel ? fyLabel(periodLabel) : null,
+      'Analytics',
+      asOf?.observedOn ? `as of ${fmtDate(asOf.observedOn)}${asOf.stale ? ` · ${asOf.staleDays} days old` : ''}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || null
+  // ── Plain words for the registry tiles (the registry label is jargon on a
+  // band: "Enrollment vs Plan", "Enrollment Change (YoY)"). ──
+  const head = tiles.find((t) => t.key === 'enrollment_headcount') ?? null
+  const vsTile = tiles.find((t) => t.key === 'enrollment_vs_plan') ?? null
+  const headN = head && Number.isFinite(Number(head.value)) ? Number(head.value) : null
+  const planN = vsPlan?.totals && Number.isFinite(Number(vsPlan.totals.plan)) ? Number(vsPlan.totals.plan) : null
+  // The gap is taken from the SAME promoted headcount the band quotes (and the
+  // vs-plan tile is computed from), so the sentence, the card and the tile can
+  // never describe two different readings.
+  const planGap = headN != null && planN != null ? Math.round(headN - planN) : null
+  const headDelta =
+    head && Number.isFinite(Number(head.periodOverPeriodDelta)) ? Math.round(Number(head.periodOverPeriodDelta)) : null
+  const trueMinus = (v) => (v == null ? v : String(v).replace(/^-/, '−'))
+  const signedN = (n) => (n > 0 ? `+${fmtCount(n)}` : n < 0 ? `−${fmtCount(Math.abs(n))}` : '0')
+  const PLAIN = {
+    enrollment_headcount: { label: 'Students enrolled', icon: Users },
+    enrollment_change_yoy: { label: 'Change on last year', icon: TrendingUp },
+    enrollment_vs_plan: { label: 'Gap to plan', icon: TrendingUp },
+    student_teacher_ratio: { label: 'Students per teacher', icon: Users },
+  }
+  const captionFor = (t) => {
+    const dt = trueMinus(formatMetricDeltaOf(t))
+    if (t.key === 'enrollment_headcount') return planN != null ? `Plan ${fmtCount(planN)}` : dt ? `${dt} on last year` : 'Latest count'
+    if (t.key === 'enrollment_change_yoy') return headDelta != null ? `${signedN(headDelta)} students` : 'Against last year'
+    if (t.key === 'enrollment_vs_plan')
+      return planGap == null
+        ? 'Against the plan'
+        : planGap < 0
+          ? `${fmtCount(Math.abs(planGap))} short of ${fmtCount(planN)}`
+          : planGap > 0
+            ? `${fmtCount(planGap)} over ${fmtCount(planN)}`
+            : `Right on ${fmtCount(planN)}`
+    return dt ? `${dt} on last year` : 'This year'
+  }
+  const bandKpis = tiles.map((t) => ({
+    key: t.key,
+    icon: PLAIN[t.key]?.icon ?? TrendingUp,
+    label: PLAIN[t.key]?.label ?? t.boardLabel ?? t.label,
+    // PRE-FORMATTED by the canonical formatter, so a card here and the same
+    // metric on the scorecard print the same figure (with a true minus sign).
+    value: trueMinus(formatMetric(t)),
+    caption: captionFor(t),
+    verdict: toVerdict(t.status),
+  }))
+  const fy = periodLabel || period?.label ? fyLabel(periodLabel || period?.label) : null
+  const planTone = vsTile ? toVerdict(vsTile.status) : null
+  // Built the way the Overview's band builds it — the headcount, then the gap
+  // to the plan in students. Tied to the YEAR, never "the latest count": the
+  // ReconciliationStrip below may say a newer reading counts a different
+  // number, and this sentence must not claim to be the newest.
+  const bandVerdict = tiles.length ? (
+    <>
+      {head ? (
+        <>
+          <VerdictEm>{formatMetric(head)} students</VerdictEm>
+          {fy ? ` in ${fy}` : reconciliation?.diverged ? ' on the promoted count' : ''}.{' '}
+        </>
+      ) : null}
+      {planGap != null ? (
+        planGap < 0 ? (
+          <>
+            That is <VerdictEm tone={planTone ?? undefined}>{fmtCount(Math.abs(planGap))} short</VerdictEm> of the plan
+            of {fmtCount(planN)}.
+          </>
+        ) : planGap > 0 ? (
+          <>
+            That is <VerdictEm tone={planTone ?? undefined}>{fmtCount(planGap)} over</VerdictEm> the plan of{' '}
+            {fmtCount(planN)}.
+          </>
+        ) : (
+          <>Right on the plan of {fmtCount(planN)}.</>
+        )
+      ) : null}
+    </>
+  ) : (
+    'No year holds an enrollment headcount yet. Add one and these figures fill in.'
+  )
+  const strip = VIEW_STRIP[view] ?? VIEW_STRIP.trend
 
   const yearSpan =
     gradeByYear?.years?.length > 1
@@ -267,23 +359,33 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
     // pb-28 below lg: the floating Penny coin is fixed bottom-right, and at
     // narrow widths this data-dense page's last rows (E4's school total, E5's
     // donut) could never scroll clear of it — the coin sat ON the figures.
-    // Clearance beats repositioning the coin: everything stays reachable and
-    // the coin behaves like every other page's.
-    <div className="mx-auto max-w-page space-y-4 px-4 py-8 pb-28 sm:px-10 lg:pb-8">
-      {/* ── VITALS: the registry Stats, and ONLY the ones the server sent. A
-          Stat the server could not compute is absent, never a column of
-          em-dashes. ── */}
-      <VitalsStrip tiles={tiles} asOf={asOfChip} sparkFor={sparkFor} />
+    <div className="au-scope mx-auto max-w-page px-4 py-6 pb-28 sm:px-10 sm:py-8 lg:pb-10">
+      {/* ── THE BAND: the registry vitals as glass cards, and ONLY the ones the
+          server sent. A figure the server could not compute is absent, never a
+          card of em-dashes. ── */}
+      <AuroraHero
+        moduleKey="enrollment"
+        school={schoolName}
+        eyebrow={bandEyebrow}
+        title="Enrollment"
+        verdict={bandVerdict}
+        actions={
+          <>
+            <AddDataCta />
+            <RecordsCta module="enrollment" />
+            <AuroraButton to={pathname} icon={<TrendingUp size={18} aria-hidden="true" />}>
+              Overview
+            </AuroraButton>
+          </>
+        }
+        kpis={bandKpis}
+      />
 
       {/* HONESTY SURFACE 1 — PINNED, not filed under a view. It exists because
-          the TILES (promoted headcount) and the GRADE CHARTS (current reading)
-          can quote two different observations. Half of that pair lives above the
-          strip and the other half is on the Grades tab, so a reader who opened
-          Grades directly would compare a vs-plan table against a tile drawn from
-          a different day with nothing on screen saying so — precisely the
-          confusion this strip was built to prevent. It renders only when the two
-          have actually diverged, so pinning it costs nothing the rest of the
-          time. */}
+          the band's figures (promoted headcount) and the GRADE CHARTS (current
+          reading) can quote two different observations; a reader who opened
+          Grades directly would otherwise compare two different days with
+          nothing saying so. It renders only when the two have diverged. */}
       <ReconciliationStrip
         reconciliation={reconciliation}
         periodLabel={period?.label}
@@ -292,12 +394,21 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
       />
 
       {/* ── THE FOUR DOORS ── */}
-      <EnrollmentAnalyticsTabs view={view} onView={setView} />
+      <div className="mt-8">
+        <EnrollmentAnalyticsTabs view={view} onView={setView} />
+      </div>
 
+      <AuroraSection
+        first
+        icon={strip.icon}
+        title={strip.title}
+        subtitle={strip.subtitle}
+        count={yearSpan ?? null}
+      >
       <EnrollmentAnalyticsPanel view={view}>
       {/* ── TREND — the whole school, over time, and what the gap costs ── */}
       {view === 'trend' ? (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* E1.
             ── PROSE → PROGRESSIVE DISCLOSURE (this card and every chart card
             below): the full WhatThisMeasures paragraph moves VERBATIM into the
@@ -306,10 +417,10 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             and any reference-line key, which are data and stay in view. */}
         <ChartCard
           id="enr-trend"
-          sub="E1 · Over time"
+          sub="Over time"
           title="Headcount over time"
           asOf={asOfChip}
-          className="lg:col-span-2"
+          className="enr-chartcard lg:col-span-2"
           info={
             <WhatThisMeasures
               scope={sourceScope}
@@ -342,7 +453,6 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
           }
         >
           <ChartCaption
-            scope={sourceScope}
             refs={
               trend?.planTotal != null ? (
                 <RefChip
@@ -356,35 +466,24 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
               ) : null
             }
           >
-            {live
-              ? 'One reading per day from your live register — the axis starts at zero.'
-              : 'Each filed reading, placed on the day it describes — the axis starts at zero.'}
+            {live ? 'One reading per day from your register.' : 'Each filed reading, on the day it describes.'}
           </ChartCaption>
           <EnrollmentHeadcountTrend points={trend?.points ?? []} planTotal={trend?.planTotal ?? null} reduce={reduce} />
         </ChartCard>
 
-        {/* Q6 — forwarded verbatim from the briefing, never recomputed. It sits
-            with the TREND rather than with the grades that decompose the gap:
-            it is a whole-school consequence stated in dollars, which is the
-            question this view answers ("how are we doing, and so what"). */}
-        {impactItems.length ? (
-          <div className="lg:col-span-2">
-            <ImpactStrip items={impactItems} reduce={reduce} />
-          </div>
-        ) : null}
       </div>
       ) : null}
 
       {/* ── GRADES — where the miss actually is, chart then figure ── */}
       {view === 'grades' ? (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* E4 — the marquee. */}
         <ChartCard
           id="enr-vs-plan"
-          sub="E4 · Against plan"
+          sub="Against plan"
           title="Which grades carry the miss"
           asOf={asOfChip}
-          className="lg:col-span-2"
+          className="enr-chartcard lg:col-span-2"
           info={
             <WhatThisMeasures
               scope={sourceScope}
@@ -399,9 +498,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             </WhatThisMeasures>
           }
         >
-          <ChartCaption scope={sourceScope}>
-            Solid column = counted actual · dashed outline = the plan nobody counted.
-          </ChartCaption>
+          <ChartCaption>Solid = counted · dashed = the plan.</ChartCaption>
           <EnrollmentVsPlanChart
             vsPlan={vsPlan}
             planFailed={planFailed}
@@ -414,10 +511,10 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
         {/* E2 */}
         <ChartCard
           id="enr-heatmap"
-          sub="E2 · Grade × year"
+          sub="Grade by year"
           title="Every grade, every year"
           asOf={asOfChip}
-          className="lg:col-span-2"
+          className="enr-chartcard lg:col-span-2"
           info={
             <WhatThisMeasures scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope} reduce={reduce}>
               Every cell is the headcount in <strong className="font-semibold text-navy">one grade in one school
@@ -428,9 +525,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             </WhatThisMeasures>
           }
         >
-          <ChartCaption scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}>
-            One cell = one grade in one school year, all shaded on one zero-based scale.
-          </ChartCaption>
+          <ChartCaption>One cell = one grade in one school year.</ChartCaption>
           <EnrollmentGradeHeatmap gradeByYear={gradeByYear} minCell={minCell} reduce={reduce} />
         </ChartCard>
 
@@ -438,7 +533,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             charts it prints — the table IS "every grade, in figures", and a
             reader who distrusts a bar wants the number in the same view, not
             four screens away on a tab about something else. */}
-        <div className="lg:col-span-2">
+        <div className="enr-chartcard lg:col-span-2">
           <EnrollmentGradeTable
             ladder={ladder}
             vsPlan={vsPlan}
@@ -452,14 +547,14 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
 
       {/* ── COHORTS — one class, followed up the grades ── */}
       {view === 'cohorts' ? (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* E3 — the star. */}
         <ChartCard
           id="enr-cohorts"
-          sub="E3 · Following a class"
+          sub="Following a class"
           title="Cohort size progression"
           asOf={asOfChip}
-          className="lg:col-span-2"
+          className="enr-chartcard lg:col-span-2"
           info={
             <WhatThisMeasures
               scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}
@@ -477,9 +572,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             </WhatThisMeasures>
           }
         >
-          <ChartCaption scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}>
-            One panel = one class followed up the grades, all on one zero-based axis — class size, not retention.
-          </ChartCaption>
+          <ChartCaption>One class per panel — its size, not retention.</ChartCaption>
           <EnrollmentCohortSize
             cohortSize={cohortSize}
             moveFloor={COHORT_MOVE_FLOOR}
@@ -498,11 +591,12 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
 
       {/* ── WHO'S HERE — the people behind the counts ── */}
       {view === 'who' ? (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* E5 */}
         <ChartCard
           id="enr-demographics"
-          sub="E5 · Who is here"
+          className="enr-chartcard"
+          sub="Who is here"
           title="Demographic mix"
           asOf={asOfChip}
           info={
@@ -519,16 +613,15 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             </WhatThisMeasures>
           }
         >
-          <ChartCaption scope={sourceScope}>
-            Counts first — every figure is printed in the key, nothing is read off an angle.
-          </ChartCaption>
+          <ChartCaption>Counts first — every figure is in the key.</ChartCaption>
           <EnrollmentDemographicsCard demographics={demographics} />
         </ChartCard>
 
         {/* E7 */}
         <ChartCard
           id="enr-support"
-          sub="E7 · Support needs"
+          className="enr-chartcard"
+          sub="Support needs"
           title="Support needs and register status"
           asOf={asOfChip}
           info={
@@ -543,9 +636,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             </WhatThisMeasures>
           }
         >
-          <ChartCaption scope={sourceScope}>
-            Counts of support flags on your register — under-{minCell} cells stay hidden, never zero.
-          </ChartCaption>
+          <ChartCaption>Support flags on your register — under {minCell} stays hidden.</ChartCaption>
           <EnrollmentSupportNeedsCard mix={mix} />
         </ChartCard>
 
@@ -555,22 +646,25 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             chart, and the same line twice on one page is noise. It lands on THIS
             view because it asks E5's and E7's question with the filters live. */}
         {rosterMode ? (
-          <Section
-            aria-label="Explore the register"
-            className="lg:col-span-2"
-            label={
-              <span className="inline-flex items-center gap-1.5">
-                <BarChart3 size={13} aria-hidden="true" /> Explore the register
-              </span>
-            }
-            aside="filter your roster and watch every mix respond"
-          >
-            <RosterAnalyticsSection schoolId={schoolId} />
-          </Section>
+          <div className="lg:col-span-2" aria-label="Explore the records">
+            <AuroraSection
+              compact
+              icon={BarChart3}
+              title="Explore the records"
+              subtitle="Filter the list and watch every mix respond"
+            >
+              <RosterAnalyticsSection schoolId={schoolId} />
+            </AuroraSection>
+          </div>
         ) : null}
       </div>
       ) : null}
       </EnrollmentAnalyticsPanel>
+      </AuroraSection>
+
+      {/* Q6 — forwarded verbatim from the briefing, never recomputed: the
+          whole-school consequence in dollars, under the trend it follows. */}
+      {view === 'trend' ? <ImpactStrip items={impactItems} /> : null}
 
       {/* ── PINNED FOOT, ON EVERY VIEW ─────────────────────────────────────────
           These two qualify EVERY figure on the page, not the four on whichever

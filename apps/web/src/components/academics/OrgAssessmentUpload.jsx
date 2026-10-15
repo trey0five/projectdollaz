@@ -80,13 +80,10 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
 
   return (
     <Panel style={HUE_VAR}>
-      <p className="a2-eyebrow">
-        One file, every school
-      </p>
-      <h3 className="a2-title">Upload the network&rsquo;s results</h3>
-      <p className="mt-1 max-w-[70ch] text-small text-ink2">
-        The publisher&rsquo;s export, exactly as it arrives. School names are matched against your records — including
-        the spellings you have already corrected once — and you see every match before anything is saved.
+      {/* The Aurora section strip above names this ("One file, every school");
+          the card keeps one plain line and the dropzone. */}
+      <p className="max-w-[70ch] text-small text-ink2" title="School names are matched against your records — including the spellings you have already corrected once — and you see every match before anything is saved.">
+        The publisher&rsquo;s export, as it arrives. You see every school match before anything is saved.
       </p>
 
       <label

@@ -389,7 +389,15 @@ export default function CashScheduleWorkspace({ schoolId, periodId, canEdit }) {
       <Section
         key={restriction}
         label={CASH_RESTRICTION_LABELS[restriction]}
-        aside={canEdit ? <AddRowButton onClick={() => onAdd(restriction)} label="Add account" /> : null}
+        aside={
+          canEdit ? (
+            <AddRowButton
+              onClick={() => onAdd(restriction)}
+              label="Add account"
+              data-add-default={restriction === 'unrestricted' ? 'true' : undefined}
+            />
+          ) : null
+        }
       >
         <div className="dt-wrap">
           <table className="dt">
@@ -464,7 +472,7 @@ export default function CashScheduleWorkspace({ schoolId, periodId, canEdit }) {
 
       {CASH_RESTRICTIONS.map((r) => renderGroup(r))}
 
-      <Section label="Total cash & investments">
+      <Section label="Total cash & investments" className="sched-total">
         <StatStrip cols={3} className="stats-compact">
           <Stat label="Balance" value={statMoney(grand.balance)} />
           <Stat label="Total insured" value={statMoney(grand.insured)} />

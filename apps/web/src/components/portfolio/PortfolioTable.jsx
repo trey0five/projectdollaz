@@ -29,7 +29,9 @@
 import AttentionBandChip, { UrgencyChip, bandTone, pctText, percentileText } from './AttentionBandChip.jsx'
 import DriversList from './DriversList.jsx'
 import { DemoChip } from '../accreditation/ReadinessTrendStrip.jsx'
-import { Section, DataTable } from '../ui/surface/index.js'
+import { DataTable } from '../ui/surface/index.js'
+import { ListOrdered } from 'lucide-react'
+import { AuroraEmpty, AuroraSection } from '../ui/aurora/index.js'
 import '../../styles/pending/b1-domain.css'
 
 /**
@@ -96,20 +98,23 @@ export default function PortfolioTable({ rows = [], indexComparable = true }) {
   const ranked = Array.isArray(rows) ? rows : []
   if (ranked.length === 0) {
     return (
-      <Section label="Ranked by attention">
-        <div className="b1-empty">
-          <p>No school in this organization can be ranked yet. The sections below name what is missing.</p>
-        </div>
-      </Section>
+      <AuroraSection icon={ListOrdered} title="Ranked by attention" subtitle="Schools that need you most, first">
+        <AuroraEmpty
+          icon={ListOrdered}
+          text="No school in this organization can be ranked yet."
+          sub="The sections below name what is missing."
+        />
+      </AuroraSection>
     )
   }
 
   // NO sortable column, on purpose: the order is the server's (see above).
   const columns = [
-    { key: 'rank', header: '#', num: true, render: (row) => <span className="font-semibold text-ink2">{row?.rank ?? '—'}</span> },
+    { key: 'rank', header: '#', num: true, className: 'pf-c-rank', render: (row) => <span className="font-semibold text-ink2">{row?.rank ?? '—'}</span> },
     {
       key: 'school',
       header: 'School',
+      className: 'pf-c-school',
       render: (row) => (
         <div className="flex min-w-[12rem] flex-col gap-0.5 py-2">
           <span className="flex flex-wrap items-center gap-2">
@@ -120,51 +125,93 @@ export default function PortfolioTable({ rows = [], indexComparable = true }) {
         </div>
       ),
     },
-    { key: 'attention', header: 'Attention', render: (row) => <AttentionBandChip band={row?.attentionBand} score={row?.attentionScore} /> },
-    { key: 'urgency', header: 'Urgency', render: (row) => <UrgencyChip urgency={row?.urgency} reason={row?.urgencyReason} /> },
+    // `pf-m-label` is the column's name, shown only on a phone, where each row
+    // becomes a stacked card and the header row is off screen.
+    {
+      key: 'attention',
+      header: 'Attention',
+      className: 'pf-c-att',
+      render: (row) => (
+        <>
+          <span className="pf-m-label">Attention</span>
+          <AttentionBandChip band={row?.attentionBand} score={row?.attentionScore} />
+        </>
+      ),
+    },
+    {
+      key: 'urgency',
+      header: 'Urgency',
+      className: 'pf-c-urg',
+      render: (row) => (
+        <>
+          <span className="pf-m-label">Urgency</span>
+          <UrgencyChip urgency={row?.urgency} reason={row?.urgencyReason} />
+        </>
+      ),
+    },
     // THE TIEBREAK COLUMN. `verifiedPct` — the evidence-backed figure the server
     // broke ties on. Never `readinessPct`, never `selfScoredPct`.
     {
       key: 'verified',
       header: 'Evidence-backed',
       num: true,
-      render: (row) =>
-        pctText(row?.verifiedPct) ?? <span className="font-normal text-ink2">Not measured</span>,
-      className: 'font-semibold',
+      render: (row) => (
+        <>
+          <span className="pf-m-label">Evidence-backed</span>
+          {pctText(row?.verifiedPct) ?? <span className="font-normal text-ink2">Not measured</span>}
+        </>
+      ),
+      className: 'font-semibold pf-c-ev',
     },
-    { key: 'peers', header: 'Peers', render: (row) => <PeerCell peers={row?.peers ?? null} /> },
+    {
+      key: 'peers',
+      header: 'Peers',
+      className: 'pf-c-peers',
+      render: (row) => (
+        <>
+          <span className="pf-m-label">Peers</span>
+          <PeerCell peers={row?.peers ?? null} />
+        </>
+      ),
+    },
     {
       key: 'why',
       header: 'Why',
-      className: 'min-w-[16rem] max-w-[26rem] !py-2 align-top',
-      render: (row) => <DriversList drivers={row?.drivers} />,
+      className: 'min-w-[16rem] max-w-[26rem] !py-2 align-top pf-c-why',
+      render: (row) => (
+        <>
+          <span className="pf-m-label">Why</span>
+          <DriversList drivers={row?.drivers} />
+        </>
+      ),
     },
   ]
 
   return (
-    <Section
+    <AuroraSection
       aria-labelledby="portfolio-ranked"
-      className="!mt-0"
-      label={
-        <span id="portfolio-ranked">
-          Ranked by attention · {ranked.length} {ranked.length === 1 ? 'school' : 'schools'}
-        </span>
+      icon={ListOrdered}
+      title={<span id="portfolio-ranked">Ranked by attention</span>}
+      subtitle={
+        indexComparable
+          ? 'Band, then urgency, then evidence — never by index'
+          : 'Index scores are not compared across frameworks.'
       }
+      count={`${ranked.length} ${ranked.length === 1 ? 'school' : 'schools'}`}
     >
-      <p className="mb-2 text-[12px] text-ink2">
-        Ordered by the server: band, then urgency, then attention, then evidence coverage.
-        {!indexComparable && ' Index scores are not compared across frameworks.'}
-      </p>
-      {/* Wide content scrolls inside its own container — the page never scrolls
-          sideways. */}
-      <DataTable
-        caption="Schools ranked by attention"
-        columns={columns}
-        rows={ranked}
-        rowKey={(row, i) => row?.schoolId ?? row?.rank ?? i}
-        markOf={(row) => bandTone(row?.attentionBand)}
-        className="[&_.dt]:min-w-[52rem]"
-      />
-    </Section>
+      {/* Wide content scrolls inside its own card — the page never scrolls
+          sideways. The order is the server's: band, then urgency, then
+          attention, then evidence coverage. */}
+      <div className="au-card au-card-flat au-register min-w-0">
+        <DataTable
+          caption="Schools ranked by attention"
+          columns={columns}
+          rows={ranked}
+          rowKey={(row, i) => row?.schoolId ?? row?.rank ?? i}
+          markOf={(row) => bandTone(row?.attentionBand)}
+          className="pf-stack pf-ranked [&_.dt]:min-w-[52rem]"
+        />
+      </div>
+    </AuroraSection>
   )
 }

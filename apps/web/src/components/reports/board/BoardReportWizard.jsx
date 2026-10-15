@@ -18,7 +18,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useReducer } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Check } from 'lucide-react'
+import { Check, FileBarChart2 } from 'lucide-react'
 import { useBoardReport } from '../../../hooks/useBoardReport.js'
 import { useAutosave } from '../../../hooks/useAutosave.js'
 import { useBilling } from '../../../context/BillingContext.jsx'
@@ -28,7 +28,9 @@ import Step2Confirm from './steps/Step2Confirm.jsx'
 import Step3Variance from './steps/Step3Variance.jsx'
 import Step4Branding from './steps/Step4Branding.jsx'
 import Step5Generate from './steps/Step5Generate.jsx'
-import { PageHeader, Panel } from '../../ui/surface/index.js'
+import { Panel } from '../../ui/surface/index.js'
+import { FinanceSubBand } from '../../statements/financeSub.jsx'
+import { AuroraSection } from '../../ui/aurora/index.js'
 import '../../../styles/pending/b2-finance.css'
 
 const STEPS = [
@@ -228,35 +230,43 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
   // inside ONE Panel — the only raised surface (it is a form).
   return (
     <div>
-      <PageHeader
-        eyebrow={['Reports', school?.name, 'Board report'].filter(Boolean).join(' · ')}
-        title="Board report"
-        meta="A branded finance-committee packet: budget vs. actual, key indicators, MD&A narrative, and the three core statements."
-        hue="37 99 235"
-        actions={
+      <FinanceSubBand
+        school={school?.name ?? null}
+        eyebrow="Finance committee packet"
+        title="Board Report"
+        verdict={<>Five short steps: pick the year, check it, add your notes, brand it, print.</>}
+        tools={
           canEdit && (saving || saveError) ? (
-            <span className="text-small text-ink2" role="status">
+            <span className="pill" role="status">
               {saving ? 'Saving…' : saveError}
             </span>
           ) : null
         }
       />
-      <div className="mt-5">{renderRail(step, ctx)}</div>
-      <Panel className="mt-5" padded={false}>
-        <div className="px-5 py-6 sm:px-7">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={reduce ? false : { opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, x: -18 }}
-              transition={{ duration: 0.22 }}
-            >
-              {renderStep(step, ctx)}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </Panel>
+      <AuroraSection
+        first
+        icon={FileBarChart2}
+        title="Your report"
+        subtitle={STEPS.find((x) => x.id === step)?.label ?? 'Five short steps'}
+        count={`Step ${step} of ${STEPS.length}`}
+      >
+        <div>{renderRail(step, ctx)}</div>
+        <Panel className="mt-5" padded={false}>
+          <div className="px-5 py-6 sm:px-7">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={reduce ? false : { opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, x: -18 }}
+                transition={{ duration: 0.22 }}
+              >
+                {renderStep(step, ctx)}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </Panel>
+      </AuroraSection>
     </div>
   )
 }

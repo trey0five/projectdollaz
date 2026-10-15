@@ -71,14 +71,14 @@ function HealthHeader({ health, counts, framework, printHref }) {
       label={
         <span className="inline-flex items-center gap-1.5">
           <Glyph icon={FileStack} size={12} />
-          Evidence readiness
+          Proof readiness
           {framework?.name ? <span className="font-normal normal-case tracking-normal">· {framework.name}</span> : null}
         </span>
       }
       aside={
         printHref ? (
           <Button to={printHref} variant="secondary" size="sm" icon={<Glyph icon={Printer} size={13} />} className="no-print">
-            Evidence Index
+            Print proof list
           </Button>
         ) : null
       }
@@ -220,7 +220,7 @@ function ArtifactRow({ artifact }) {
 }
 
 // ── One requirement group ────────────────────────────────────────────────────
-function GroupCard({ group, onOpenStandard, reduce }) {
+function GroupCard({ group, onOpenStandard, reduce, nudgeLink = null }) {
   const [open, setOpen] = useState(false)
   const serves = group.servesStandards ?? []
   const artifacts = group.artifacts ?? []
@@ -262,6 +262,13 @@ function GroupCard({ group, onOpenStandard, reduce }) {
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <CtaPill cta={group.cta} title={group.message} />
+            {/* The link of the nudge folded into this group (the same sentence
+                is said once — here), so no action is lost by the de-dupe. */}
+            {nudgeLink && nudgeLink !== group.cta?.link ? (
+              <Link to={nudgeLink} className="dt-link text-[12px]">
+                Open
+              </Link>
+            ) : null}
             <span
               className="inline-flex items-center gap-1 text-[11.5px] text-ink2"
               title={`Where this lives: ${whereItLives(group.sourceRegister, group.dataAvailability)}`}
@@ -372,8 +379,21 @@ export default function EvidenceReadinessTable({
   // Never blanks the tab, never substitutes a zero — one honest line.
   if (notLicensed || (error && groups.length === 0)) {
     return (
-      <p className="border-y border-hair px-6 py-12 text-center text-small text-ink2">Evidence readiness is unavailable right now.</p>
+      <p className="border-y border-hair px-6 py-12 text-center text-small text-ink2">Proof is unavailable right now.</p>
     )
+  }
+
+  // SAID ONCE. A nudge whose sentence is a group's own sentence ("No Approved
+  // board minutes on file.") listed every missing item twice — once as a
+  // nudge, once as its group below. Such a nudge folds into its group (its
+  // link rides along); any nudge that is not a group's sentence still renders.
+  const groupMessages = new Set(groups.map((g) => g?.message).filter(Boolean))
+  const foldedLinks = new Map()
+  const ownNudges = []
+  for (const n of nudges ?? []) {
+    if (n?.message && groupMessages.has(n.message)) {
+      if (n.link && !foldedLinks.has(n.message)) foldedLinks.set(n.message, n.link)
+    } else ownNudges.push(n)
   }
 
   return (
@@ -382,9 +402,9 @@ export default function EvidenceReadinessTable({
 
       {strengths ? <div className="mt-6">{strengths}</div> : null}
 
-      {nudges?.length ? (
+      {ownNudges.length ? (
         <div className="mt-6">
-          <NudgeList nudges={nudges} />
+          <NudgeList nudges={ownNudges} />
         </div>
       ) : null}
 
@@ -401,6 +421,7 @@ export default function EvidenceReadinessTable({
               <GroupCard
                 key={g.tag}
                 group={g}
+                nudgeLink={foldedLinks.get(g.message) ?? null}
                 onOpenStandard={onOpenStandard}
                 reduce={reduce}
               />

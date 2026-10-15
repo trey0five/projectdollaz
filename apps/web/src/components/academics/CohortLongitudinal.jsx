@@ -23,8 +23,8 @@ import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Footprints, Grid3x3, Printer, Users2 } from 'lucide-react'
 import { fitScale, INK } from './chartKit.jsx'
-import { Section } from '../module/SectionHeader.jsx'
-import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
+import { Section } from './AcademicsCard.jsx'
+import { WhatThisMeasures, MeasureKey, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
 import { testTypeLabel } from '../../lib/academicsVocab.js'
 import { FilterChip, Segmented } from './AssessmentFilters.jsx'
 import CohortTrajectoryPanel from './CohortTrajectoryPanel.jsx'
@@ -385,6 +385,19 @@ export default function CohortLongitudinal({ payload, loading = false, error = '
             : 'Follow the same children forward'
         }
         reduce={reduce}
+        info={
+          <WhatThisMeasures
+            mode="popover"
+            chart="cohortTrajectory"
+            ctx={ctx}
+            refs={['national']}
+            gradeLabel={
+              ctx?.gradeSpan?.lowGrade
+                ? `grades ${ctx.gradeSpan.lowGrade}–${ctx.gradeSpan.highGrade}`
+                : 'every grade on file'
+            }
+          />
+        }
         aside={
           ctx?.window ? (
             <span
@@ -397,19 +410,10 @@ export default function CohortLongitudinal({ payload, loading = false, error = '
           ) : null
         }
       >
-        {/* The scope line names the GRADE SPAN, not one grade: "grade 4" is a
-            category error on a chart whose subject is a group crossing grades. */}
-        <WhatThisMeasures
-          chart="cohortTrajectory"
-          ctx={ctx}
-          refs={['national']}
-          gradeLabel={
-            ctx?.gradeSpan?.lowGrade
-              ? `grades ${ctx.gradeSpan.lowGrade}–${ctx.gradeSpan.highGrade}`
-              : 'every grade on file'
-          }
-          reduce={reduce}
-        />
+        {/* The ⓘ's scope line names the GRADE SPAN, not one grade: "grade 4" is
+            a category error on a chart whose subject is a group crossing grades.
+            The series key stays in view. */}
+        <MeasureKey ctx={ctx} refs={['national']} />
 
         {panels.length === 0 ? (
           <EmptyCohorts ctx={ctx} />

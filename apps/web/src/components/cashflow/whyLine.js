@@ -73,6 +73,8 @@ function list(items) {
  * @param projection CashProjectionResult — carries its OWN driver breakdown.
  * @param format     (n) => string — the caller's currency formatter, passed in so
  *                   this file cannot disagree with the figures printed above it.
+ * @param day        (iso) => string — the caller's date formatter ("Oct 23,
+ *                   2026"), for the same reason; omitted → the ISO date as-is.
  *
  * READS THE ENGINE'S BREAKDOWN, not a raw event list. The first version took the
  * events and summed them here, which meant the page had to be handed hundreds of
@@ -80,10 +82,11 @@ function list(items) {
  * function told a school to add the commitments it had already added. The engine
  * now reports what dug the hole, and the sentence just says it.
  */
-export function whyLine(projection, format) {
+export function whyLine(projection, format, day) {
   if (!projection || projection.lowestDate == null) return null
 
   const fmt = typeof format === 'function' ? format : (n) => `$${Math.round(n).toLocaleString()}`
+  const when = typeof day === 'function' ? day : (iso) => iso
 
   const top = (projection.driversToLowPoint ?? []).slice(0, 2)
   const drivers = top.map((d) => noun(d.category))
@@ -91,14 +94,14 @@ export function whyLine(projection, format) {
   const recovery = projection.nextReceiptAfterLow ?? null
 
   if (drivers.length === 0) {
-    return `The low point falls on ${projection.lowestDate}. Record your payroll, debt service and insurance to see what drives it.`
+    return `The low point falls on ${when(projection.lowestDate)}. Record your payroll, debt service and insurance to see what drives it.`
   }
 
   const head =
     `About ${fmt(driverTotal)} of ${list(drivers)} falls due before the low point on ` +
-    `${projection.lowestDate}`
+    `${when(projection.lowestDate)}`
   const tail = recovery
-    ? `, ahead of ${noun(recovery.category)} resuming on ${recovery.date}.`
+    ? `, ahead of ${noun(recovery.category)} resuming on ${when(recovery.date)}.`
     : `, and no significant receipt follows it inside this horizon.`
 
   // Only said when it is true: a trough with receipts still arriving is a
@@ -120,9 +123,10 @@ export function whyLine(projection, format) {
  * Returns [] when there is no shortfall, because a school in the clear should not
  * be handed a list of remedies for a problem it does not have.
  */
-export function potentialActions(projection, format) {
+export function potentialActions(projection, format, day) {
   if (!projection || projection.firstShortfallDate == null) return []
   const fmt = typeof format === 'function' ? format : (n) => `$${Math.round(n).toLocaleString()}`
+  const when = typeof day === 'function' ? day : (iso) => iso
   const gap = projection.shortfallAmount ?? 0
   const out = []
 
@@ -134,7 +138,7 @@ export function potentialActions(projection, format) {
   })
   out.push({
     key: 'defer',
-    label: `Defer discretionary spend through ${projection.lowestDate}`,
+    label: `Defer discretionary spend through ${when(projection.lowestDate)}`,
     detail: `Roughly ${fmt(gap)} would close the gap. The budget shows what is scheduled in that window.`,
     to: '/budget',
   })

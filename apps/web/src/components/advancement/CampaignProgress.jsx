@@ -25,12 +25,38 @@ function timelineElapsed(startDate, closeDate) {
   return Math.min(Math.max((now - start) / (close - start), 0), 1)
 }
 
+/**
+ * The campaign's pace against its own timeline: % of goal raised vs % of the
+ * window elapsed (±5pt deadband). Null when there is no goal or no window —
+ * never a guess. { label, tone } with tone good | risk | neutral.
+ */
+export function campaignPace({ raised, goal, startDate, closeDate, status = null }) {
+  const hasGoal = typeof goal === 'number' && Number.isFinite(goal) && goal > 0
+  if (!hasGoal) return null
+  // Pace only means something while a campaign is running: a PLANNED one has
+  // not started (nothing could be raised yet), and a CLOSED one has an
+  // outcome, not a pace — "Closed at 80% of goal", never "Behind pace" forever.
+  if (status === 'planned') return null
+  const raisedNum = typeof raised === 'number' && Number.isFinite(raised) ? raised : 0
+  const pct = raisedNum / goal
+  if (status === 'closed') {
+    return { label: `Closed at ${fmtPct(pct) ?? '0%'} of goal`, tone: pct >= 1 ? 'good' : 'neutral', closed: true }
+  }
+  if (pct > 1) return { label: 'Goal exceeded', tone: 'good' }
+  const elapsed = timelineElapsed(startDate, closeDate)
+  if (elapsed == null) return null
+  if (pct >= elapsed + 0.05) return { label: 'Ahead of pace', tone: 'good' }
+  if (pct <= elapsed - 0.05) return { label: 'Behind pace', tone: 'risk' }
+  return { label: 'On pace', tone: 'neutral' }
+}
+
 export default function CampaignProgress({
   raised,
   pledgedOutstanding = 0,
   goal,
   startDate,
   closeDate,
+  status = null, // 'planned' | 'active' | 'closed' — pace is judged only while active
   size = 'row', // 'row' | 'hero'
   reduce,
 }) {
@@ -51,15 +77,7 @@ export default function CampaignProgress({
   const elapsed = hasGoal ? timelineElapsed(startDate, closeDate) : null
 
   // Hero pace chip: compare % of goal to % of timeline elapsed (±5pt deadband).
-  let paceChip = null
-  if (hero && hasGoal) {
-    if (over) paceChip = { label: 'Goal exceeded', tone: 'good' }
-    else if (elapsed != null) {
-      if (pct >= elapsed + 0.05) paceChip = { label: 'Ahead of pace', tone: 'good' }
-      else if (pct <= elapsed - 0.05) paceChip = { label: 'Behind pace', tone: 'risk' }
-      else paceChip = { label: 'On pace', tone: 'neutral' }
-    }
-  }
+  const paceChip = hero ? campaignPace({ raised: raisedNum, goal, startDate, closeDate, status }) : null
 
   const pctLabel = fmtPct(pct)
   const HATCH = 'repeating-linear-gradient(135deg, rgb(var(--c-ink) / 0.55) 0 2px, transparent 2px 4px)'

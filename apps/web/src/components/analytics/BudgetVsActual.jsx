@@ -7,18 +7,28 @@
 // setup surface (BudgetPage passes its Budget tab); without it, the no-budget
 // CTA falls back to a Link to /budget.
 import { motion, useReducedMotion } from 'framer-motion'
-import { Wallet } from 'lucide-react'
+import { Wallet, Scale, FileStack, TrendingUp, TrendingDown, Table2 } from 'lucide-react'
 import { useBudget } from '../../hooks/useAnalytics.js'
 import { fmtDollar } from '../../lib/format.js'
-import BudgetBridge from './BudgetBridge.jsx'
-import { Section, Panel, Button } from '../ui/surface/index.js'
+import { budOf, budgetTotals } from '../budget/budgetTotals.js'
+import BudgetBridge from '../budget/BudgetBridge.jsx'
+import {
+  AuroraCard,
+  AuroraEmpty,
+  AuroraLightButton,
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+} from '../ui/aurora/index.js'
+import { money, moneyShort } from '../finance/financeAurora.js'
 
-// Premium UI P3: a `.dt` table on the ground under a Section rule (Line ·
-// Budget · Actual · Var %, numerics right-aligned tabular; section heading rows
-// and `.dt-foot`-weight total rows), the variance as a 2px semantic mark + ink
-// text, the no-budget CTA inside the one raised surface (a Panel: it is an
-// action). The mini dual bars are gone — a chart in a cell is noise next to the
-// BudgetBridge below, which already draws the same comparison.
+// Aurora (2026-10-15): the line-by-line `.dt` table sits in a white register
+// card under the "Budget vs. actual" strip (Line · Budget · Actual · Var %,
+// numerics right-aligned; the variance as a 2px semantic mark + ink text); the
+// budget→actual bridge is a WATERFALL of columns (owner rule: bars are columns —
+// BudgetBridge); the biggest misses are tiles, worst first. Empty states are
+// one line + one button. A budget with one side still empty (no spending, or no
+// income, budgeted yet) gets a NEUTRAL verdict, never a false "Behind plan".
 
 const variancePct = (v, bud) =>
   bud ? `${v >= 0 ? '+' : '−'}${Math.abs((v / bud) * 100).toFixed(1)}%` : '—'
@@ -27,30 +37,23 @@ const variancePct = (v, bud) =>
 const ragTone = (favorable, magPct) =>
   favorable == null ? 'neutral' : favorable ? 'good' : magPct > 10 ? 'risk' : 'watch'
 
-// A line's budgeted amount, read directly from the saved budget JSON (null if unset).
-const budOf = (lines, kind, key) => {
-  const v = lines?.[kind]?.[key]
-  return Number.isFinite(Number(v)) ? Number(v) : null
-}
-
 export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
   const reduce = useReducedMotion()
   const { budget } = useBudget(props.schoolId, props.periodId)
   const lines = budget?.lines || {}
 
-  const metric = (k) => (metrics ?? []).find((x) => x.key === k)
-  const revLines = metric('revenue_mix')?.components ?? []
-  const expLines = metric('expense_mix')?.components ?? []
-  const revM = metric('revenue_mix')
-  const expM = metric('expense_mix')
-  const hasLines = revLines.length > 0 || expLines.length > 0
-  const actRevTotal = revM?.available ? revM.value : null
-  const actExpTotal = expM?.available ? expM.value : null
-
-  const budRevTotal = revLines.reduce((a, c) => a + (budOf(lines, 'revenue', c.key) ?? 0), 0)
-  const budExpTotal = expLines.reduce((a, c) => a + (budOf(lines, 'expense', c.key) ?? 0), 0)
-  const noBudget = budRevTotal === 0 && budExpTotal === 0
-
+  const {
+    revLines,
+    expLines,
+    hasLines,
+    actRevTotal,
+    actExpTotal,
+    budRevTotal,
+    budExpTotal,
+    noBudget,
+    netBud,
+    netAct,
+  } = budgetTotals(budget, metrics)
   const renderLine = ({ kind, key, label, act, favHigher }) => {
     const bud = budOf(lines, kind, key)
     // A variance needs a REAL budget on the line: a $0 budget has nothing to
@@ -125,109 +128,137 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
       .slice(0, 3)
   }
 
-  const netBud = budRevTotal - budExpTotal
-  const netAct = actRevTotal != null && actExpTotal != null ? actRevTotal - actExpTotal : null
   const notes = commentary()
   const showBridge = actRevTotal != null && actExpTotal != null && (budRevTotal > 0 || budExpTotal > 0)
+  const revVar = (actRevTotal ?? 0) - budRevTotal
+  const expVar = (actExpTotal ?? 0) - budExpTotal
+  const netVar = netAct != null ? netAct - netBud : null
+  // Half-entered budget: one side is still $0, so the net comparison would only
+  // measure the missing side. Say that instead of judging it.
+  const oneSided = budExpTotal === 0 ? 'No spending in this budget yet' : budRevTotal === 0 ? 'No income in this budget yet' : null
+  const signedShort = (n) => `${n >= 0 ? '+' : '−'}${moneyShort(Math.abs(n))}`
+
+  if (!hasLines) {
+    return (
+      <AuroraEmpty
+        icon={FileStack}
+        text="Budget vs. actual needs this year’s statements."
+        sub="It compares each income and spending line once they exist."
+        action={
+          <AuroraLightButton variant="ghost" to="/statements">
+            Open statements
+          </AuroraLightButton>
+        }
+      />
+    )
+  }
 
   return (
     <motion.div initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <Section label="Budget vs. actual" aside="budget from your saved budget · actuals from your statements" className="!mt-0">
-      {!hasLines ? (
-        <p className="py-6 text-center text-body italic text-ink2">
-          Category budgeting unlocks once this period has generated statements (it needs the
-          revenue &amp; expense breakdown).
-        </p>
-      ) : noBudget ? (
-        <Panel className="text-center">
-          <span className="mx-auto mb-2 inline-flex text-navy-soft" aria-hidden="true">
-            <Wallet size={20} />
-          </span>
-          <p className="text-body text-ink">No budget set up for this period yet.</p>
-          {onSetUp ? (
-            <Button variant="primary" onClick={onSetUp} className="mt-3">
-              Set up your budget
-            </Button>
-          ) : (
-            <Button variant="primary" to="/budget" className="mt-3">
-              Set up your budget
-            </Button>
-          )}
-        </Panel>
+      {noBudget ? (
+        <AuroraEmpty
+          icon={Wallet}
+          text="No budget set up for this period yet."
+          action={
+            onSetUp ? (
+              <AuroraLightButton onClick={onSetUp}>Set up your budget</AuroraLightButton>
+            ) : (
+              <AuroraLightButton to="/budget">Set up your budget</AuroraLightButton>
+            )
+          }
+        />
       ) : (
         <>
-          <div className="dt-wrap">
-            <table className="dt">
-              <thead>
-                <tr>
-                  <th scope="col">Line</th>
-                  <th scope="col" className="dt-num">Budget</th>
-                  <th scope="col" className="dt-num">Actual</th>
-                  <th scope="col" className="dt-num">Var %</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="dt-section">
-                  <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
-                    Revenue
-                  </td>
-                </tr>
-                {revLines.map((c) =>
-                  renderLine({ kind: 'revenue', key: c.key, label: c.label, act: c.value, favHigher: true }),
-                )}
-                {totalRow('Total revenue', budRevTotal, actRevTotal, true)}
+          <AuroraSection
+            first
+            icon={Scale}
+            title="Budget vs. actual"
+            subtitle="Your budget against your statements"
+            count={netVar == null ? null : `${signedShort(netVar)} vs. plan`}
+          >
+            {showBridge ? (
+              <AuroraCard
+                title="From plan to what happened"
+                subtitle={oneSided ?? 'Plan, then the income and spending differences, then actual'}
+                verdict={oneSided ? null : netVar >= 0 ? 'good' : 'risk'}
+                verdictLabel={oneSided ? null : netVar >= 0 ? 'Ahead' : 'Behind'}
+                big={oneSided ? null : `${moneyShort(Math.abs(netVar))} ${netVar >= 0 ? 'ahead of' : 'behind'} budget`}
+                bigTone={oneSided ? null : netVar >= 0 ? 'good' : 'risk'}
+                className="mb-5"
+              >
+                <BudgetBridge netBud={netBud} revVar={revVar} expVar={expVar} netAct={netAct} fmt={moneyShort} fullFmt={money} />
+              </AuroraCard>
+            ) : null}
+            <div className="au-card au-card-flat au-register">
+              <div className="dt-wrap">
+                <table className="dt">
+                  <caption className="sr-only">Budget vs. actual, line by line</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Line</th>
+                      <th scope="col" className="dt-num">Budget</th>
+                      <th scope="col" className="dt-num">Actual</th>
+                      <th scope="col" className="dt-num">Var %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="dt-section">
+                      <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+                        Revenue
+                      </td>
+                    </tr>
+                    {revLines.map((c) =>
+                      renderLine({ kind: 'revenue', key: c.key, label: c.label, act: c.value, favHigher: true }),
+                    )}
+                    {totalRow('Total revenue', budRevTotal, actRevTotal, true)}
 
-                <tr className="dt-section">
-                  <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
-                    Expenses
-                  </td>
-                </tr>
-                {expLines.map((c) =>
-                  renderLine({ kind: 'expense', key: c.key, label: c.label, act: c.value, favHigher: false }),
-                )}
-                {totalRow('Total expenses', budExpTotal, actExpTotal, false)}
-                {totalRow('Net surplus / (deficit)', netBud, netAct, true)}
-              </tbody>
-            </table>
-          </div>
-
-          {showBridge && (
-            <div className="mt-6">
-              <BudgetBridge
-                budgetNet={netBud}
-                actualNet={netAct}
-                revVar={(actRevTotal ?? 0) - budRevTotal}
-                expVar={(actExpTotal ?? 0) - budExpTotal}
-              />
+                    <tr className="dt-section">
+                      <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+                        Expenses
+                      </td>
+                    </tr>
+                    {expLines.map((c) =>
+                      renderLine({ kind: 'expense', key: c.key, label: c.label, act: c.value, favHigher: false }),
+                    )}
+                    {totalRow('Total expenses', budExpTotal, actExpTotal, false)}
+                    {totalRow('Net surplus / (deficit)', netBud, netAct, true)}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          )}
+          </AuroraSection>
 
           {notes.length > 0 && (
-            <Section label="What moved vs. budget">
-              <ul className="m-0 list-none p-0">
-                {notes.map((n) => (
-                  <li key={n.label} className="flex items-start gap-2 border-b border-hair py-2 text-small text-ink">
-                    <i className={`mark mt-1 tone-${ragTone(n.favorable, Math.abs(n.pct))}`} aria-hidden="true" />
-                    <span>
-                      <span className="font-semibold text-ink">{n.label}</span> came in{' '}
-                      {fmtDollar(Math.abs(n.v))} ({Math.abs(n.pct).toFixed(0)}%){' '}
-                      {n.favHigher
-                        ? n.v >= 0
-                          ? 'above'
-                          : 'below'
-                        : n.v >= 0
-                          ? 'over'
-                          : 'under'}{' '}
-                      budget{n.favorable ? '' : ' — worth a look'}.
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
+            <AuroraSection
+              icon={Table2}
+              tone={(() => {
+                const tones = notes.map((n) => ragTone(n.favorable, Math.abs(n.pct)))
+                return tones.includes('risk') ? 'risk' : tones.includes('watch') ? 'watch' : 'good'
+              })()}
+              title="What moved"
+              subtitle="The biggest differences from the budget"
+              count={`${notes.length} line${notes.length === 1 ? '' : 's'}`}
+            >
+              <AuroraTileGrid cols={Math.max(2, notes.length)}>
+                {notes.map((n) => {
+                  const tone = ragTone(n.favorable, Math.abs(n.pct))
+                  const dir = n.favHigher ? (n.v >= 0 ? 'above' : 'below') : n.v >= 0 ? 'over' : 'under'
+                  return (
+                    <AuroraTile
+                      key={n.label}
+                      icon={n.v >= 0 ? TrendingUp : TrendingDown}
+                      tone={tone === 'neutral' ? null : tone}
+                      title={`${n.label} ${dir} budget`}
+                      desc={`${moneyShort(Math.abs(n.v))} (${Math.abs(n.pct).toFixed(0)}%)${n.favorable ? '' : ' — worth a look'}`}
+                      verdict={tone === 'neutral' ? null : tone}
+                    />
+                  )
+                })}
+              </AuroraTileGrid>
+            </AuroraSection>
           )}
         </>
       )}
-      </Section>
     </motion.div>
   )
 }

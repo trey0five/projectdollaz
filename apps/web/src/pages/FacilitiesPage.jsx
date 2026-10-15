@@ -29,12 +29,16 @@ import {
   Wallet,
   Trophy,
   ShieldCheck,
+  Hammer,
+  CreditCard,
+  ListChecks,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate } from 'react-router-dom'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
+import { AuroraButton, HowThisWorks, VerdictEm, compactDollar } from '../components/ui/aurora/index.js'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -57,7 +61,7 @@ import {
   complianceKindBadge,
 } from '../components/facilities/complianceKindMeta.js'
 import { shortDate } from '../lib/dates.js'
-import { PageHeader, DataTable, Toolbar, Pill } from '../components/ui/surface/index.js'
+import { DataTable, Toolbar, Pill } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
@@ -96,7 +100,15 @@ const URGENCY_BADGE = {
 
 function fmtMoney(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
-  return `$${Math.round(value).toLocaleString('en-US')}`
+  const s = `$${Math.abs(Math.round(value)).toLocaleString('en-US')}`
+  return value < 0 && Math.round(value) !== 0 ? `−${s}` : s
+}
+
+/** A glass-card figure: whole dollars, or "$1.2M" from a million up (a 10-char
+ *  figure would wrap mid-number in a half-width card on a phone). */
+function kpiMoney(value) {
+  if (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) >= 1e6) return compactDollar(value)
+  return fmtMoney(value)
 }
 
 /** A status Pill from a { label, tone } def (null-safe). */
@@ -144,11 +156,6 @@ function attentionMeta(it) {
       {PRIORITY_BADGE[it.priority] ? (
         <AttentionChip tone={PRIORITY_BADGE[it.priority].tone === 'neutral' ? null : PRIORITY_BADGE[it.priority].tone}>
           {PRIORITY_BADGE[it.priority].label}
-        </AttentionChip>
-      ) : null}
-      {it.location ? (
-        <AttentionChip icon={MapPin}>
-          {it.location}
         </AttentionChip>
       ) : null}
       {typeof it.estimatedCost === 'number' ? (
@@ -224,21 +231,33 @@ function StateRow({ title, children, error }) {
   )
 }
 
-// ── Entitlement / license gate: a plain page header, no hero card ────────────
+// ── Entitlement / license gate: the Aurora band + one line + one button ─────
 function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <PageHeader
-        eyebrow="Facilities"
-        title={notLicensed ? 'Facilities isn\u2019t on your plan yet' : 'Your subscription is paused'}
-        meta={
-          notLicensed
-            ? 'Add the Facilities module to track deferred maintenance and its capital backlog, and land its slice of the briefing here.'
-            : 'Resume your plan to manage the maintenance register.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="facilities"
+      title="Facilities"
+      Icon={Wrench}
+      icon={Wrench}
+      verdict={notLicensed ? 'Facilities isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          {notLicensed ? 'See plans' : 'Resume your plan'}
+        </AuroraButton>
+      }
+      text={
+        notLicensed
+          ? 'Add Facilities to track repairs, inspections and their cost.'
+          : 'Resume your plan to manage your repairs.'
+      }
+    />
   )
 }
 
@@ -484,9 +503,7 @@ function MaintenanceTable({
   if (items.length === 0)
     return (
       emptyState ?? (
-        <StateRow title="No maintenance items yet">
-          Add your first item to start tracking the deferred-maintenance backlog.
-        </StateRow>
+        <RegisterEmpty icon={Wrench} text="No repairs yet." sub="Log one to track its cost and date." actionLabel="Add a repair" />
       )
     )
 
@@ -607,19 +624,73 @@ function MaintenanceTable({
       ),
     })
 
+  const markOf = (it) =>
+    it.urgency === 'overdue' || it.priority === 'critical'
+      ? 'risk'
+      : it.urgency === 'due-soon' || it.priority === 'high'
+        ? 'watch'
+        : null
+
+  // Below sm the six columns cannot fit a phone, and the two figures that
+  // matter (Due, Est. cost) fell off the right edge. There each repair is a
+  // stacked row instead — title + place, then one wrapping chip line (priority,
+  // due/overdue, cost) and the actions — the same shape as the Tasks register.
   return (
-    <DataTable
-      caption="Maintenance register"
-      columns={columns}
-      rows={items}
-      markOf={(it) =>
-        it.urgency === 'overdue' || it.priority === 'critical'
-          ? 'risk'
-          : it.urgency === 'due-soon' || it.priority === 'high'
-            ? 'watch'
-            : null
-      }
-    />
+    <>
+      <ul className="b1-list sm:hidden" aria-label="Maintenance register">
+        {items.map((it) => {
+          const tone = markOf(it)
+          const pending = it.pendingBidCount ?? 0
+          return (
+            <li key={it.id}>
+              <div className="b1-row relative !flex-nowrap !items-start !py-3 !pl-3">
+                {tone ? (
+                  <i
+                    className={`absolute bottom-3 left-0 top-3 w-[2px] tone-${tone}`}
+                    style={{ background: 'currentColor' }}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold leading-snug text-ink">{it.title}</p>
+                  {it.location ? <p className="mt-0.5 text-[12px] text-ink2">{it.location}</p> : null}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-ink2">
+                    <StatusPill def={PRIORITY_BADGE[it.priority]} />
+                    <span className="whitespace-nowrap font-semibold text-ink">
+                      {it.targetDate ? `Due ${shortDate(it.targetDate)}` : 'No due date'}
+                    </span>
+                    {it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number' ? (
+                      <span className="whitespace-nowrap">{Math.abs(it.daysUntilTarget)}d overdue</span>
+                    ) : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number' ? (
+                      <span className="whitespace-nowrap">in {it.daysUntilTarget}d</span>
+                    ) : null}
+                    <span className="whitespace-nowrap">{STATUS_LABEL[it.status] ?? it.status}</span>
+                    {typeof it.estimatedCost === 'number' ? (
+                      <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(it.estimatedCost)}</span>
+                    ) : null}
+                    {onOpenBids ? (
+                      <button type="button" onClick={() => onOpenBids(it)} className="dt-link">
+                        {pending > 0 ? <i className="mark tone-watch" aria-hidden="true" /> : null}
+                        Bids{pending > 0 ? ` (${pending})` : ''}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {canEdit ? (
+                  <div className="inline-flex shrink-0 gap-1 self-center">
+                    <IconAction Icon={Pencil} onClick={() => onEdit(it)} label={`Edit ${it.title}`} />
+                    <IconAction Icon={Trash2} danger onClick={() => onDelete(it)} label={`Delete ${it.title}`} />
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="hidden sm:block">
+        <DataTable caption="Maintenance register" columns={columns} rows={items} markOf={markOf} />
+      </div>
+    </>
   )
 }
 
@@ -751,6 +822,8 @@ function FacilitiesWorkspace() {
   }
 
   // ── KPIs (computed from the summary) ───────────────────────────────────────
+  // A verdict needs something to judge: with no repairs on record, the counts
+  // show plain zeros and no pill (an empty register is not "Good").
   const kpis = useMemo(() => {
     const total = summary.total ?? 0
     const openCount = summary.openCount ?? 0
@@ -758,73 +831,132 @@ function FacilitiesWorkspace() {
     const criticalOpen = summary.criticalOpen ?? 0
     const overdueOpen = summary.overdueOpen ?? 0
     const backlogCost = summary.backlogCost ?? 0
+    const none = total === 0
 
     const openKpi = {
-      label: 'Open items',
-      value: total > 0 ? `${openCount}/${total}` : String(openCount),
-      status: overdueOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
+      label: 'Open repairs',
+      icon: ListChecks,
+      value: String(openCount),
+      unit: total > 0 ? `of ${total}` : null,
+      status: none ? 'neutral' : overdueOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
+      // The Overdue card beside it already says how many are late, so this
+      // caption carries a different real figure (high priority first).
       sub:
-        overdueOpen > 0
-          ? { icon: TrendingDown, text: `${overdueOpen} overdue`, tone: 'bad' }
-          : highPriorityOpenCount > 0
-            ? { icon: Clock, text: `${highPriorityOpenCount} high priority`, tone: 'neutral' }
-            : { icon: Check, text: 'all clear', tone: 'good' },
-    }
-
-    const highKpi = {
-      label: 'High-priority open',
-      value: String(highPriorityOpenCount),
-      status: criticalOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
-      sub:
-        criticalOpen > 0
-          ? { icon: AlertTriangle, text: `${criticalOpen} critical`, tone: 'bad' }
-          : { icon: Check, text: 'manageable', tone: 'good' },
+        highPriorityOpenCount > 0
+          ? { icon: Clock, text: `${highPriorityOpenCount} high priority`, tone: overdueOpen > 0 ? 'bad' : 'neutral' }
+          : overdueOpen > 0
+            ? { icon: Clock, text: `${openCount - overdueOpen} on schedule`, tone: 'neutral' }
+            : none
+              ? { icon: Wrench, text: 'nothing logged yet', tone: 'neutral' }
+              : { icon: Check, text: 'all clear', tone: 'good' },
     }
 
     const overdueKpi = {
       label: 'Overdue',
+      icon: AlertTriangle,
       value: String(overdueOpen),
-      status: overdueOpen > 0 ? 'risk' : 'good',
+      status: none ? 'neutral' : overdueOpen > 0 ? 'risk' : 'good',
       sub:
         overdueOpen > 0
-          ? { icon: AlertTriangle, text: 'past target date', tone: 'bad' }
-          : { icon: Check, text: 'on schedule', tone: 'good' },
+          ? { icon: AlertTriangle, text: 'past their target date', tone: 'bad' }
+          : { icon: Check, text: none ? 'nothing to track' : 'on schedule', tone: none ? 'neutral' : 'good' },
+    }
+
+    const highKpi = {
+      label: 'High priority',
+      icon: Hammer,
+      value: String(highPriorityOpenCount),
+      status: none ? 'neutral' : criticalOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
+      sub:
+        criticalOpen > 0
+          ? { icon: AlertTriangle, text: `${criticalOpen} critical`, tone: 'bad' }
+          : { icon: Check, text: none ? 'nothing to track' : 'none critical', tone: none ? 'neutral' : 'good' },
     }
 
     const backlogKpi = {
-      label: 'Deferred backlog',
-      value: fmtMoney(backlogCost),
+      label: 'Repair backlog',
+      icon: Wrench,
+      value: kpiMoney(backlogCost),
       status: 'neutral',
-      sub: { icon: Wrench, text: 'open maintenance cost', tone: 'neutral' },
+      sub: { icon: Wrench, text: 'cost of open repairs', tone: 'neutral' },
     }
 
-    // KPI 5 — the inherited Finance budget's remaining headroom.
+    // The inherited Finance budget's remaining headroom.
     const hasBudget = !!budget?.hasBudget
     const overBudget = !!budget?.overBudget
+    // Over budget, the card says so and shows the amount over (never "$-4,000").
     const budgetKpi = {
-      label: 'Budget remaining',
-      value: hasBudget ? fmtMoney(budget.remaining ?? 0) : '—',
+      label: overBudget ? 'Over budget' : 'Budget left',
+      icon: Wallet,
+      value: hasBudget ? kpiMoney(overBudget ? Math.abs(budget.remaining ?? 0) : (budget.remaining ?? 0)) : '—',
       status: overBudget ? 'risk' : hasBudget ? 'good' : 'neutral',
       sub: overBudget
-        ? { icon: AlertTriangle, text: 'over budget', tone: 'bad' }
+        ? { icon: AlertTriangle, text: `budget was ${fmtMoney(budget.budgetTotal ?? 0)}`, tone: 'bad' }
         : hasBudget
-          ? { icon: Wallet, text: `of ${fmtMoney(budget.budgetTotal ?? 0)} inherited`, tone: 'neutral' }
-          : { icon: Wallet, text: 'inherit from Finance', tone: 'neutral' },
+          ? { icon: Wallet, text: `of ${fmtMoney(budget.budgetTotal ?? 0)}`, tone: 'neutral' }
+          : { icon: Wallet, text: 'set it in Finance', tone: 'neutral' },
     }
 
-    // KPI 6 — items whose bids await a Leadership decision.
+    // Items whose bids await a Leadership decision.
     const needsDecisionCount = summary.needsDecisionCount ?? 0
     const decisionKpi = {
-      label: 'Needs decision',
+      label: 'Bids to decide',
+      icon: Gavel,
       value: String(needsDecisionCount),
-      status: needsDecisionCount > 0 ? 'watch' : 'good',
+      status: needsDecisionCount > 0 ? 'watch' : 'neutral',
       sub:
         needsDecisionCount > 0
-          ? { icon: Gavel, text: 'bids await Leadership', tone: 'neutral' }
-          : { icon: Check, text: 'no bids waiting', tone: 'good' },
+          ? { icon: Gavel, text: 'waiting on Leadership', tone: 'neutral' }
+          : { icon: Check, text: 'no bids waiting', tone: 'neutral' },
     }
 
-    return [openKpi, highKpi, overdueKpi, backlogKpi, budgetKpi, decisionKpi]
+    return [openKpi, overdueKpi, backlogKpi, budgetKpi, highKpi, decisionKpi]
+  }, [summary, budget])
+
+  // ── The band's one sentence (real counts only; worst thing first) ─────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    const total = summary.total ?? 0
+    const openCount = summary.openCount ?? 0
+    const overdueOpen = summary.overdueOpen ?? 0
+    const criticalOpen = summary.criticalOpen ?? 0
+    const high = summary.highPriorityOpenCount ?? 0
+    const decide = summary.needsDecisionCount ?? 0
+    const backlogCost = summary.backlogCost ?? 0
+    if (total === 0) return <>Log your repairs and inspections, and this page keeps them on track.</>
+    const lead =
+      openCount > 0 ? (
+        <>
+          <VerdictEm>{plural(openCount, 'repair is', 'repairs are')} open</VerdictEm>
+          {backlogCost > 0 ? (
+            <>
+              , about <VerdictEm>{fmtMoney(backlogCost)}</VerdictEm> of work
+            </>
+          ) : null}
+          .{' '}
+        </>
+      ) : (
+        <>Every logged repair is done. </>
+      )
+    const over = budget?.hasBudget && budget.overBudget
+    const issues = [
+      over && { tone: 'risk', text: `${fmtMoney(Math.abs(budget.remaining ?? 0))} over budget.` },
+      overdueOpen && { tone: 'risk', text: `${plural(overdueOpen, 'is', 'are')} overdue.` },
+      criticalOpen && { tone: 'risk', text: `${plural(criticalOpen, 'is', 'are')} critical.` },
+      decide && { tone: 'watch', text: `${plural(decide, 'repair has bids', 'repairs have bids')} to decide.` },
+      high && { tone: 'watch', text: `${plural(high, 'is', 'are')} high priority.` },
+    ].filter(Boolean)
+    const top = issues[0]
+    return (
+      <>
+        {lead}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : openCount > 0 ? (
+          <VerdictEm tone="good">Nothing is overdue.</VerdictEm>
+        ) : null}
+      </>
+    )
   }, [summary, budget])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
@@ -841,7 +973,7 @@ function FacilitiesWorkspace() {
         tone: 'risk',
         sortKey: -1,
         title: 'Facilities is over budget',
-        why: `${fmtMoney(Math.abs(budget.remaining ?? 0))} past the budget inherited from Finance`,
+        why: `${fmtMoney(Math.abs(budget.remaining ?? 0))} past the budget set in Finance.`,
         actions: [{ label: 'View budget', primary: true, onClick: () => navigate('/budget') }],
       })
     }
@@ -859,7 +991,7 @@ function FacilitiesWorkspace() {
         tone: overdueNow ? 'risk' : 'watch',
         sortKey: overdueNow ? 0.5 : 1.5,
         title: it.title,
-        why: `${n} bid${n === 1 ? '' : 's'} pending — Leadership picks the winner`,
+        why: `${n} bid${n === 1 ? '' : 's'} waiting. Leadership picks the winner.`,
         meta: attentionMetaBids(it),
         actions: [
           { label: 'Review bids', primary: true, onClick: () => setBidsItem(it) },
@@ -981,7 +1113,9 @@ function FacilitiesWorkspace() {
 
   const onNew = canEdit ? (tab === 'vendors' ? () => setVendorModal({ editing: null }) : openAdd) : null
 
-  // The inherited-budget card sits BETWEEN the KPI row and the register.
+  // The inherited budget is the page's "numbers" section: it sits AFTER the
+  // decisions (register + Needs attention), the Aurora order — what needs a
+  // decision first, then the figures, then How this works.
   const budgetCard = (
     <FacilitiesBudgetCard
       budget={budget}
@@ -992,25 +1126,43 @@ function FacilitiesWorkspace() {
   )
 
   const commandCenter = (
-    <DomainCommandCenter
-      showAddData
-      moduleKey="facilities"
-      eyebrow={`Facilities · ${activeSchool?.name ?? 'School'}`}
-      title="Facilities"
-      Icon={Wrench}
-      attentionCount={attentionItems.length}
-      kpis={kpis}
-      tabs={TABS}
-      activeTab={tab}
-      onTabChange={setTab}
-      onNew={onNew}
-      registerTable={registerTable}
-      attentionItems={attentionItems}
-      beforeBody={budgetCard}
-      registerTitle="Maintenance register"
-      // Location rides in the Item meta line (beside category and vendor) so
-      // the six columns fit in two thirds at 1280 and the rail stays a side rail.
-    />
+    <>
+      <DomainCommandCenter
+        showAddData
+        moduleKey="facilities"
+        eyebrow={null}
+        title="Facilities"
+        Icon={Wrench}
+        verdict={verdict}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={onNew}
+        registerTable={registerTable}
+        registerSubtitle="Repairs, inspections and the vendors who do them"
+        registerIcon={Wrench}
+        attentionItems={attentionItems}
+        registerTitle="Repairs"
+        // Location rides in the Item meta line (beside category and vendor) so
+        // the six columns fit in two thirds at 1280 and the rail stays a side rail.
+      />
+      <div className="au-scope mx-auto max-w-page px-4 pb-8 sm:px-10">
+        {budgetCard}
+        <HowThisWorks>
+          <p>Everything here comes from the repairs, inspections and vendors you add.</p>
+          <p>
+            The budget is read from your Finance budget, never edited here. Committed is the estimate on every open
+            repair (an accepted bid sets it). Spent is the actual cost of this year&rsquo;s finished repairs.
+          </p>
+          <p>
+            A repair with two or more bids, or one bid while overdue, waits for Leadership to pick the winner. This list
+            is separate from planned capital projects.
+          </p>
+        </HowThisWorks>
+      </div>
+    </>
   )
 
   const modal = (

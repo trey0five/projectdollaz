@@ -52,6 +52,7 @@
 import { useMemo } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { ConfidenceCaveat } from './ConfidenceChip.jsx'
+import ShortReason from './ShortReason.jsx'
 import {
   DOMAIN_ICON_FALLBACK,
   DOMAIN_NOT_IN_FRAMEWORK,
@@ -94,19 +95,24 @@ function SignalCell({ domain, counts, rows, loading, unavailable }) {
   // does and does not measure, and the whole reason the second indicator exists.
   // But WHICH statement depends on why the count is zero, and getting that wrong
   // makes the row disprove itself on screen.
+  // The cell shows a few words; the full sentence is one tap away (ShortReason).
   if (!domain.signalCount) {
     let sentence
+    let short
     if (domain.covered === false) {
       // Your accreditor asks nothing here, so nothing can ever be bound here.
       sentence = DOMAIN_NOT_IN_FRAMEWORK
+      short = 'Not applicable'
     } else if (domain.partialSignalCount > 0) {
       // Bound, but below the attribution floor — those numbers are on screen
       // right now under the domain that carries most of each standard.
       sentence = domainPartialSignalNote(domain.partialSignalCount)
+      short = `${domain.partialSignalCount} reported elsewhere`
     } else {
       sentence = domainSignalHint(domain.domainKey) ?? 'No operating signal is bound to these standards yet.'
+      short = 'No signal'
     }
-    return <span className="block max-w-[32ch] whitespace-normal text-[12px] leading-snug text-ink2">{sentence}</span>
+    return <ShortReason short={short} full={sentence} />
   }
 
   // Bound, but we cannot value them right now. Say the binding exists and say the
@@ -238,11 +244,12 @@ export default function DomainGrid({
           const measured = d.measured === true
           const pct = measured && typeof d.readinessPct === 'number' ? d.readinessPct : null
           if (!measured) {
-            // NO NUMBER. The server's sentence, verbatim.
+            // NO NUMBER. A short status built from the row's own counts, with the
+            // server's sentence, verbatim, one tap away.
+            const n = d.contributingLeafCount ?? 0
+            const short = d.covered === false ? 'No standards here' : `Too few standards (${n})`
             return (
-              <span className="block max-w-[30ch] whitespace-normal text-left text-[12px] leading-snug text-ink2">
-                {d.reason ?? 'Not enough standards in this domain to score it.'}
-              </span>
+              <ShortReason short={short} full={d.reason ?? 'Not enough standards in this domain to score it.'} />
             )
           }
           const showEffective = typeof d.effectiveLeafWeight === 'number' && d.effectiveLeafWeight !== d.contributingLeafCount

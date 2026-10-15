@@ -18,14 +18,16 @@
 // NO ARITHMETIC LIVES HERE. Values arrive computed and are formatted, nothing
 // more — the same discipline the dashboard itself keeps.
 // ─────────────────────────────────────────────────────────────────────────────
+import { cloneElement } from 'react'
 import { motion } from 'framer-motion'
 import { Info } from 'lucide-react'
 import { materialGap, subjectLabelOf } from '@finrep/analytics'
 import { testTypeLabel } from '../../lib/academicsVocab.js'
 import { INK } from './chartKit.jsx'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
 const EASE = [0.2, 0.8, 0.2, 1]
-const HUE = '#0D9488'
+const HUE = moduleHue('academics')
 
 const num = (v, digits = 1) =>
   v === null || v === undefined || !Number.isFinite(Number(v))
@@ -232,7 +234,7 @@ function RefChip({ color, name, value, gloss }) {
       <span className="text-micro font-semibold uppercase" style={{ color }}>
         {name} {value}
       </span>
-      <span className="text-[11px] text-muted">— {gloss}</span>
+      {gloss ? <span className="text-[11px] text-muted">— {gloss}</span> : null}
     </span>
   )
 }
@@ -293,9 +295,23 @@ export function WhatThisMeasures({
   gradeLabel = null,
   note = null,
   reduce = false,
+  // 'popover' — the same words, unframed, for a card's ⓘ (Aurora: the chart
+  // keeps only its series key in view; the sentence is one click away).
+  mode = 'strip',
 }) {
   if (!ctx) return null
   const chips = refChipsFor(refs, ctx, peerAvg)
+
+  if (mode === 'popover') {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-small leading-snug text-ink">{measureSentence(chart, ctx, { example })}</p>
+        <p className="text-micro font-semibold uppercase text-ink2">{scopeOf(ctx, gradeLabel)}</p>
+        {chips.length ? <div className="flex flex-col gap-1">{chips}</div> : null}
+        {note ? <p className="text-[11px] leading-snug text-ink2">{note}</p> : null}
+      </div>
+    )
+  }
 
   return (
     <motion.div
@@ -319,3 +335,15 @@ export function WhatThisMeasures({
 }
 
 export default WhatThisMeasures
+
+/**
+ * MeasureKey — what stays IN VIEW once the explanation moves behind the ⓘ:
+ * the series key only ("NATIONAL 50 · NETWORK 57.2"), in each line's own ink.
+ * Data, not prose, so a reader never has to open anything to read the chart.
+ */
+export function MeasureKey({ ctx, peerAvg = null, refs = [] }) {
+  if (!ctx) return null
+  const chips = refChipsFor(refs, ctx, peerAvg).map((c) => cloneElement(c, { gloss: null }))
+  if (!chips.length) return null
+  return <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1">{chips}</div>
+}

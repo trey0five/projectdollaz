@@ -495,13 +495,14 @@ describe('the page wiring (source-pinned)', () => {
     expect(block.indexOf("key: 'journey'")).toBeLessThan(block.indexOf("key: 'domains'"))
   })
 
-  it('the default lands on journey ONLY when a cycle is configured', () => {
-    // The initial state stays 'domains'; the flip is gated on the payload and
-    // on nothing else having claimed the tab.
-    expect(page).toMatch(/return CENTER_TABS\.some\(\(x\) => x\.key === t\) \? t : 'domains'/)
-    expect(page).toMatch(
-      /if \(!cycleConfigured \|\| tabTouchedRef\.current \|\| centerParamAtMountRef\.current\) return/,
-    )
+  it('nothing auto-opens: Records is six tiles until the reader picks one; ?center= still opens its tab', () => {
+    // AURORA: the cycle has its own section (CycleStepper) above Records, so
+    // auto-opening Journey drew it twice. The initial tab is the `?center=`
+    // deep link when there is one, else none — and no effect flips it later.
+    expect(page).toMatch(/return CENTER_TABS\.some\(\(x\) => x\.key === t\) \? t : null/)
+    expect(page).not.toMatch(/setTab\('journey'\)/)
+    expect(page).toContain('data-testid="records-tiles"')
+    expect(page).toMatch(/onClick=\{\(\) => openRecord\(t\.key\)\}/)
   })
 
   it('deep links speak ?center=, never ?tab=', () => {

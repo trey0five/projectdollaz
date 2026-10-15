@@ -183,9 +183,9 @@ function SubtotalRow({ actual, budget }) {
 }
 
 // ── Add-row button (module scope) ────────────────────────────────────────────
-export function AddRowButton({ onClick, label }) {
+export function AddRowButton({ onClick, label, ...rest }) {
   return (
-    <Button variant="secondary" size="sm" onClick={onClick} icon={<Plus size={13} />}>
+    <Button variant="secondary" size="sm" onClick={onClick} icon={<Plus size={13} />} {...rest}>
       {label}
     </Button>
   )
@@ -327,7 +327,15 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
       <Section
         key={group}
         label={CAPITAL_GROUP_LABELS[group]}
-        aside={canEdit ? <AddRowButton onClick={() => onAdd(group)} label="Add project" /> : null}
+        aside={
+          canEdit ? (
+            <AddRowButton
+              onClick={() => onAdd(group)}
+              label="Add project"
+              data-add-default={group === 'current' ? 'true' : undefined}
+            />
+          ) : null
+        }
       >
         <div className="dt-wrap">
           <table className="dt">
@@ -385,7 +393,7 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
 
       {CAPITAL_GROUPS.map((g) => renderGroup(g))}
 
-      <Section label="Total capital">
+      <Section label="Total capital" className="sched-total">
         <StatStrip cols={3} className="stats-compact">
           <Stat label="Actual" value={statMoney(grand.actual)} />
           <Stat label="Budget" value={statMoney(grand.budget)} />
@@ -414,11 +422,11 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
 // an icon stroke, the title in Garamond, the explainer, the "Saved …" Pill.
 export function ScheduleHeading({ icon: Icon, title, body, savedAt }) {
   return (
-    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+    <div className="sched-head flex flex-wrap items-start gap-x-3 gap-y-2">
       {Icon ? <Icon size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" /> : null}
-      <div className="min-w-0 flex-1">
+      <div className="sched-head-title min-w-0 flex-1">
         <h3 className="font-serif text-title font-medium text-ink">{title}</h3>
-        <p className="mt-0.5 max-w-3xl text-small text-ink2">{body}</p>
+        <p className="sched-head-body mt-0.5 max-w-3xl text-small text-ink2">{body}</p>
       </div>
       {savedAt && (
         <Pill>

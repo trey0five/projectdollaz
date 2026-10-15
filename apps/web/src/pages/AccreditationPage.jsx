@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
+  AlertTriangle,
   Award,
   BadgeCheck,
   BookOpen,
@@ -28,31 +29,40 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
+  CreditCard,
+  FileCheck2,
   FileText,
+  Gauge,
   Landmark,
+  Layers,
   Link as LinkIcon,
   ListChecks,
+  Paperclip,
   Pencil,
   Plus,
+  Route,
   ShieldAlert,
   StickyNote,
   Trash2,
-  TrendingDown,
+  TrendingUp,
   User as UserIcon,
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
 import { Panel, Button, Pill } from '../components/ui/surface/index.js'
 import useDtOverflow from '../components/ui/surface/useDtOverflow.js'
 import '../styles/pending/a2-carry.css'
+import '../styles/pending/aurora-accred.css'
+import { AuroraButton, AuroraTile, AuroraTileGrid, HowThisWorks, VerdictEm } from '../components/ui/aurora/index.js'
 import DomainResolvePanel from '../components/accreditation/DomainResolvePanel.jsx'
 import StandardImprovePanel from '../components/accreditation/StandardImprovePanel.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
@@ -83,6 +93,8 @@ import RecognitionChips from '../components/accreditation/RecognitionChips.jsx'
 import EvidencePlatformChip from '../components/accreditation/EvidencePlatformChip.jsx'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
+import ReadinessDial from '../components/accreditation/ReadinessDial.jsx'
+import CycleStepper from '../components/accreditation/CycleStepper.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
 import RubricPicker from '../components/accreditation/RubricPicker.jsx'
 import SuggestionsStrip from '../components/accreditation/SuggestionsStrip.jsx'
@@ -112,7 +124,7 @@ import SignalCoverageTable from '../components/accreditation/SignalCoverageTable
 import HorizonTimeline from '../components/accreditation/HorizonTimeline.jsx'
 import CoverageCta from '../components/accreditation/CoverageCta.jsx'
 import NamedHolesPanel from '../components/accreditation/NamedHolesPanel.jsx'
-import ImprovementPlaceholder from '../components/accreditation/ImprovementPlaceholder.jsx'
+import ImprovementPlaceholder, { improvementCandidates } from '../components/accreditation/ImprovementPlaceholder.jsx'
 import { mergeAttentionRail } from '../components/accreditation/attentionRail.js'
 import {
   actionsForFinding,
@@ -242,27 +254,38 @@ function StateRow({ children }) {
 }
 
 // ── Light-theme entitlement / license gate ───────────────────────────────────
+// ── Entitlement / license gate: the Aurora band + one line + one button ─────
 function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <Panel className="text-center">
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-title font-medium text-ink">Accreditation isn&apos;t on your plan yet</h2>
-            <p className="mx-auto mt-2 max-w-md text-body text-ink2">
-              Add the Accreditation module to track your standards, attach evidence and watch your readiness build —
-              with every gap named and the fastest path to your target mapped.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-title font-medium text-ink">Your subscription is paused</h2>
-            <p className="mx-auto mt-2 max-w-md text-body text-ink2">Resume your plan to manage accreditation.</p>
-          </>
-        )}
-      </Panel>
-    </div>
+    <ModuleAccent moduleKey="accreditation">
+      <DomainStatePanel
+        showBack
+        moduleKey="accreditation"
+        title="Accreditation"
+        icon={BadgeCheck}
+        verdict={notLicensed ? 'Accreditation isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+        // Only an owner can change the plan, so only an owner gets the button —
+        // everyone else gets the one true next step in words (no dead button).
+        primaryAction={
+          isOwner ? (
+            <AuroraButton variant="primary" to="/settings/billing" icon={<CreditCard size={19} aria-hidden="true" />}>
+              {notLicensed ? 'See plans' : 'Resume your plan'}
+            </AuroraButton>
+          ) : null
+        }
+        text={
+          !isOwner
+            ? notLicensed
+              ? 'Ask an owner to add Accreditation.'
+              : 'Ask an owner to resume your plan.'
+            : notLicensed
+              ? 'Add Accreditation to score your standards, attach proof and watch readiness build.'
+              : 'Resume your plan to manage accreditation.'
+        }
+      />
+    </ModuleAccent>
   )
 }
 
@@ -1339,12 +1362,12 @@ function StandardsTable({
     )
   if (standards.length === 0)
     return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No standards yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Add your first standard to start tracking accreditation evidence.
-        </p>
-      </StateRow>
+      <RegisterEmpty
+        icon={BadgeCheck}
+        text="No standards yet."
+        sub="Adopt a framework, or add your first standard."
+        actionLabel="Add a standard"
+      />
     )
 
   return (
@@ -1383,7 +1406,7 @@ function StandardsTable({
                   {(s.depth ?? 0) > 0 ? (
                     <ChevronRight size={12} className="shrink-0 text-muted/50" aria-hidden />
                   ) : null}
-                  <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
+                  <span className="whitespace-nowrap rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
                     {s.code}
                   </span>
                 </div>
@@ -1562,18 +1585,18 @@ function StandardsTable({
 // F1 adds the SIXTH tab — Journey — placed FIRST. Phase E moved the default to
 // Domains arguing a head of school should first see WHERE they are exposed; the
 // same argument now says they should first see WHEN — exposure is one click
-// away. The default lands on `journey` ONLY when a cycle is configured (the
-// effect below flips it once the payload says so); unconfigured schools keep the
-// `domains` default and the Journey tab holds the setup card — never a dead
-// default landing. Deep links use `?center=journey` (the briefing's `?center=`
-// convention, never `?tab=` — ModuleTabs owns that one).
+// away. AURORA retires the default landing: the overview shows the six as
+// tiles (each with its own count) and opens none until the reader picks one —
+// the cycle has its own section above, so auto-opening Journey drew it twice.
+// Deep links use `?center=journey` (the briefing's `?center=` convention, never
+// `?tab=` — ModuleTabs owns that one) and still open their tab.
 const REGISTER_TABS = [{ key: 'standards', label: 'Standards' }]
 const CENTER_TABS = [
   { key: 'journey', label: 'Journey' },
   { key: 'domains', label: 'Domains' },
   { key: 'standards', label: 'Standards' },
-  { key: 'evidence', label: 'Evidence' },
-  { key: 'signals', label: 'Signals' },
+  { key: 'evidence', label: 'Proof' },
+  { key: 'signals', label: 'Warnings' },
   { key: 'improvement', label: 'Improvement' },
 ]
 
@@ -1712,40 +1735,18 @@ function AccreditationWorkspace() {
   // see `openAdd` below, which uses exactly that. Two readers of one param is how
   // a deep link resolves differently depending on which shell rendered it.
   const [searchParams, setSearchParams] = useSearchParams()
+  // AURORA: the Records section is a grid of six tiles and NOTHING is open
+  // until the reader picks one (the approved mockup) — the cycle already has
+  // its own section above, so opening Journey by default drew it twice. A
+  // `?center=` deep link still opens its tab, exactly as before.
   const [tab, setTab] = useState(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('center')
-      return CENTER_TABS.some((x) => x.key === t) ? t : 'domains'
+      return CENTER_TABS.some((x) => x.key === t) ? t : null
     } catch {
-      return 'domains'
+      return null
     }
   })
-  // F1 — the default lands on Journey ONLY once the cycle payload says a cycle
-  // is configured, and only when nothing else has claimed the tab: not a
-  // `?center=` deep link (the reader was sent somewhere specific) and not the
-  // reader's own click. Tracked as refs so this can never fight navigation.
-  const centerParamAtMountRef = useRef(
-    (() => {
-      try {
-        const t = new URLSearchParams(window.location.search).get('center')
-        return CENTER_TABS.some((x) => x.key === t)
-      } catch {
-        return false
-      }
-    })(),
-  )
-  const tabTouchedRef = useRef(false)
-  useEffect(() => {
-    let cancelled = false
-    Promise.resolve().then(() => {
-      if (cancelled) return
-      if (!cycleConfigured || tabTouchedRef.current || centerParamAtMountRef.current) return
-      setTab('journey')
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [cycleConfigured])
   // The rule the reader was SENT to look at — it leads the rail and says so, so
   // "which of these did the brief mean?" has an answer on screen.
   const [focusRule, setFocusRule] = useState(() => {
@@ -1806,9 +1807,23 @@ function AccreditationWorkspace() {
   // severity order.
   const chooseTab = useCallback((key) => {
     setFocusRule(null)
-    tabTouchedRef.current = true
     setTab(key)
   }, [])
+  // AURORA: a Records tile (or the cycle section's door) opens its panel and
+  // brings it into view — the panel sits under the six tiles, which on a
+  // phone is a screen further down.
+  const openRecord = useCallback(
+    (key) => {
+      chooseTab(key)
+      window.setTimeout(() => {
+        document
+          .getElementById('acc-records-open')
+          ?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+      }, 60)
+    },
+    [chooseTab, reduce],
+  )
+  const openJourney = useCallback(() => openRecord('journey'), [openRecord])
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -2134,7 +2149,6 @@ function AccreditationWorkspace() {
   // scroll its register row into view.
   const scrollToStandard = useCallback(
     (standardId) => {
-      tabTouchedRef.current = true
       setTab('standards')
       setExpandedView('evidence')
       setExpanded(standardId)
@@ -2267,44 +2281,57 @@ function AccreditationWorkspace() {
   }
 
   // ── KPIs (computed from the summary + standards) ───────────────────────────
+  // AURORA: the band shows FOUR glass cards and a chip row for the rest, so the
+  // order is the argument. Once a framework is adopted the four are the
+  // mockup's: the projected score, the next milestone, standards scored and
+  // standards with proof. Every verdict comes from a band the page already had
+  // (the framework's own status bands, the cycle payload's milestone states,
+  // the coverage thresholds) — none is invented here, and a figure with nothing
+  // to judge is `neutral` (no pill).
   const kpis = useMemo(() => {
     const total = summary.total ?? 0
     const withEvidence = summary.withEvidence ?? 0
     const gaps = summary.gaps ?? 0
     const pct = total === 0 ? 0 : summary.pctCovered ?? 0
 
-    // 1) Coverage.
+    // 1) Coverage — "Standards with proof".
     const coverageKpi = {
-      label: 'Coverage',
-      value: total === 0 ? '—' : `${withEvidence}/${total}`,
+      label: 'Standards with proof',
+      icon: FileCheck2,
+      value: total === 0 ? '—' : String(withEvidence),
+      unit: total === 0 ? null : `of ${total}`,
       status: total === 0 ? 'neutral' : pct >= 80 ? 'good' : pct >= 50 ? 'watch' : 'risk',
       sub:
         total === 0
-          ? { icon: Check, text: 'no standards yet', tone: 'neutral' }
-          : pct >= 80
-            ? { icon: Check, text: `${pct}% evidenced`, tone: 'good' }
-            : { icon: TrendingDown, text: `${pct}% evidenced`, tone: pct >= 50 ? 'neutral' : 'bad' },
+          ? { text: 'No standards yet', tone: 'neutral' }
+          : gaps > 0
+            ? { text: `${gaps} missing`, tone: pct >= 50 ? 'neutral' : 'bad' }
+            : { text: 'Every standard has proof', tone: 'good' },
     }
 
-    // 2) Evidence gaps.
+    // 2) Evidence gaps — "Missing proof" (a chip once a framework is adopted;
+    //    the coverage card's caption already says it).
     const gapsKpi = {
-      label: 'Evidence gaps',
-      value: String(gaps),
-      status: gaps > 0 ? 'risk' : 'good',
+      label: 'Missing proof',
+      icon: ShieldAlert,
+      value: total === 0 ? '—' : String(gaps),
+      status: total === 0 ? 'neutral' : gaps > 0 ? 'risk' : 'good',
       sub:
-        gaps > 0
-          ? { icon: ShieldAlert, text: 'standards with no evidence', tone: 'bad' }
-          : { icon: Check, text: 'all evidenced', tone: 'good' },
+        total === 0
+          ? { text: 'No standards yet', tone: 'neutral' }
+          : gaps > 0
+            ? { text: 'Standards with no proof', tone: 'bad' }
+            : { text: 'All have proof', tone: 'good' },
     }
 
     // 3) Rating coverage (met %) over LEAF standards — the accreditor-judgement
-    //    dimension, distinct from evidence coverage above. Total standards live in the
-    //    Coverage card's "N/M" so this slot surfaces the rating rollup.
+    //    dimension, distinct from evidence coverage above.
     const leafCount = ratingSummary?.leafCount ?? 0
     const metCount = ratingSummary?.metCount ?? 0
     const ratingPct = ratingSummary?.ratingCoveragePct ?? 0
     const ratingKpi = {
-      label: 'Rating met',
+      label: 'Rated met',
+      icon: BadgeCheck,
       value: total === 0 ? '—' : `${ratingPct}%`,
       status:
         total === 0 || leafCount === 0
@@ -2316,10 +2343,8 @@ function AccreditationWorkspace() {
               : 'risk',
       sub:
         total === 0 || leafCount === 0
-          ? { icon: BadgeCheck, text: `${total} in your register`, tone: 'neutral' }
-          : ratingPct >= 80
-            ? { icon: Check, text: `${metCount}/${leafCount} leaves met`, tone: 'good' }
-            : { icon: TrendingDown, text: `${metCount}/${leafCount} leaves met`, tone: ratingPct >= 50 ? 'neutral' : 'bad' },
+          ? { text: `${total} in your records`, tone: 'neutral' }
+          : { text: `${metCount} of ${leafCount} met`, tone: ratingPct >= 80 ? 'good' : ratingPct >= 50 ? 'neutral' : 'bad' },
     }
 
     // 4) Review due. F1 SWITCHES THIS CARD: once a cycle is configured it reads
@@ -2338,26 +2363,28 @@ function AccreditationWorkspace() {
     const reviewKpi = countdown
       ? {
           label: 'Next milestone',
-          value:
-            typeof countdown.daysRemaining === 'number' ? `${countdown.daysRemaining}d` : '—',
+          icon: CalendarClock,
+          value: typeof countdown.daysRemaining === 'number' ? String(countdown.daysRemaining) : '—',
+          unit: typeof countdown.daysRemaining === 'number' ? (countdown.daysRemaining === 1 ? 'day' : 'days') : null,
           status: milestoneStates.includes('overdue')
             ? 'risk'
             : milestoneStates.includes('at_risk')
               ? 'watch'
               : 'good',
           sub: milestoneStates.includes('overdue')
-            ? { icon: ShieldAlert, text: 'a milestone is overdue', tone: 'bad' }
-            : { icon: CalendarClock, text: countdown.label, tone: 'neutral' },
+            ? { text: 'A milestone is overdue', tone: 'bad' }
+            : { text: countdown.dueDate ? `Due ${formatShortDate(String(countdown.dueDate).slice(0, 10))}` : countdown.label, tone: 'neutral' },
         }
       : {
           label: 'Review due',
+          icon: CalendarClock,
           value: !hasReviewData ? '—' : String(reviewDue),
           status: !hasReviewData ? 'neutral' : reviewDue > 0 ? 'risk' : 'good',
           sub: !hasReviewData
-            ? { icon: Check, text: 'no review dates set', tone: 'neutral' }
+            ? { text: 'No review dates set', tone: 'neutral' }
             : reviewDue > 0
-              ? { icon: ShieldAlert, text: 'past review date', tone: 'bad' }
-              : { icon: Check, text: 'all current', tone: 'good' },
+              ? { text: 'Past review date', tone: 'bad' }
+              : { text: 'All current', tone: 'good' },
         }
 
     // 5) Documented / Defensible (Phase A) — once a framework is adopted. This
@@ -2365,8 +2392,7 @@ function AccreditationWorkspace() {
     //    single number that averages "what you claim" with "what you can prove"
     //    reads as a grade and hides the only figure an accreditor will press on,
     //    which is the DIFFERENCE between the two. Same source and same instant as
-    //    the hero's ProvenancePair directly below it. The grid flexes to 5-up
-    //    (DomainCommandCenter handles cols).
+    //    the ProvenancePair in the "Your score" card.
     if (adopted && readiness) {
       const documented = typeof readiness.selfScoredPct === 'number' ? readiness.selfScoredPct : null
       const defensible = typeof readiness.verifiedPct === 'number' ? readiness.verifiedPct : null
@@ -2375,41 +2401,196 @@ function AccreditationWorkspace() {
       const rLeaves = readiness.leafCount ?? 0
       const hasPair = documented != null && defensible != null
       const spread = hasPair ? documented - defensible : null
-      return [
-        coverageKpi,
-        ratingKpi,
-        gapsKpi,
-        reviewKpi,
-        {
-          label: 'Documented / Defensible',
-          value: hasPair ? `${documented} / ${defensible}` : '—',
-          status:
-            !hasPair || rLeaves === 0
-              ? 'neutral'
-              : defensible >= 80
-                ? 'good'
-                : defensible >= 50
-                  ? 'watch'
-                  : 'risk',
-          sub: !hasPair
-            ? { icon: BadgeCheck, text: 'not available yet', tone: 'neutral' }
-            : spread > 0
-              ? {
-                  icon: TrendingDown,
-                  text: `${scored} scored · ${covered} evidenced of ${rLeaves}`,
-                  tone: spread >= 20 ? 'bad' : 'neutral',
-                }
-              : {
-                  icon: Check,
-                  text: `${scored} scored · ${covered} evidenced of ${rLeaves}`,
-                  tone: 'good',
-                },
-        },
-      ]
+      const fw = readiness.framework ?? null
+      const hasIndex = fw?.indexMin != null && fw?.indexMax != null && readiness.projectedIndex != null
+      const below = readiness.belowThreshold === true
+
+      // The projected score — the framework's OWN status bands are its verdict:
+      // below every band → At risk, landed in one → Good.
+      const indexKpi = hasIndex
+        ? {
+            label: 'Projected score',
+            icon: Gauge,
+            value: String(readiness.projectedIndex),
+            status: below ? 'risk' : 'good',
+            sub: readiness.target?.bandLabel && readiness.target?.index != null
+              ? { text: `${readiness.target.bandLabel} needs ${readiness.target.index}`, tone: below ? 'bad' : 'neutral' }
+              : readiness.band
+                ? { text: readiness.band, tone: below ? 'bad' : 'good' }
+                : null,
+          }
+        : null
+
+      // Standards scored — the verdict is the cycle payload's own state for the
+      // self-assessment milestone (the server measured "scored" and banded it);
+      // with no cycle there is no band, so no pill.
+      const selfAssess = cycleConfigured
+        ? (cycle?.milestones ?? []).find((m) => m?.measure?.kind === 'scored')
+        : null
+      const scoredStatus = !selfAssess
+        ? 'neutral'
+        : selfAssess.state === 'overdue'
+          ? 'risk'
+          : selfAssess.state === 'at_risk'
+            ? 'watch'
+            : selfAssess.state === 'done' || selfAssess.state === 'on_track'
+              ? 'good'
+              : 'neutral'
+      const scoredKpi = {
+        label: 'Standards scored',
+        icon: ListChecks,
+        value: rLeaves === 0 ? '—' : String(scored),
+        unit: rLeaves === 0 ? null : `of ${rLeaves}`,
+        status: rLeaves === 0 ? 'neutral' : scoredStatus,
+        sub:
+          rLeaves === 0
+            ? { text: 'Nothing to score yet', tone: 'neutral' }
+            : scored === 0
+              ? { text: 'Not started', tone: 'bad' }
+              : scored < rLeaves
+                ? { text: `${rLeaves - scored} still to score`, tone: 'neutral' }
+                : { text: 'All scored', tone: 'good' },
+      }
+
+      const pairKpi = {
+        label: 'Documented / Defensible',
+        value: hasPair ? `${documented} / ${defensible}` : '—',
+        status:
+          !hasPair || rLeaves === 0
+            ? 'neutral'
+            : defensible >= 80
+              ? 'good'
+              : defensible >= 50
+                ? 'watch'
+                : 'risk',
+        sub: !hasPair
+          ? { text: 'not available yet', tone: 'neutral' }
+          : {
+              text: `${scored} scored · ${covered} evidenced of ${rLeaves}`,
+              tone: spread > 0 && spread >= 20 ? 'bad' : spread > 0 ? 'neutral' : 'good',
+            },
+      }
+
+      // Standards with proof — once adopted, from the SAME readiness leaves as
+      // "Standards scored" and the "Your score" card, so the band can never say
+      // 2 have proof while the card under it says 0. The register-wide summary
+      // (hand-made rows included) stays the reading before a framework.
+      const proofPct = rLeaves === 0 ? 0 : Math.round((covered / rLeaves) * 100)
+      const proofKpi = {
+        label: 'Standards with proof',
+        icon: FileCheck2,
+        value: rLeaves === 0 ? '—' : String(covered),
+        unit: rLeaves === 0 ? null : `of ${rLeaves}`,
+        status: rLeaves === 0 ? 'neutral' : proofPct >= 80 ? 'good' : proofPct >= 50 ? 'watch' : 'risk',
+        sub:
+          rLeaves === 0
+            ? { text: 'Nothing to back yet', tone: 'neutral' }
+            : covered < rLeaves
+              ? { text: `${rLeaves - covered} missing`, tone: proofPct >= 50 ? 'neutral' : 'bad' }
+              : { text: 'Every standard has proof', tone: 'good' },
+      }
+
+      return [indexKpi, reviewKpi, scoredKpi, proofKpi, pairKpi, ratingKpi].filter(Boolean)
     }
 
     return [coverageKpi, ratingKpi, gapsKpi, reviewKpi]
   }, [summary, ratingSummary, standards, adopted, readiness, cycle, cycleConfigured])
+
+  // ── AURORA: the band's ONE plain sentence, from the same payloads ──────────
+  // Readiness first (where the index lands, or how far it is from the target),
+  // then the cycle's next milestone. Every number is the server's.
+  const bandVerdict = useMemo(() => {
+    const total = summary.total ?? 0
+    const countdown = cycleConfigured ? (cycle?.countdown ?? null) : null
+    const states = cycleConfigured ? (cycle?.milestones ?? []).map((m) => m.state) : []
+    const nextTone = states.includes('overdue') ? 'risk' : states.includes('at_risk') ? 'watch' : null
+    const next =
+      countdown && typeof countdown.daysRemaining === 'number' ? (
+        <>
+          {' '}
+          Next up: {countdown.label}, in{' '}
+          <VerdictEm tone={nextTone}>
+            {countdown.daysRemaining} day{countdown.daysRemaining === 1 ? '' : 's'}
+          </VerdictEm>
+          .
+        </>
+      ) : null
+    if (adopted && readiness) {
+      const fw = readiness.framework ?? null
+      const hasIndex = fw?.indexMin != null && fw?.indexMax != null && readiness.projectedIndex != null
+      const below = readiness.belowThreshold === true
+      const gap = readiness.target?.pointGap ?? null
+      if (hasIndex && readiness.band && !below) {
+        return (
+          <>
+            You&apos;d land <VerdictEm tone="good">{readiness.band}</VerdictEm> today.
+            {readiness.nextBand ? (
+              <>
+                {' '}
+                <VerdictEm>
+                  {readiness.nextBand.pointGap} point{readiness.nextBand.pointGap === 1 ? '' : 's'}
+                </VerdictEm>{' '}
+                from {readiness.nextBand.label}.
+              </>
+            ) : null}
+            {next}
+          </>
+        )
+      }
+      if (hasIndex && gap != null && gap > 0) {
+        return (
+          <>
+            You are{' '}
+            <VerdictEm tone={below ? 'risk' : null}>
+              {gap} point{gap === 1 ? '' : 's'}
+            </VerdictEm>{' '}
+            from {readiness.target?.bandLabel ?? 'your target'}.{next}
+          </>
+        )
+      }
+      if (hasIndex && readiness.target) {
+        return (
+          <>
+            You&apos;ve reached <VerdictEm tone="good">{readiness.target.bandLabel}</VerdictEm>.{next}
+          </>
+        )
+      }
+      const leaves = readiness.leafCount ?? 0
+      if (leaves > 0) {
+        return (
+          <>
+            <VerdictEm>
+              {readiness.scoredCount ?? 0} of {leaves}
+            </VerdictEm>{' '}
+            standards scored, <VerdictEm>{readiness.coveredCount ?? 0}</VerdictEm> with proof.{next}
+          </>
+        )
+      }
+    }
+    if (loading) return <>Loading your accreditation records…</>
+    if (total === 0) return <>Add your standards and this page fills in.</>
+    return (
+      <>
+        <VerdictEm>
+          {summary.withEvidence ?? 0} of {total}
+        </VerdictEm>{' '}
+        standards have proof.{next}
+      </>
+    )
+  }, [summary, adopted, readiness, cycle, cycleConfigured, loading])
+
+  // The band's eyebrow — the framework and where the school is in its cycle
+  // (the chip already names the school; the title the module).
+  const bandEyebrow = useMemo(() => {
+    const cfw = cycle?.framework ?? null
+    const fwLabel = cfw?.accreditor
+      ? `${cfw.accreditor}${cfw.version ? ` ${cfw.version}` : ''}`
+      : (readiness?.framework?.name ?? null)
+    const phase = cycleConfigured ? (cycle?.phase ?? null) : null
+    const term = cycleConfigured ? (cycle?.anchor?.termYears ?? null) : null
+    const yearLine = phase?.yearOfCycle != null && term != null ? `Year ${phase.yearOfCycle} of ${term}` : null
+    return [adopted ? fwLabel : null, yearLine].filter(Boolean).join(' · ') || null
+  }, [cycle, cycleConfigured, readiness, adopted])
 
   // ── Phase E derived state ──────────────────────────────────────────────────
   // standardId → its TwinStandardRisk row, for the register's Risk column. Built
@@ -2696,7 +2877,7 @@ function AccreditationWorkspace() {
         severity: 'watch',
         sortKey: 2,
         title: `${g.code} is unscored`,
-        why: lift != null ? `${g.title} · worth +${lift} index pts at full marks` : g.title,
+        why: lift != null ? `${g.title} · worth +${lift} points at full marks` : g.title,
         actions: [
           { label: 'Score it', primary: true, onClick: () => scrollToStandard(g.standardId) },
         ],
@@ -2943,14 +3124,24 @@ function AccreditationWorkspace() {
   //   5. the rules that can never fire today, each naming what would unlock it.
   // Ordering matters: coverage before consequence, and the holes last so they are
   // the note a reader leaves on rather than a disclaimer they scrolled past.
+  // AURORA (plainer, shorter): the tab is now "Warnings". What is coming
+  // (the horizon) and the school's own numbers lead; the two long reference
+  // lists — what the engine could read, and the rules that cannot run yet —
+  // sit behind disclosures that open in place, in the same order as before
+  // (coverage first, the holes last). Nothing is dropped: both still render
+  // the server's sentences verbatim, one click away.
   const signalsTab = (
     <div className="space-y-5">
-      <SignalCoverageTable
-        rows={twin.signals}
-        counts={twin.coverage?.signals ?? null}
-        notEvaluated={twin.notEvaluated}
-        loading={twin.loading}
-      />
+      <HowThisWorks inline title="What KYRO could read — and what it couldn't" className="acc-disclose">
+        <SignalCoverageTable
+          rows={twin.signals}
+          counts={twin.coverage?.signals ?? null}
+          notEvaluated={twin.notEvaluated}
+          loading={twin.loading}
+        />
+      </HowThisWorks>
+
+      <HorizonTimeline findings={twin.findings} now={twin.now} loading={twin.loading} />
 
       {/* The Phase-B panel, hoisted to the whole-school view — the same light
           ledger block the standard drawer renders, on the ground (no card). */}
@@ -2967,15 +3158,15 @@ function AccreditationWorkspace() {
         />
       </div>
 
-      <HorizonTimeline findings={twin.findings} now={twin.now} loading={twin.loading} />
-
       <CoverageCta coverage={twin.coverage} />
 
-      <NamedHolesPanel
-        namedHoles={twin.coverage?.namedHoles ?? []}
-        notEvaluated={twin.notEvaluated}
-        loading={twin.loading}
-      />
+      <HowThisWorks inline title="Warnings that can't run yet — and what would unlock them" className="acc-disclose">
+        <NamedHolesPanel
+          namedHoles={twin.coverage?.namedHoles ?? []}
+          notEvaluated={twin.notEvaluated}
+          loading={twin.loading}
+        />
+      </HowThisWorks>
     </div>
   )
 
@@ -2999,6 +3190,145 @@ function AccreditationWorkspace() {
       reduce={reduce}
       onNavigate={openCenterLink}
     />
+  )
+
+  // ── AURORA: the Records section — six tiles, each with ONE count ─────────
+  // The approved mockup's navigation: a 3×2 grid (Journey, Domains, Standards,
+  // Proof, Warnings, Improvement), each tile one short line and one pill built
+  // from counts this page ALREADY holds. A pill only judges when a band exists
+  // (the cycle's milestone states, the coverage thresholds the band uses, an
+  // open warning); otherwise it is a grey count. Clicking a tile opens its
+  // panel underneath with a compact pill bar to switch.
+  const recordTiles = (() => {
+    const states = cycleConfigured ? (cycle?.milestones ?? []).map((m) => m?.state) : []
+    const overdue = states.filter((x) => x === 'overdue').length
+    const atRisk = states.filter((x) => x === 'at_risk').length
+    const journey = !cycle
+      ? { verdict: null, label: null }
+      : !cycleConfigured
+        ? { verdict: null, label: 'Not set up' }
+        : overdue > 0
+          ? { verdict: 'risk', label: `${overdue} overdue` }
+          : atRisk > 0
+            ? { verdict: 'watch', label: `${atRisk} at risk` }
+            : { verdict: 'good', label: 'On track' }
+
+    const doms = Array.isArray(readiness?.domains) ? readiness.domains : []
+    const measured = doms.filter((d) => d?.measured === true).length
+    const domains = doms.length
+      ? { verdict: null, label: `${measured} of ${doms.length} scored` }
+      : { verdict: null, label: null }
+
+    const leaves = adopted && readiness ? (readiness.leafCount ?? 0) : 0
+    const scored = readiness?.scoredCount ?? 0
+    const covered = readiness?.coveredCount ?? 0
+    const selfAssess = cycleConfigured ? (cycle?.milestones ?? []).find((m) => m?.measure?.kind === 'scored') : null
+    const scoredVerdict =
+      selfAssess?.state === 'overdue'
+        ? 'risk'
+        : selfAssess?.state === 'at_risk'
+          ? 'watch'
+          : selfAssess && (selfAssess.state === 'done' || selfAssess.state === 'on_track')
+            ? 'good'
+            : null
+    const total = summary.total ?? 0
+    const standardsPill =
+      leaves > 0
+        ? { verdict: scoredVerdict, label: `${scored} of ${leaves} scored` }
+        : total > 0
+          ? { verdict: null, label: `${total} in your records` }
+          : { verdict: null, label: null }
+
+    const proofDen = leaves > 0 ? leaves : total
+    const proofNum = leaves > 0 ? covered : (summary.withEvidence ?? 0)
+    const proofPct = proofDen === 0 ? 0 : Math.round((proofNum / proofDen) * 100)
+    const proof =
+      proofDen === 0
+        ? { verdict: null, label: null }
+        : proofNum >= proofDen
+          ? { verdict: 'good', label: 'All backed' }
+          : {
+              verdict: proofPct >= 80 ? 'good' : proofPct >= 50 ? 'watch' : 'risk',
+              label: `${proofDen - proofNum} missing`,
+            }
+
+    const open = earlyWarningItems.length
+    const warnings = twin.loading
+      ? { verdict: null, label: null }
+      : open > 0
+        ? { verdict: 'risk', label: `${open} open` }
+        : { verdict: 'good', label: 'None open' }
+
+    const cand = improvementCandidates(twin.findings ?? []).length
+    const improvement =
+      twin.loading || cand === 0 ? { verdict: null, label: null } : { verdict: null, label: `${cand} to plan` }
+
+    return [
+      { key: 'journey', icon: Route, desc: 'Every milestone in your cycle, with dates.', ...journey },
+      { key: 'domains', icon: Layers, desc: 'The big areas the accreditor reviews.', ...domains },
+      { key: 'standards', icon: ListChecks, desc: 'Score each standard against the rubric.', ...standardsPill },
+      { key: 'evidence', icon: Paperclip, desc: 'Files that back up each score.', ...proof },
+      { key: 'signals', icon: AlertTriangle, desc: 'Gaps KYRO found, with the fix for each.', ...warnings },
+      { key: 'improvement', icon: TrendingUp, desc: 'Plans to close the gaps.', ...improvement },
+    ]
+  })()
+
+  const activeRecordLabel = CENTER_TABS.find((t) => t.key === tab)?.label ?? null
+  const recordsBody = (
+    <div className="acc-records">
+      <AuroraTileGrid cols={3} data-testid="records-tiles">
+        {recordTiles.map((t) => {
+          const label = CENTER_TABS.find((x) => x.key === t.key)?.label ?? t.key
+          const on = t.key === tab
+          return (
+            <AuroraTile
+              key={t.key}
+              icon={t.icon}
+              title={label}
+              desc={t.desc}
+              verdict={t.verdict}
+              verdictLabel={t.label}
+              onClick={() => openRecord(t.key)}
+              ariaLabel={`Open ${label}`}
+              className={on ? 'acc-rec-on' : ''}
+              data-testid={`records-tile-${t.key}`}
+              aria-current={on ? 'true' : undefined}
+            />
+          )
+        })}
+      </AuroraTileGrid>
+      {tab ? (
+        <div id="acc-records-open" className="acc-records-open">
+          <div role="tablist" aria-label="Records" className="au-tabs">
+            {CENTER_TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={t.key === tab}
+                onClick={() => chooseTab(t.key)}
+                className="au-tab"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="au-card au-card-flat au-register min-w-0" aria-label={activeRecordLabel ?? undefined} role="tabpanel">
+            {tab === 'journey'
+              ? journeyTab
+              : tab === 'domains'
+                ? domainGrid
+                : tab === 'evidence'
+                  ? evidenceTab
+                  : tab === 'signals'
+                    ? signalsTab
+                    : tab === 'improvement'
+                      ? improvementTab
+                      : registerTable}
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 
   // ── Phase B: the open standard's signal slice ──────────────────────────────
@@ -3026,61 +3356,106 @@ function AccreditationWorkspace() {
       reduce={reduce}
       history={history}
       cycle={cycle}
-      onOpenJourney={() => chooseTab('journey')}
+      onOpenJourney={openJourney}
       onUnbackedClick={() => {
         setRegisterFilter('unbacked')
         chooseTab('standards')
       }}
+      // AURORA: the index is drawn on the band (ReadinessDial) and the cycle
+      // has its own section above, so neither is repeated here.
+      dial={false}
+      showCountdown={!cycleConfigured}
+      onImproveStandard={ruleApi.improveStandard}
+      first={!cycleConfigured && !(cycle && adopted)}
     />
   )
+
+  // ── AURORA: the sections under the band — where the school is in its
+  // cycle, then the readiness sections (quickest wins, must-pass checks, the
+  // score). The full road and every register stay one tab away below.
+  const overviewSections = (
+    <>
+      <CycleStepper
+        cycle={cycle}
+        notLicensed={cycleHook.notLicensed}
+        adopted={adopted}
+        onOpenJourney={openJourney}
+        first
+      />
+      {readinessHero}
+    </>
+  )
+
+  // The Needs-attention strip merges two lists; its subtitle names both, by
+  // what each counts, so it agrees with the Records "Warnings" tile (open
+  // engine warnings only) instead of calling every to-do a warning.
+  // The rail is the engine's open warnings (earlyWarningItems — the SAME list
+  // the tile counts) merged with the readiness to-dos; its total minus the
+  // warnings is exactly the to-dos.
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const railWarnings = earlyWarningItems.length
+  const railTodos = Math.max(0, attentionItems.list.length + attentionItems.more - railWarnings)
+  const attentionSubtitle =
+    railWarnings + railTodos === 0
+      ? 'Nothing waiting on you'
+      : [
+          railWarnings > 0 ? plural(railWarnings, 'open warning') : null,
+          railTodos > 0 ? plural(railTodos, 'to-do') : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
 
   const commandCenter = (
     <DomainCommandCenter
       showAddData
       moduleKey="accreditation"
-      eyebrow={['Accreditation', activeSchool?.name].filter(Boolean).join(' · ')}
+      eyebrow={bandEyebrow}
       title="Accreditation"
-      Icon={BadgeCheck}
+      verdict={bandVerdict}
+      heroAside={adopted && readiness ? <ReadinessDial readiness={readiness} reduce={reduce} /> : null}
       attentionCount={attentionItems.list.length}
       kpis={kpis}
-      tabs={CENTER_TABS}
-      activeTab={tab}
-      onTabChange={chooseTab}
-      onNew={canEdit ? openAdd : null}
-      registerTable={
-        tab === 'journey'
-          ? journeyTab
-          : tab === 'domains'
-            ? domainGrid
-            : tab === 'evidence'
-              ? evidenceTab
-              : tab === 'signals'
-                ? signalsTab
-                : tab === 'improvement'
-                  ? improvementTab
-                  : registerTable
-      }
+      // AURORA: the six registers are TILES (recordsBody), not a tab bar —
+      // DCC's own tab bar is switched off by handing it no tabs.
+      tabs={[]}
+      registerTitle="Records"
+      registerTable={recordsBody}
       attentionItems={attentionItems.list}
       attentionMoreCount={attentionItems.more}
-      attentionOnMore={() => chooseTab('signals')}
-      aboveKpis={readinessHero}
+      attentionOnMore={() => openRecord('signals')}
+      aboveKpis={overviewSections}
+      registerSubtitle="Everything behind the score"
+      attentionSubtitle={attentionSubtitle}
+      howItWorks={
+        <>
+          <p>
+            Your projected score is the average of your own rubric scores across the framework&apos;s
+            standards. Proof backs a score; it does not raise it. Must-pass checks are pass or fail and sit
+            outside the score.
+          </p>
+          <p>
+            Warnings come from KYRO&apos;s early-warning rules over your school&apos;s own numbers. A rule we
+            cannot check is listed as not checked, never as passed.
+          </p>
+        </>
+      }
       // THE DENSEST REGISTER IN THE APP. Standards carries code, standard,
       // rating, coverage, risk, review and actions; at two-thirds width the last
       // two sat behind a horizontal scrollbar, so a reader had to scroll sideways
       // to find out whether a standard needed a decision. Full width, with the
       // needs-attention rail beneath rather than squeezed beside.
       wideRegister
+      actions={
+        /* AIC PHASE H — the one entry control into the Mock Visit. A LINK, not a
+           button, and never role-gated: a viewer is exactly the audience for
+           "what would a visiting team find?", and the visit route reads for
+           owner, accountant and viewer alike. */
+        <AuroraButton to="/accreditation/visit" icon={<ClipboardCheck size={19} aria-hidden="true" />}>
+          Mock visit
+        </AuroraButton>
+      }
       headerAside={
         <>
-          {/* AIC PHASE H — the one entry control into the Mock Visit. A LINK, not a
-              button, and never role-gated: a viewer is exactly the audience for
-              "what would a visiting team find?", and the visit route reads for
-              owner, accountant and viewer alike. Same hued pill vocabulary as the
-              Frameworks control beside it, so this page grows no new affordance
-              language. */}
-          <Button to="/accreditation/visit" variant="secondary" icon={<ShieldAlert size={14} />}>
-            Mock visit
-          </Button>
           {/* THE FRAMEWORK SWITCHER. Rendered only for a school that actually
               holds more than one accreditation — for everyone else this page
               gains no new control at all. Not role-gated: choosing which
@@ -3378,7 +3753,7 @@ function AccreditationWorkspace() {
 
 export default function AccreditationPage() {
   return (
-    <div className="min-h-screen">
+    <div className="acc-hue min-h-screen">
       <BillingBanner />
       <AccreditationWorkspace />
     </div>

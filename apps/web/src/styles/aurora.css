@@ -1,0 +1,1912 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   aurora.css — the approved "Aurora" module look (owner sign-off 2026-10-15).
+
+   One stylesheet for the Aurora primitives in components/ui/aurora/*. Every
+   selector is `au-` namespaced, so nothing here can reach the school home
+   (.home-classic / hc-*), the org home, the sidebar or a print document.
+
+   HUE. Everything colourful derives from the `--au-*` custom properties that
+   components/module/moduleAnatomy.js computes from the ONE locked module hue
+   (moduleAccentVars spreads them onto every module page root; AuroraHero /
+   AuroraSection / AuroraTile also accept a `hue` / `moduleKey` prop). The
+   fallbacks below are Finance blue so a primitive outside a module root still
+   renders. Status colours (good / watch / at risk) are a separate, fixed trio:
+   they mean a state, never a module.
+
+   SCREEN ONLY. The @media print block at the bottom flattens every Aurora
+   surface to plain ink on white; print routes never mount these classes, so
+   printed documents are untouched either way.
+
+   MOTION. The band's blobs drift (transform only) and tiles flood on hover.
+   prefers-reduced-motion (CSS) and `.au-still` (set by the components from
+   framer's useReducedMotion) both stop all of it.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.au-scope,
+.au-hero,
+.au-sec,
+.au-tile,
+.au-card {
+  --au-ink-1: #101c3d;
+  --au-ink-2: #3d4865;
+  --au-ink-3: #5a6480;
+  --au-line: #e3e7f0;
+  --au-good: #047857;
+  --au-good-bg: #d1fae5;
+  --au-good-dot: #10b981;
+  --au-good-h: #059669;
+  --au-watch: #9a4508;
+  --au-watch-bg: #fef3c7;
+  --au-watch-dot: #f59e0b;
+  --au-watch-h: #d97706;
+  --au-risk: #be123c;
+  --au-risk-bg: #ffe4e6;
+  --au-risk-dot: #e11d48;
+  --au-risk-h: #e11d48;
+  --au-none: #475569;
+  --au-none-bg: #e2e8f0;
+}
+
+/* ═══ The band ═══════════════════════════════════════════════════════════ */
+.au-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 26px;
+  padding: 34px 40px;
+  color: #fff;
+  background: radial-gradient(
+    120% 140% at 0% 0%,
+    var(--au-d0, #1b45a5) 0%,
+    var(--au-d1, #0f2a63) 42%,
+    var(--au-d2, #07142f) 100%
+  );
+  box-shadow:
+    0 30px 60px -28px var(--au-shadow, rgba(29, 63, 168, 0.6)),
+    inset 0 2px 0 rgba(255, 255, 255, 0.08);
+  font-family: var(--font-body);
+}
+.au-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.au-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.7;
+  animation: au-drift 16s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.au-blob-1 {
+  width: 520px;
+  height: 380px;
+  left: -120px;
+  top: -140px;
+  background: var(--au-g1, var(--au-b1, #3b82f6));
+}
+.au-blob-2 {
+  width: 560px;
+  height: 360px;
+  right: -160px;
+  top: -60px;
+  background: var(--au-g2, var(--au-h2, #8b5cf6));
+  animation-duration: 21s;
+  animation-delay: -6s;
+}
+.au-blob-3 {
+  width: 620px;
+  height: 300px;
+  left: 30%;
+  bottom: -200px;
+  background: var(--au-g3, var(--au-h3, #22d3ee));
+  animation-duration: 24s;
+  animation-delay: -3s;
+}
+.au-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    var(--au-veil, rgba(5, 12, 40, 0.5)) 0%,
+    var(--au-veil, rgba(5, 12, 40, 0.5)) 30%,
+    transparent 68%
+  );
+}
+.au-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 60%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 60%);
+}
+.au-ribbonart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.55;
+}
+@keyframes au-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(60px, 30px) scale(1.12);
+  }
+  100% {
+    transform: translate(-40px, 20px) scale(0.95);
+  }
+}
+.au-hero.au-still .au-blob {
+  animation: none;
+}
+
+.au-hero-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: center;
+}
+.au-hero-main {
+  min-width: 0;
+}
+.au-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+.au-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.au-chip > svg {
+  flex: none;
+}
+.au-title {
+  margin: 16px 0 12px;
+  font-family: var(--font-display);
+  font-size: 60px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.15);
+  text-wrap: balance;
+}
+.au-verdict {
+  max-width: 720px;
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: #fff;
+}
+.au-em {
+  font-style: normal;
+  font-weight: 700;
+  color: #fff;
+}
+.au-em-good {
+  color: #a7f3d0;
+}
+.au-em-watch {
+  color: #fde68a;
+}
+.au-em-risk {
+  color: #fecdd3;
+}
+
+/* Right column: the big faint monogram with the period switcher over it. */
+.au-aside {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 220px;
+  min-height: 180px;
+}
+.au-monogram {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 190px;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  color: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  user-select: none;
+}
+.au-aside-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Buttons on the band ───────────────────────────────────────────────── */
+.au-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.au-btn,
+.au-actions .btn,
+.au-actions .btn.btn-primary,
+.au-actions .btn.btn-secondary,
+.au-actions .btn.btn-quiet {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.2);
+  background-image: none;
+  box-shadow: none;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+}
+.au-btn svg,
+.au-actions .btn svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+.au-btn:hover,
+.au-actions .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+.au-btn:focus-visible,
+.au-actions .btn:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+}
+.au-btn-primary,
+.au-actions .btn.btn-primary {
+  background: #fff;
+  border-color: #fff;
+  color: var(--au-deep, #1d3fa8);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.45);
+}
+.au-btn-primary:hover,
+.au-actions .btn.btn-primary:hover:not(:disabled) {
+  background: #fff;
+  color: var(--au-deep, #1d3fa8);
+  box-shadow: 0 16px 34px -10px rgba(0, 0, 0, 0.5);
+}
+.au-btn:disabled,
+.au-actions .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Existing pills / segmented controls / wrappers a page drops into the band's
+   action row (an "as of" chip, a framework switcher) wear glass too. */
+.au-actions .pill {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.au-actions .pill-status .pill-mark {
+  color: #fde68a;
+}
+.au-actions .seg {
+  align-self: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 4px;
+}
+.au-actions .seg-btn {
+  border-radius: 9px;
+  color: #fff;
+}
+.au-actions .seg-btn[aria-pressed='true'],
+.au-actions .seg-btn[aria-selected='true'] {
+  background: #fff;
+  color: var(--au-deep, #1d3fa8);
+  box-shadow: none;
+}
+.au-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.au-hero .au-actions label {
+  color: rgba(255, 255, 255, 0.88);
+}
+.au-hero .au-actions .sel {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+.au-hero .au-actions .sel option {
+  color: #101c3d;
+}
+
+/* ── The tools row (secondary controls under the band's buttons) ──────────
+   A framework switcher, a division select, an "as of" chip, Refresh… These
+   used to share the button row and, at 390px, overlapped it (the Division
+   select ran past the band's edge over the Frameworks button). Their own row:
+   compact glass, wraps, every child may shrink, nothing exceeds the band. */
+.au-actions.au-tools {
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 14px;
+}
+.au-actions.au-tools > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.au-actions.au-tools .btn,
+.au-actions.au-tools .btn.btn-primary,
+.au-actions.au-tools .btn.btn-secondary,
+.au-actions.au-tools .btn.btn-quiet,
+.au-actions.au-tools .au-btn {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 15px;
+  gap: 8px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.au-actions.au-tools .btn svg,
+.au-actions.au-tools .au-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.au-actions.au-tools label {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+.au-actions.au-tools label .sel,
+.au-actions.au-tools select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Muted ink a page drops into a band slot ("Data as of …" in text-ink2) was
+   navy-on-navy (~1.6:1). On the band every muted ink reads as soft white. */
+.au-hero :is(.au-actions, .au-aside-body, .au-eyebrow, .au-verdict)
+  :is(.text-ink, .text-ink2, .text-muted, .text-navy, .text-ink\/70, .text-ink\/60, [class*='text-slate-'], [class*='text-gray-']) {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ── Segmented switch (period / year) on the band ──────────────────────── */
+.au-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.au-switch-btn {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.au-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.au-switch-btn[aria-pressed='true'] {
+  background: #fff;
+  color: var(--au-deep, #1d3fa8);
+}
+.au-switch-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 1px;
+}
+
+/* ── Glass KPI cards ───────────────────────────────────────────────────── */
+/* Single-class selector ON PURPOSE: a responsive Tailwind grid-cols-* on the
+   same element (DomainCommandCenter's no-clip column rule) must still win. */
+.au-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 30px;
+  border-bottom: 0;
+}
+@media (min-width: 1280px) {
+  .au-kpis {
+    grid-template-columns: repeat(var(--au-kpi-cols, 4), minmax(0, 1fr));
+  }
+}
+.au-kpi,
+.au-kpis .au-kpi.stat,
+.au-kpis .au-kpi.stat + .au-kpi.stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(16px) brightness(0.72) saturate(1.25);
+  backdrop-filter: blur(16px) brightness(0.72) saturate(1.25);
+  box-shadow:
+    0 18px 40px -22px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #fff;
+  text-decoration: none;
+}
+a.au-kpi:hover,
+.au-kpis a.au-kpi.stat:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
+}
+a.au-kpi:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+}
+.au-kpi-lab,
+.au-kpi .stat-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.9);
+  overflow-wrap: break-word;
+}
+.au-kpi-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.au-kpi-val,
+.au-kpi .stat-value {
+  display: block;
+  margin: 12px 0 4px;
+  font-family: var(--font-body);
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.au-kpi.stat-text .stat-value,
+.au-kpi-val.au-kpi-val-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  font-size: 30px;
+  line-height: 1.15;
+}
+.au-kpi.stat-text.au-kpi-num .stat-value {
+  white-space: nowrap;
+  font-size: 40px;
+  line-height: 1.1;
+}
+/* The glass grid replaces the ledger strip's rule/clip tricks. */
+.au-kpis.stats {
+  margin-left: 0;
+  clip-path: none;
+  row-gap: 16px;
+}
+.au-kpi-unit,
+.au-kpi .stat-unit {
+  margin-left: 6px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+.au-kpi-cap,
+.au-kpi .stat-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+}
+.au-kpi .stat-foot .mark {
+  display: none;
+}
+.au-kpi .stat-foot svg {
+  color: rgba(255, 255, 255, 0.85);
+}
+.au-kpi .stat-mark {
+  display: none;
+}
+.au-kpi > .au-pill {
+  margin-top: auto;
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+}
+
+/* ═══ Verdict pill (Good / Watch / At risk / neutral) ═══════════════════ */
+.au-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 7px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.au-pill-i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+}
+.au-pill-good {
+  background: var(--au-good-bg, #d1fae5);
+  color: var(--au-good, #047857);
+}
+.au-pill-good .au-pill-i {
+  background: var(--au-good-dot, #10b981);
+}
+.au-pill-watch {
+  background: var(--au-watch-bg, #fef3c7);
+  color: var(--au-watch, #9a4508);
+}
+.au-pill-watch .au-pill-i {
+  background: var(--au-watch-dot, #f59e0b);
+}
+.au-pill-risk {
+  background: var(--au-risk-bg, #ffe4e6);
+  color: var(--au-risk, #be123c);
+}
+.au-pill-risk .au-pill-i {
+  background: var(--au-risk-dot, #e11d48);
+}
+.au-pill-neutral {
+  background: var(--au-none-bg, #e2e8f0);
+  color: var(--au-none, #475569);
+}
+.au-pill-neutral .au-pill-i {
+  background: #94a3b8;
+}
+
+/* Reserved pill height on a glass card that has no verdict (no band → no
+   pill, but the cards in a row still line up). */
+.au-pill-ghost {
+  visibility: hidden;
+  min-height: 28px;
+  padding: 0;
+  box-shadow: none !important;
+}
+.au-pill-sm {
+  gap: 4px;
+  padding: 3px 8px 3px 4px;
+  font-size: 11px;
+}
+.au-pill-sm .au-pill-i {
+  width: 15px;
+  height: 15px;
+}
+.au-pill-sm .au-pill-i svg {
+  width: 9px;
+  height: 9px;
+}
+
+/* ── "More figures": the band's KPIs past the fourth, as small glass chips ── */
+.au-kchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.au-kchip {
+  min-width: 0;
+  max-width: 100%;
+}
+.au-kchip-in {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 9px;
+  max-width: 100%;
+  padding: 7px 10px 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(12px) brightness(0.75);
+  backdrop-filter: blur(12px) brightness(0.75);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.25;
+  text-decoration: none;
+}
+a.au-kchip-in:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+a.au-kchip-in:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+}
+.au-kchip-lab {
+  min-width: 0;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  overflow-wrap: anywhere;
+}
+.au-kchip-val {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.au-kchip-val small {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ═══ Section heading strip ══════════════════════════════════════════════ */
+.au-sec {
+  --sh: var(--au-h, #2563eb);
+  --sh2: var(--au-h2, #4f46e5);
+  margin-top: 58px;
+  min-width: 0;
+}
+.au-sec-first {
+  margin-top: 40px;
+}
+.au-ribbon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 26px;
+  padding: 12px 24px 12px 12px;
+  border-radius: 999px 18px 18px 999px;
+  border: 1px solid color-mix(in srgb, var(--sh) 22%, transparent);
+  border-right: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sh) 17%, #fff) 0%,
+    color-mix(in srgb, var(--sh) 7%, #fff) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+.au-ribbon::after {
+  content: '';
+  position: absolute;
+  left: 66px;
+  right: 0;
+  bottom: -11px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--sh), var(--sh2) 40%, transparent);
+}
+.au-medal {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(140deg, var(--sh), var(--sh2));
+  box-shadow:
+    0 0 0 4px #fff,
+    0 0 0 5px color-mix(in srgb, var(--sh) 30%, transparent),
+    0 12px 24px -8px color-mix(in srgb, var(--sh) 70%, transparent);
+}
+.au-ribbon-text {
+  min-width: 0;
+}
+.au-ribbon-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--sh) 55%, #0b1020);
+  text-wrap: balance;
+}
+.au-ribbon-sub {
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--au-ink-2);
+}
+.au-ribbon-rr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+.au-count {
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--sh) 30%, transparent);
+  background: #fff;
+  color: color-mix(in srgb, var(--sh) 70%, #000);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.au-orn {
+  display: flex;
+  gap: 5px;
+}
+.au-orn > b {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: var(--sh);
+  opacity: 0.85;
+}
+.au-orn > b:nth-child(2) {
+  opacity: 0.5;
+}
+.au-orn > b:nth-child(3) {
+  opacity: 0.25;
+}
+/* A section in a narrow column (a rail beside a register). */
+.au-sec-compact .au-ribbon {
+  gap: 12px;
+  padding: 9px 14px 9px 8px;
+}
+.au-sec-compact .au-ribbon::after {
+  left: 52px;
+}
+.au-sec-compact .au-medal {
+  width: 44px;
+  height: 44px;
+}
+.au-sec-compact .au-ribbon-title {
+  font-size: 24px;
+}
+.au-sec-compact .au-ribbon-sub {
+  font-size: 12.5px;
+}
+.au-sec-compact .au-orn {
+  display: none;
+}
+.au-ribbon-text .au-count {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+/* ═══ Colourful tiles (school-home tile language) ════════════════════════ */
+.au-tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+@media (min-width: 640px) {
+  .au-t2,
+  .au-t3,
+  .au-t4,
+  .au-t5,
+  .au-t6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .au-t3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .au-t4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .au-t5,
+  .au-t6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1440px) {
+  .au-t5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .au-t6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.au-tiles-stack {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.au-tile {
+  --th: var(--au-h, #2563eb);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 22px 22px 20px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--th) 16%, var(--au-line));
+  background: linear-gradient(140deg, color-mix(in srgb, var(--th) 10%, #fff) 0%, #fff 62%);
+  box-shadow:
+    0 1px 2px rgba(16, 28, 61, 0.04),
+    0 14px 30px -24px color-mix(in srgb, var(--th) 60%, transparent);
+  color: var(--au-ink-1);
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.3s ease;
+}
+.au-tile-risk {
+  --th: var(--au-risk-h);
+}
+.au-tile-watch {
+  --th: var(--au-watch-h);
+}
+.au-tile-good {
+  --th: var(--au-good-h);
+}
+.au-tile-neutral {
+  --th: #64748b;
+}
+/* The colour flood — only on tiles that go somewhere. */
+.au-tile-live::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--th) 80%, #0b1020),
+    color-mix(in srgb, var(--th) 58%, #0b1020)
+  );
+  clip-path: circle(0 at 92% 90%);
+  transition: clip-path 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.au-tile-live:hover,
+.au-tile-live:focus-within {
+  transform: translateY(-3px);
+  box-shadow: 0 26px 44px -26px color-mix(in srgb, var(--th) 80%, transparent);
+}
+.au-tile-live:hover::before,
+.au-tile-live:focus-within::before {
+  clip-path: circle(160% at 92% 90%);
+}
+.au-tile-live:hover,
+.au-tile-live:focus-within,
+.au-tile-live:hover :is(.au-tile-desc, .au-tile-kick, .au-tile-fig, .au-tile-fig small, .au-tile-title),
+.au-tile-live:focus-within :is(.au-tile-desc, .au-tile-kick, .au-tile-fig, .au-tile-fig small, .au-tile-title) {
+  color: #fff;
+}
+.au-tile-live:hover .au-well,
+.au-tile-live:focus-within .au-well {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.au-tile-live:hover .au-art,
+.au-tile-live:focus-within .au-art {
+  color: #fff;
+  opacity: 0.16;
+}
+.au-tile-live:hover .au-go,
+.au-tile-live:focus-within .au-go {
+  background: #fff;
+  color: var(--th);
+}
+.au-tile-live:hover .au-lbtn,
+.au-tile-live:focus-within .au-lbtn {
+  background: #fff;
+  color: var(--lb-fill);
+  border-color: #fff;
+}
+/* A stretched link/button makes the whole tile the hit area; real controls in
+   the foot sit above it (z 2) so a tile can carry its own button. */
+.au-tile-hit {
+  color: inherit;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.au-tile-hit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.au-tile-hit:focus-visible {
+  outline: none;
+}
+.au-tile:has(.au-tile-hit:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--th) 75%, #101c3d);
+  outline-offset: 3px;
+}
+.au-tile-lift {
+  position: relative;
+  z-index: 2;
+}
+.au-well {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--th) 13%, #fff);
+  color: var(--th);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+/* Tiles stay tiles, not paragraphs: two lines of title, two of description;
+   the full text rides on the element's title attribute. */
+.au-tile-title,
+.au-tile-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.au-tile-title {
+  margin: 16px 0 6px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--au-ink-1);
+  overflow-wrap: break-word;
+  transition: color 0.3s ease;
+}
+.au-tile-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--au-ink-2);
+  overflow-wrap: break-word;
+  transition: color 0.3s ease;
+}
+.au-tile-kick {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--th) 70%, #0b1020);
+}
+.au-tile-fig {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--au-ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.au-tile-fig small {
+  margin-left: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--au-ink-3);
+}
+.au-tile-body {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--au-ink-2);
+}
+.au-tile-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+.au-go {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--th) 12%, #fff);
+  color: var(--th);
+  transition: all 0.3s ease;
+}
+.au-art {
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  z-index: -1;
+  width: 130px;
+  height: 130px;
+  color: var(--th);
+  opacity: 0.11;
+  transform: rotate(-8deg);
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    color 0.3s ease;
+}
+.au-art > svg {
+  width: 100%;
+  height: 100%;
+}
+/* Row tiles (warnings): the well sits beside the words. */
+.au-tile-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+}
+.au-tile-row .au-tile-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  align-self: stretch;
+}
+.au-tile-row .au-tile-title {
+  margin: 2px 0 6px;
+  font-size: 17px;
+}
+
+/* ═══ Light buttons (inside sections, cards and tiles) ═══════════════════ */
+/* The fill is --au-deep (moduleAnatomy.auroraVarsFromHue): the hue darkened
+   just until white clears 4.6:1, so a LIGHT registry hue (Enrollment's sky,
+   Accreditation's amber, Improvement's teal) gets a readable button while a
+   dark hue (Finance's blue) looks as before. A `hue` prop on
+   AuroraLightButton sets --lb-deep from the same function. The same colour is
+   the outline button's words and the white-on-hover tile button's words. */
+.au-lbtn {
+  --th: var(--au-h, #2563eb);
+  --lb-fill: var(--lb-deep, var(--au-deep, #1d3fa8));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: var(--lb-fill);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 10px 20px -12px var(--th);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
+}
+.au-lbtn:hover {
+  transform: translateY(-1px);
+  /* hover goes a shade DEEPER, never lighter — it can only gain contrast */
+  background: color-mix(in srgb, var(--lb-fill) 86%, #000);
+}
+.au-lbtn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--th) 45%, transparent);
+  outline-offset: 2px;
+}
+.au-lbtn-ghost {
+  background: #fff;
+  color: var(--lb-fill);
+  border-color: color-mix(in srgb, var(--th) 30%, transparent);
+  box-shadow: none;
+}
+.au-lbtn-ghost:hover {
+  background: color-mix(in srgb, var(--th) 6%, #fff);
+  /* the tint costs a little contrast — the words go the hover shade deeper */
+  color: color-mix(in srgb, var(--lb-fill) 86%, #000);
+}
+.au-lbtn-sm {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.au-lbtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+.au-lbtn svg {
+  flex: none;
+}
+
+/* ═══ White data card (charts / tables inside a section) ═════════════════ */
+.au-card {
+  --th: var(--au-h, #2563eb);
+  --th2: var(--au-h2, #60a5fa);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  padding: 24px 26px;
+  border-radius: 22px;
+  border: 1px solid var(--au-line);
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(16, 28, 61, 0.04),
+    0 20px 40px -32px rgba(16, 28, 61, 0.35);
+}
+.au-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--th), var(--th2));
+}
+.au-card-flat::before {
+  display: none;
+}
+.au-card-flush {
+  padding: 8px 0 0;
+}
+.au-card-flush > .au-card-head {
+  padding: 16px 22px 4px;
+}
+.au-card-risk {
+  --th: var(--au-risk-h);
+  --th2: #f97316;
+}
+.au-card-watch {
+  --th: var(--au-watch-h);
+  --th2: #fbbf24;
+}
+.au-card-good {
+  --th: var(--au-good-h);
+  --th2: #34d399;
+}
+.au-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 14px;
+  margin-bottom: 6px;
+}
+.au-card-head > div {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.au-card-title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--au-ink-1);
+}
+.au-card-sub {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--au-ink-3);
+}
+.au-big {
+  margin: 14px 0 2px;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--au-ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.au-big-good {
+  color: var(--au-good);
+}
+.au-big-risk {
+  color: var(--au-risk);
+}
+.au-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+.au-cols2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+}
+@media (min-width: 1100px) {
+  .au-cols2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The register table's card (DomainCommandCenter): a little air, no rule. */
+.au-register {
+  padding: 10px 18px 14px;
+  border-radius: 18px;
+}
+@media (max-width: 639px) {
+  .au-register {
+    padding: 6px 10px 10px;
+  }
+}
+/* A register wider than its card scrolls INSIDE the card. Say so: the right
+   edge fades to the card's white with a soft inner shadow (the DataTable's
+   own data-overflow / data-at-end flags drive it; it lifts at the last column). */
+.au-register .dt-wrap[data-overflow='x']::after {
+  width: 3rem;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 80%);
+  box-shadow: inset -12px 0 12px -12px rgba(16, 28, 61, 0.35);
+}
+
+/* ═══ Column chart (vertical columns, owner rule) ════════════════════════ */
+.au-chart {
+  position: relative;
+  margin-top: 14px;
+}
+.au-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.au-chart-grid {
+  stroke: #e8ecf4;
+  stroke-width: 1;
+}
+.au-chart-base {
+  stroke: #c9d1e2;
+  stroke-width: 1;
+}
+.au-chart-tick {
+  fill: var(--au-ink-3);
+  font-family: var(--font-body);
+  font-size: 11px;
+}
+.au-chart-val {
+  fill: var(--au-ink-1);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+}
+.au-chart-lab {
+  fill: var(--au-ink-2);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.au-chart-bar {
+  transition: opacity 0.15s ease;
+}
+.au-chart-col:hover .au-chart-bar {
+  opacity: 0.85;
+}
+.au-chart-tip {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, calc(-100% - 8px));
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #101c3d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 20px -8px rgba(16, 28, 61, 0.5);
+}
+
+/* ═══ Register tabs inside an Aurora section ═════════════════════════════ */
+.au-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.au-tab {
+  --th: var(--au-h, #2563eb);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--th) 22%, var(--au-line, #e3e7f0));
+  background: #fff;
+  color: var(--au-ink-2, #3d4865);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.au-tab:hover {
+  background: color-mix(in srgb, var(--th) 8%, #fff);
+  color: var(--au-ink-1, #101c3d);
+}
+.au-tab[aria-selected='true'] {
+  border-color: transparent;
+  background: linear-gradient(140deg, var(--th), color-mix(in srgb, var(--th) 70%, #0b1020));
+  color: #fff;
+  box-shadow: 0 8px 18px -10px var(--th);
+}
+.au-tab:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--th) 45%, transparent);
+  outline-offset: 2px;
+}
+
+/* ═══ "How this works" disclosure ═══════════════════════════════════════ */
+.au-how {
+  --th: var(--au-h, #2563eb);
+  margin-top: 40px;
+  border-top: 1px solid var(--au-line, #e3e7f0);
+  padding-top: 14px;
+  color: var(--au-ink-2, #3d4865);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.au-how > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--th) 70%, #0b1020);
+  font-weight: 700;
+  font-size: 13.5px;
+  list-style: none;
+  cursor: pointer;
+}
+.au-how > summary::-webkit-details-marker {
+  display: none;
+}
+.au-how > summary:hover {
+  background: color-mix(in srgb, var(--th) 8%, #fff);
+}
+.au-how > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--th) 40%, transparent);
+  outline-offset: 2px;
+}
+.au-how-chev {
+  transition: transform 0.2s ease;
+}
+.au-how[open] .au-how-chev {
+  transform: rotate(90deg);
+}
+.au-how-body {
+  max-width: 820px;
+  padding: 8px 4px 0 12px;
+}
+.au-how-body p {
+  margin: 0 0 8px;
+}
+.au-how-inline {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* ═══ Designed empty state ═══════════════════════════════════════════════ */
+.au-empty {
+  --th: var(--au-h, #2563eb);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border-radius: 20px;
+  border: 1.5px dashed color-mix(in srgb, var(--th) 30%, #c8cfdf);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--th) 6%, #fff), #fff 70%);
+}
+/* Inside a Records card the empty state is the card's content, not a second
+   card: no dashed frame, no wash (never card-in-card). */
+.au-register .au-empty {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+.au-empty .au-well {
+  --th: var(--au-h, #2563eb);
+}
+.au-empty-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--au-ink-1, #101c3d);
+}
+.au-empty-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--au-ink-2, #3d4865);
+}
+
+/* ═══ Responsive ═════════════════════════════════════════════════════════ */
+@media (max-width: 1240px) {
+  .au-aside {
+    min-width: 180px;
+  }
+  .au-monogram {
+    font-size: 150px;
+  }
+}
+@media (max-width: 900px) {
+  .au-hero {
+    padding: 26px 20px 22px;
+    border-radius: 22px;
+  }
+  .au-hero-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .au-title {
+    margin: 12px 0 10px;
+    font-size: 44px;
+  }
+  .au-verdict {
+    font-size: 18px;
+  }
+  .au-aside {
+    justify-items: start;
+    min-width: 0;
+    min-height: 0;
+  }
+  .au-aside-body {
+    align-items: flex-start;
+  }
+  .au-monogram {
+    display: none;
+  }
+  .au-aside:not(:has(.au-aside-body)) {
+    display: none;
+  }
+  .au-veil {
+    background: linear-gradient(
+      180deg,
+      var(--au-veil, rgba(5, 12, 40, 0.5)) 0%,
+      var(--au-veil, rgba(5, 12, 40, 0.5)) 38%,
+      transparent 70%
+    );
+  }
+  .au-actions {
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .au-actions > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .au-btn,
+  .au-actions .btn,
+  .au-actions .btn.btn-primary,
+  .au-actions .btn.btn-secondary,
+  .au-actions .btn.btn-quiet {
+    height: 48px;
+    min-height: 48px;
+    padding: 0 10px;
+    gap: 7px;
+    font-size: 14px;
+  }
+  .au-actions > :first-child {
+    flex-basis: 100%;
+  }
+  /* A long label ("Governance report") wraps inside its half-width button
+     instead of spilling out of it. */
+  .au-btn,
+  .au-actions .btn,
+  .au-actions .btn.btn-primary,
+  .au-actions .btn.btn-secondary,
+  .au-actions .btn.btn-quiet {
+    height: auto;
+    padding-block: 8px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+  .au-btn svg,
+  .au-actions .btn svg {
+    width: 17px;
+    height: 17px;
+  }
+  .au-kpis {
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .au-kpi,
+  .au-kpis .au-kpi.stat,
+  .au-kpis .au-kpi.stat + .au-kpi.stat {
+    padding: 14px;
+    border-radius: 16px;
+  }
+  .au-kpi-lab,
+  .au-kpi .stat-label {
+    gap: 7px;
+    font-size: 12px;
+  }
+  .au-kpi-ic {
+    width: 26px;
+    height: 26px;
+  }
+  .au-kpi-val,
+  .au-kpi .stat-value {
+    margin: 10px 0 2px;
+    font-size: 30px;
+  }
+  .au-kpi.stat-text .stat-value,
+  .au-kpi-val.au-kpi-val-text {
+    font-size: 22px;
+  }
+  .au-kpi.stat-text.au-kpi-num .stat-value {
+    font-size: 30px;
+  }
+  .au-kpis.stats {
+    row-gap: 10px;
+  }
+  .au-kpi-unit,
+  .au-kpi .stat-unit {
+    margin-left: 3px;
+    font-size: 12px;
+  }
+  .au-kpi-cap,
+  .au-kpi .stat-foot {
+    margin-bottom: 10px;
+    font-size: 11.5px;
+  }
+  .au-pill {
+    font-size: 11.5px;
+  }
+  .au-sec {
+    margin-top: 44px;
+  }
+  .au-ribbon {
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 10px 14px 10px 8px;
+  }
+  .au-ribbon::after {
+    left: 52px;
+  }
+  .au-medal {
+    width: 46px;
+    height: 46px;
+  }
+  .au-medal svg {
+    width: 20px;
+    height: 20px;
+  }
+  .au-ribbon-title {
+    font-size: 24px;
+  }
+  .au-ribbon-sub {
+    font-size: 12.5px;
+  }
+  .au-orn {
+    display: none;
+  }
+  .au-tiles {
+    gap: 14px;
+  }
+  .au-tile {
+    padding: 16px 16px 14px;
+  }
+  .au-tile-row {
+    padding: 16px;
+  }
+  .au-card {
+    padding: 20px 18px;
+  }
+  .au-well {
+    width: 46px;
+    height: 46px;
+  }
+}
+/* Phone tiles: the well sits beside the words so a list of tiles reads as a
+   list, not a stack of posters. */
+@media (max-width: 639px) {
+  /* Two glass cards share a phone's width: a figure like "−$4.57M" must fit. */
+  .au-kpi-val,
+  .au-kpi .stat-value,
+  .au-kpi.stat-text.au-kpi-num .stat-value {
+    font-size: 26px;
+  }
+  .au-kpi-unit,
+  .au-kpi .stat-unit {
+    font-size: 11px;
+  }
+  /* The count pill folds away on a phone; a real control in the strip's
+     aside ("+ New") stays. */
+  .au-ribbon-rr .au-count,
+  .au-ribbon-rr .au-orn {
+    display: none;
+  }
+  .au-ribbon-rr:not(:has(> :not(.au-count, .au-orn))) {
+    display: none;
+  }
+  .au-tile:not(.au-tile-row) {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    column-gap: 14px;
+    align-content: start;
+  }
+  .au-tile:not(.au-tile-row) > * {
+    grid-column: 2;
+  }
+  .au-tile:not(.au-tile-row) > .au-well {
+    grid-column: 1;
+    grid-row: 1 / span 5;
+    align-self: start;
+  }
+  .au-tile:not(.au-tile-row) > .au-art {
+    grid-column: auto;
+    width: 96px;
+    height: 96px;
+  }
+  .au-tile:not(.au-tile-row) .au-tile-title {
+    margin: 2px 0 4px;
+    font-size: 16.5px;
+  }
+  .au-tile-fig {
+    margin-top: 2px;
+    font-size: 28px;
+  }
+  .au-tile-foot {
+    padding-top: 12px;
+  }
+  .au-tile-desc {
+    font-size: 13.5px;
+  }
+}
+
+/* The tools row keeps its controls at their natural size (they never share a
+   half-width like the main buttons) and wraps; on a phone a label + select
+   ("Division: [Cognia NCA ▾]") takes its own full-width line so the select
+   can never run past the band or over a button. */
+@media (max-width: 900px) {
+  .au-actions.au-tools {
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .au-actions.au-tools > *,
+  .au-actions.au-tools > :first-child {
+    flex: 0 1 auto;
+    flex-basis: auto;
+  }
+  .au-actions.au-tools .btn,
+  .au-actions.au-tools .btn.btn-primary,
+  .au-actions.au-tools .btn.btn-secondary,
+  .au-actions.au-tools .btn.btn-quiet,
+  .au-actions.au-tools .au-btn {
+    height: 40px;
+    min-height: 40px;
+    padding: 0 14px;
+    white-space: nowrap;
+    font-size: 13.5px;
+  }
+}
+@media (max-width: 639px) {
+  .au-actions.au-tools > label,
+  .au-actions.au-tools > :has(> select) {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .au-actions.au-tools label > select,
+  .au-actions.au-tools label > .sel {
+    flex: 1 1 auto;
+    width: auto;
+  }
+  .au-actions.au-tools > .seg {
+    flex: 1 1 100%;
+    overflow-x: auto;
+  }
+}
+
+/* ═══ Motion off ═════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .au-blob {
+    animation: none;
+  }
+  .au-tile,
+  .au-tile-live::before,
+  .au-btn,
+  .au-lbtn,
+  .au-actions .btn {
+    transition: none;
+  }
+  .au-tile-live:hover,
+  .au-tile-live:focus-within,
+  .au-btn:hover,
+  .au-lbtn:hover {
+    transform: none;
+  }
+}
+.au-still .au-tile,
+.au-still .au-tile-live::before,
+.au-tile.au-still,
+.au-tile.au-still::before {
+  transition: none;
+}
+
+/* ═══ Add-data step under a band (FinancePage FinanceAddData) ════════════
+   The band carries the screen's eyebrow + title, so the shared wizard's own
+   eyebrow and h1 fold away — one heading, not two. Its step line, stepper and
+   hue rule stay. Screen only: print is untouched. */
+@media screen {
+  .au-addstep .pg-head .pg-eyebrow,
+  .au-addstep .pg-head .pg-title {
+    display: none;
+  }
+  .au-addstep .pg-head .pg-meta {
+    margin-top: 0;
+  }
+  /* clear of the band's shadow, so the stepper's hue rule reads as its own */
+  .au-addstep .pg-head {
+    margin-top: 20px;
+  }
+}
+
+/* ═══ Print: Aurora is screen-only ═══════════════════════════════════════ */
+@media print {
+  .au-hero {
+    padding: 0 0 12px;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: #000;
+  }
+  .au-fx,
+  .au-monogram,
+  .au-actions,
+  .au-switch,
+  .au-art,
+  .au-go,
+  .au-orn,
+  .au-ribbon::after,
+  .au-card::before,
+  .au-tile::before {
+    display: none !important;
+  }
+  .au-title,
+  .au-verdict,
+  .au-em,
+  .au-eyebrow,
+  .au-chip,
+  .au-kpi,
+  .au-kpi *,
+  .au-tile,
+  .au-tile * {
+    color: #000 !important;
+    text-shadow: none;
+  }
+  .au-chip,
+  .au-kpi,
+  .au-kpis .au-kpi.stat,
+  .au-tile,
+  .au-card,
+  .au-ribbon {
+    background: none !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .au-medal {
+    box-shadow: none;
+  }
+}
+
+/* An existing flat secondary Button dropped into a tile foot or card foot
+   (e.g. the board-packet export link) wears the light ghost button. */
+.au-tile .btn.btn-secondary,
+.au-card .btn.btn-secondary,
+.au-empty .btn.btn-secondary {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--th, #2563eb) 30%, transparent);
+  background: #fff;
+  color: color-mix(in srgb, var(--th, #2563eb) 75%, #000);
+  font-size: 13px;
+  font-weight: 700;
+}
+.au-tile .btn.btn-secondary:hover:not(:disabled),
+.au-card .btn.btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--th, #2563eb) 6%, #fff);
+}

@@ -17,7 +17,8 @@
 // no-percentage label is chosen from `progressSource`, not from the null.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { ChevronRight, UserRound } from 'lucide-react'
+import { ChevronRight, Flag, UserRound } from 'lucide-react'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 import { Pill } from '../ui/surface/index.js'
 import '../../styles/pending/b1-domain.css'
 import { ORIGIN_LABELS, RISK_SIGNAL_META, STATUS_LABELS, pctLabel, shortDate } from './improvementMeta.js'
@@ -27,14 +28,15 @@ const SIGNAL_TONE = { bad: 'risk', warn: 'watch', good: 'neutral' }
 
 export default function InitiativeList({ initiatives = [], onOpen, reduce = false }) {
   if (initiatives.length === 0) {
+    // The designed empty state: one line, one short second line, and the
+    // register's own New action (a viewer gets no button).
     return (
-      <div className="b1-empty">
-        <p className="b1-empty-title">No initiatives yet</p>
-        <p>
-          Take one of the recommendations above, or add your own. Either way it gets an owner, a date and a way to
-          measure itself.
-        </p>
-      </div>
+      <RegisterEmpty
+        icon={Flag}
+        text="No initiatives yet."
+        sub="Take a recommendation above, or start your own."
+        actionLabel="Start an initiative"
+      />
     )
   }
 

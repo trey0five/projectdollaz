@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { Truck, Pencil, Trash2, Mail, Phone } from 'lucide-react'
 import { DataTable, Pill } from '../ui/surface/index.js'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 import '../../styles/pending/b1-domain.css'
 import EntityFormModal, {
   Field,
@@ -157,10 +158,12 @@ export default function VendorsPanel({ vendors, loading, canEdit, onEdit, onDele
     )
   if (vendors.length === 0)
     return (
-      <div className="b1-empty">
-        <p className="b1-empty-title">No vendors yet</p>
-        <p>Add the companies that do your maintenance work, then reference them on items and bids.</p>
-      </div>
+      <RegisterEmpty
+        icon={Truck}
+        text="No vendors yet."
+        sub="Add the companies that do your repairs."
+        actionLabel="Add a vendor"
+      />
     )
 
   const doDelete = async (v) => {

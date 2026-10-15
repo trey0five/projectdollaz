@@ -44,6 +44,7 @@ import ProjectedRosterGrid from './ProjectedRosterGrid.jsx'
 import { seedAssumptions, toDriverPriorContext, GRADE_ROW } from './driverModel.js'
 import { Section, StatStrip, Stat, Button } from '../ui/surface/index.js'
 import '../../styles/pending/b2-finance.css'
+import '../../styles/pending/aurora-domains.css'
 import { statMoney } from './StatFigure.jsx'
 
 // computeDriverBudget is shared with the API; if it's not yet a function in the
@@ -122,7 +123,7 @@ function ForecastRow({ kind, label, forecast, budget, explanation, onExplain, di
           placeholder={disabled ? '' : 'Comment…'}
           aria-label={`Comment on ${label}`}
           onChange={(e) => onExplain(clampExplanation(e.target.value))}
-          className="h-7 w-full min-w-[140px] rounded-[4px] border border-hair/[0.18] bg-white px-2 text-[12.5px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
+          className="h-7 w-full min-w-[120px] rounded-[4px] border border-hair/[0.18] bg-white px-2 text-[12.5px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
     </tr>
@@ -640,7 +641,7 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-6"
+      className="au-forecast-ws space-y-6"
     >
       <div className="flex items-start gap-2.5">
         <TrendingUp size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" />
@@ -680,7 +681,10 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
         disabled={!canEdit}
       />
 
-      <div className="grid grid-cols-1 gap-x-10 gap-y-8 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+      {/* The inputs column is capped at 380px so the Forecast-vs-budget table
+          (six columns incl. an editable comment) fits its column at 1440 with
+          seven-figure lines — it must never clip inside a card. */}
+      <div className="grid grid-cols-1 gap-x-8 gap-y-8 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         {/* id anchors Penny's "add your feeder students" glide. */}
         <div id="forecast-feeder-input" className="min-w-0 space-y-6">
           {isRollforward ? (

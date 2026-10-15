@@ -22,6 +22,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
 import {
   Library,
+  FileText,
   Upload,
   Pencil,
   Trash2,
@@ -30,13 +31,17 @@ import {
   Check,
   Tag,
   Clock,
+  CreditCard,
+  ArrowLeft,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, AuroraEmpty, AuroraLightButton, VerdictEm } from '../components/ui/aurora/index.js'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useDocuments } from '../hooks/useDocuments.js'
 import EntityFormModal, { Field, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
-import { PageHeader, DataTable, Pill } from '../components/ui/surface/index.js'
+import { DataTable, Pill } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
 // Friendly labels for the linked-record source types (a doc "linked to a record"
@@ -137,18 +142,37 @@ function SourceBadge({ sourceType }) {
 // Knowledge has NO module gate (CORE), but TWO page-level states: the subscription
 // is paused (notEntitled) OR storage isn't set up on the server (notConfigured).
 function GatePanel({ notEntitled }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <PageHeader
-        eyebrow="Knowledge"
-        title={notEntitled ? 'Your subscription is paused' : 'Document storage isn\u2019t set up yet'}
-        meta={
-          notEntitled
-            ? 'Reactivate your plan to access your document library.'
-            : 'Your library needs cloud storage configured on the server before you can upload or download files. Ask your administrator to finish the storage setup.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      title="Knowledge"
+      Icon={Library}
+      icon={Library}
+      verdict={notEntitled ? 'Your subscription is paused.' : 'Document storage isn\u2019t set up yet.'}
+      primaryAction={
+        notEntitled ? (
+          <AuroraButton
+            variant="primary"
+            to={isOwner ? '/settings/billing' : '/settings'}
+            icon={<CreditCard size={19} aria-hidden="true" />}
+          >
+            Resume your plan
+          </AuroraButton>
+        ) : (
+          <AuroraButton variant="primary" to="/app" icon={<ArrowLeft size={19} aria-hidden="true" />}>
+            Back to the dashboard
+          </AuroraButton>
+        )
+      }
+      text={
+        notEntitled
+          ? 'Reactivate your plan to open your document library.'
+          : 'Files can\u2019t be uploaded or downloaded until storage is set up.'
+      }
+      sub={notEntitled ? null : 'Ask your administrator to finish the storage setup.'}
+    />
   )
 }
 
@@ -319,10 +343,25 @@ function EditMetaModal({ doc, onClose, onSave }) {
 
 // ═══════════════════════════ DOCUMENTS TABLE ════════════════════════════════
 
-function DocumentsTable({ items, loading, error, canEdit, onDownload, onEdit, onDelete }) {
+function DocumentsTable({ items, loading, error, canEdit, onDownload, onEdit, onDelete, onUpload = null }) {
   if (loading) return <StateRow>Loading documents…</StateRow>
   if (error) return <StateRow error>{error}</StateRow>
-  if (items.length === 0) return <StateRow title="No documents yet">Upload your first file.</StateRow>
+  // Empty library: the card carries the one button, under the band's own
+  // "Upload document" — the same verb, and the strip's "New" is hidden.
+  if (items.length === 0)
+    return onUpload ? (
+      <AuroraEmpty
+        icon={FileText}
+        text="No documents yet."
+        action={
+          <AuroraLightButton variant="ghost" onClick={onUpload} icon={<Upload size={15} aria-hidden="true" />}>
+            Upload document
+          </AuroraLightButton>
+        }
+      />
+    ) : (
+      <RegisterEmpty icon={FileText} text="No documents yet." actionLabel="Upload document" />
+    )
 
   const columns = [
     {
@@ -461,6 +500,7 @@ function KnowledgeWorkspace() {
 
     const documentsKpi = {
       label: 'Documents',
+      icon: FileText,
       value: String(total),
       status: 'neutral',
       sub: { icon: Library, text: 'in your library', tone: 'neutral' },
@@ -468,13 +508,15 @@ function KnowledgeWorkspace() {
 
     const linkedKpi = {
       label: 'Linked to a record',
+      icon: Link2,
       value: String(linkedCount),
       status: linkedCount > 0 ? 'good' : 'neutral',
-      sub: { icon: Link2, text: 'connected to operations', tone: 'good' },
+      sub: { icon: Link2, text: 'attached to another record', tone: 'neutral' },
     }
 
     const recentKpi = {
       label: 'Added recently',
+      icon: Clock,
       value: String(recentCount),
       status: 'neutral',
       sub: { icon: Clock, text: 'in the last 30 days', tone: 'neutral' },
@@ -482,12 +524,16 @@ function KnowledgeWorkspace() {
 
     const untaggedKpi = {
       label: 'Untagged',
+      icon: Tag,
       value: String(untaggedCount),
-      status: untaggedCount > 0 ? 'watch' : 'good',
+      // An empty library is not "all tagged" — no documents, no verdict.
+      status: untaggedCount > 0 ? 'watch' : total === 0 ? 'neutral' : 'good',
       sub:
         untaggedCount > 0
           ? { icon: Tag, text: 'need a tag', tone: 'neutral' }
-          : { icon: Check, text: 'all tagged', tone: 'good' },
+          : total === 0
+            ? { icon: Tag, text: 'nothing to tag yet', tone: 'neutral' }
+            : { icon: Check, text: 'all tagged', tone: 'good' },
     }
 
     return [documentsKpi, linkedKpi, recentKpi, untaggedKpi]
@@ -504,16 +550,43 @@ function KnowledgeWorkspace() {
         id: `untagged-${doc.id}`,
         tone: 'watch',
         title: `${doc.title} has no tags`,
-        why: "Add a tag so it's easy to find",
+        why: 'Add a tag so it is easy to find.',
         actions: [{ label: 'Add tags', primary: false, onClick: () => setEditingDoc(doc) }],
       }))
   }, [items, canEdit])
+
+  // ── The band's one sentence (real counts only) ────────────────────────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    if (total === 0) return <>Your library is empty. Upload a policy, a report or any file to keep it here.</>
+    const recent = items.filter(addedInLast30Days).length
+    const untagged = items.filter(isUntagged).length
+    return (
+      <>
+        <VerdictEm>{plural(total, 'document', 'documents')}</VerdictEm> in your library
+        {recent > 0 ? (
+          <>
+            , <VerdictEm>{recent}</VerdictEm> added in the last 30 days
+          </>
+        ) : null}
+        .{' '}
+        {untagged > 0 ? (
+          <VerdictEm tone="watch">{plural(untagged, 'needs a tag', 'need a tag')}.</VerdictEm>
+        ) : (
+          <VerdictEm tone="good">Everything is tagged.</VerdictEm>
+        )}
+      </>
+    )
+  }, [items, total])
 
   // ── Gate states (BOTH light, page-level) ───────────────────────────────────
   // notEntitled → subscription paused. notConfigured → S3 not set up on the server.
   // (The list can't render meaningfully without storage, so notConfigured is a
   // page-level gate here, mirroring the prior "storage isn't set up" panel.)
   if (notEntitled || notConfigured) return <GatePanel notEntitled={notEntitled} />
+
+  const openUpload = canEdit ? () => setUploadOpen(true) : null
+  const libraryEmpty = !loading && !error && items.length === 0
 
   const registerTable = (
     <DocumentsTable
@@ -524,10 +597,19 @@ function KnowledgeWorkspace() {
       onDownload={onDownload}
       onEdit={setEditingDoc}
       onDelete={onDelete}
+      onUpload={openUpload}
     />
   )
 
-  const onNew = canEdit ? () => setUploadOpen(true) : null
+  // One verb for one job: the band's primary is always "Upload document"; the
+  // strip's "New" shows only once the library has files (while it is empty the
+  // empty card already carries the button).
+  const onNew = libraryEmpty ? null : openUpload
+  const primaryAction = openUpload ? (
+    <AuroraButton variant="primary" onClick={openUpload} icon={<Upload size={19} aria-hidden="true" />}>
+      Upload document
+    </AuroraButton>
+  ) : null
 
   return (
     <>
@@ -542,17 +624,30 @@ function KnowledgeWorkspace() {
 
       <DomainCommandCenter
         showBack
-        eyebrow={`Knowledge · ${activeSchool?.name ?? 'School'}`}
+        eyebrow={null}
         title="Knowledge"
         Icon={Library}
+        verdict={verdict}
         attentionCount={attentionItems.length}
         kpis={kpis}
         tabs={TABS}
         activeTab={tab}
         onTabChange={setTab}
         onNew={onNew}
+        primaryAction={primaryAction}
         registerTable={registerTable}
+        registerSubtitle="Every file your school keeps here"
+        registerIcon={Library}
         attentionItems={attentionItems}
+        howItWorks={
+          <>
+            <p>Files are stored securely for your school. A download opens a private link that expires.</p>
+            <p>
+              A file is linked when it was attached to a policy, board report, standard, campaign or repair. Added
+              recently means in the last 30 days.
+            </p>
+          </>
+        }
       />
 
       {uploadOpen ? <UploadModal onClose={() => setUploadOpen(false)} onSubmit={upload} /> : null}

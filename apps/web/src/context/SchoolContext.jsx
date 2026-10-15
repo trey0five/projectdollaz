@@ -136,6 +136,11 @@ export function SchoolProvider({ children }) {
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>
 }
 
+/** Like useSchools, but null outside a SchoolProvider (presentational shells). */
+export function useOptionalSchools() {
+  return useContext(SchoolContext)
+}
+
 export function useSchools() {
   const ctx = useContext(SchoolContext)
   if (!ctx) throw new Error('useSchools must be used within a SchoolProvider')

@@ -213,7 +213,7 @@ function SchoolCharts({ school, onCrossToTable }) {
 
   return (
     <div>
-      <QuestionGroup title="How's the money?">
+      <QuestionGroup first title="How's the money?">
         <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
           <ChartCard id="chart-revmix" metricKey="revenue_mix" title="Where the money comes from" sub="Revenue mix" asOf={asOf} onViewAsTable={onCrossToTable}>
             {BarsFromMix(m.revenue_mix)}
@@ -411,7 +411,7 @@ function CompareCharts({ compare }) {
     schools.some((s) => s.metrics?.[k]?.available !== false && s.metrics?.[k]?.value != null),
   )
   return (
-    <QuestionGroup title="How do we compare?">
+    <QuestionGroup first title="How do we compare?">
       <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2 lg:items-start">
         <ChartCard id="chart-ppc" metricKey="cost_per_pupil" title="Per-pupil economics" sub="Cost per pupil vs. net tuition per student" asOf={compare.asOf}>
           {rows.length ? (
@@ -523,7 +523,7 @@ function OrgCharts({ org }) {
     })
   }
   return (
-    <div>
+    <QuestionGroup first title="How are the schools doing?" subtitle="Days of cash, school by school">
       <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
         <ChartCard
           id="chart-cash"
@@ -572,7 +572,7 @@ function OrgCharts({ org }) {
           )}
         </ChartCard>
       </div>
-    </div>
+    </QuestionGroup>
   )
 }
 

@@ -75,6 +75,14 @@ describe('the Why sentence explains the trough it is attached to', () => {
     expect(whyLine({ ...WITH_DRIVERS, lowestDate: null }, money)).toBeNull()
   })
 
+  it('spells dates with the CALLER’s day formatter when one is given', () => {
+    const day = (iso) => `DAY(${iso})`
+    const s = whyLine(WITH_DRIVERS, money, day)
+    expect(s).toContain('DAY(2026-07-31)')
+    expect(s).toContain('DAY(2026-08-01)')
+    expect(potentialActions(PROJECTION, money, day).some((x) => x.label.includes('DAY(2026-07-31)'))).toBe(true)
+  })
+
   it('uses the CALLER’s formatter so a sentence cannot disagree with a card', () => {
     const s = whyLine(WITH_DRIVERS, () => 'FORMATTED')
     expect(s).toContain('FORMATTED')

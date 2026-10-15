@@ -486,7 +486,7 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
           <p className="b2-note-title">No campaign lines yet</p>
           {canEdit && (
             <div className="flex items-center justify-center pt-2">
-              <AddRowButton onClick={onAddDivision} label="Add division" />
+              <AddRowButton onClick={onAddDivision} label="Add division" data-add-default="true" />
             </div>
           )}
         </div>
@@ -496,11 +496,11 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
 
           {canEdit && (
             <div className="mt-4 flex justify-start">
-              <AddRowButton onClick={onAddDivision} label="Add division" />
+              <AddRowButton onClick={onAddDivision} label="Add division" data-add-default="true" />
             </div>
           )}
 
-          <Section label="Campaign total">
+          <Section label="Campaign total" className="sched-total">
             <StatStrip cols={3} className="stats-compact">
               <Stat label="Budget" value={statMoney(grand.budget)} />
               <Stat label="Estimate" value={statMoney(grand.estimate)} />

@@ -7,6 +7,7 @@
 import { Gift as GiftIcon, HandCoins, Pencil, Trash2, TrendingDown } from 'lucide-react'
 import { GIFT_STATUS, GIFT_KIND_LABEL, fmtMoneyFull, shortDate } from './campaignMeta.js'
 import { DataTable, Pill, Button } from '../ui/surface/index.js'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 import '../../styles/pending/b1-domain.css'
 
 function IconAction(props) {
@@ -34,10 +35,8 @@ export default function GiftsLedger({ gifts, loading, canEdit, onEdit, onWriteOf
     )
   if (gifts.length === 0)
     return (
-      <div className="b1-empty">
-        <p className="b1-empty-title">No gifts or pledges recorded yet</p>
-        <p>Record the first entry to start rolling up what this campaign has raised.</p>
-      </div>
+      // The one button is the page's own "Add gift / pledge" (RegisterNewContext).
+      <RegisterEmpty icon={GiftIcon} text="No gifts or pledges yet." actionLabel="Add a gift or pledge" />
     )
 
   const columns = [

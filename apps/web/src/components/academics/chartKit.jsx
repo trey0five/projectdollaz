@@ -21,8 +21,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { stripFiller } from '../analytics/charts/labelText.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
-export const HUE = '#0D9488'
+export const HUE = moduleHue('academics')
 export const EASE = [0.2, 0.8, 0.2, 1]
 
 /** Focus teal, peer slate, and the two reference colours, in one place. */

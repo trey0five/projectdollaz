@@ -26,8 +26,6 @@ export default function ActSection({
   title,
   /** A short standing sentence about what the act IS. Never about the school. */
   kicker = null,
-  /** The act hue — a CSS colour string owned by the page. */
-  hue = '#2563EB',
   Icon = null,
   /** Rendered at the right of the header (counts, a play control). */
   aside = null,
@@ -39,6 +37,12 @@ export default function ActSection({
   // jsdom does not implement and which a print stylesheet never fires — either way
   // the section would sit at opacity 0 forever. An entrance animation is not worth
   // a blank act.
+  //
+  // AURORA (2026-10-15): the act opens with the Aurora heading strip — the act's
+  // icon in a round gradient medallion, the title in serif, the kicker as the
+  // ONE short subtitle, "Act N" as the count pill, the aside beside it — and
+  // the act's body sits in one white card under it. Same element, same ids,
+  // same reduced-motion contract; still no prop that can hide content.
   return (
     <motion.section
       id={id}
@@ -47,24 +51,29 @@ export default function ActSection({
       initial={reduce ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduce ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
-      // PREMIUM UI P4: a Section on the ground — the act number as the label
-      // row (with the act's icon as a stroke in the hue), the title in Garamond,
-      // the kicker as prose. No card.
-      className="sec scroll-mt-24"
+      className="au-sec acc-act scroll-mt-24"
     >
-      <header className="sec-head-block">
-        <div className="sec-head">
-          {Icon ? <Icon size={13} aria-hidden style={{ color: hue }} className="shrink-0" /> : null}
-          <h2 className="sec-label">Act {index}</h2>
-          <span className="sec-rule" aria-hidden="true" />
-          {aside ? <div className="sec-aside">{aside}</div> : null}
+      <header className="au-ribbon">
+        <span className="au-medal" aria-hidden="true">
+          {Icon ? <Icon size={25} /> : null}
+        </span>
+        <div className="au-ribbon-text">
+          <h2 id={id ? `${id}-title` : undefined} className="au-ribbon-title">
+            {title}
+          </h2>
+          {kicker ? <p className="au-ribbon-sub">{kicker}</p> : null}
         </div>
-        <h3 id={id ? `${id}-title` : undefined} className="sec-title !mb-1">
-          {title}
-        </h3>
-        {kicker ? <p className="mb-3 max-w-[70ch] text-small leading-relaxed text-ink2">{kicker}</p> : null}
+        <div className="au-ribbon-rr">
+          <span className="au-count acc-act-num">Act {index}</span>
+          {aside}
+          <span className="au-orn" aria-hidden="true">
+            <b />
+            <b />
+            <b />
+          </span>
+        </div>
       </header>
-      <div>{children}</div>
+      <div className="au-card acc-act-body">{children}</div>
     </motion.section>
   )
 }

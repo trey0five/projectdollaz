@@ -5,6 +5,9 @@
    .dt / .pill / .toolbar / .tile / .btn. Plain CSS inlined BEFORE the Tailwind
    layers so every utility still outranks a primitive on the same element. */
 @import './styles/surface.css';
+/* Aurora (owner-approved module look): band, glass KPIs, section strips, tiles.
+   au- namespaced and screen-only — see the file header. */
+@import './styles/aurora.css';
 
 @tailwind base;
 @tailwind components;

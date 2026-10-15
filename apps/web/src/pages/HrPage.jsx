@@ -36,12 +36,18 @@ import {
   ClipboardCheck,
   Check,
   AlertTriangle,
+  GraduationCap,
+  PieChart,
+  CreditCard,
+  LineChart,
+  BarChart3,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, AuroraEmpty, AuroraLightButton, VerdictEm, fyLabel } from '../components/ui/aurora/index.js'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import TrendSpark from '../components/analytics/v2/TrendSpark.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -61,11 +67,11 @@ import {
 import { useSparkTrends } from '../components/analytics/v2/data.js'
 import { formatMetric } from '../components/analytics/v2/helpers.js'
 import { formatMetricValue } from '../lib/metricMeta.js'
-import { PageHeader, StatStrip, Stat } from '../components/ui/surface/index.js'
+import { StatStrip, Stat } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
-// The hr module hue (locked brand hue — matches tileRegistry/moduleAnatomy).
-const HR_HUE = '#059669'
+// The hr module hue — read from the ONE registry (tileRegistry → moduleHue).
+const HR_HUE = moduleHue('hr')
 
 const TREND_KEYS = ['student_teacher_ratio', 'teaching_staff_share', 'total_staff_fte']
 
@@ -84,29 +90,49 @@ const fteText = (v) =>
 const signedPct = (v) =>
   v == null || !Number.isFinite(v) ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`
 
-// Band-target context ("Target ≤ 12.0") for a banded metric.
+// Band-target context in plain words ("good at 12 or fewer", "good at 60% or
+// more") for a banded metric — the registry band's own threshold, never invented.
 function bandTarget(m) {
   const b = m?.bands
   if (!b || !Number.isFinite(b.good)) return null
   const dir = b.goodDirection ?? m.goodDirection
-  return `target ${dir === 'lower' ? '≤' : '≥'} ${formatMetricValue(b.good, m.unit ?? 'ratio')}`
+  const unit = m.unit ?? 'ratio'
+  const value =
+    unit === 'pct' || unit === 'percent'
+      ? `${Math.round(b.good * 100)}%`
+      : unit === 'ratio' || unit === 'count'
+        ? Number(b.good).toLocaleString('en-US', { maximumFractionDigits: Number.isInteger(b.good) ? 0 : 1 })
+        : formatMetricValue(b.good, unit)
+  return `good at ${value} or ${dir === 'lower' ? 'fewer' : 'more'}`
 }
 
-// ── Gate: a plain page header on the ground (StrategyPage pattern) ──────────
+// ── Gate: the Aurora band + one line + one button ───────────────────────────
 function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <PageHeader
-        eyebrow="HR & Staffing"
-        title={notLicensed ? 'HR & Staffing isn\u2019t on your plan yet' : 'Your subscription is paused'}
-        meta={
-          notLicensed
-            ? 'Add the HR & Staffing module for a staffing command center: the student-teacher ratio, FTEs and trends on one page, with staffing flags in your morning briefing.'
-            : 'Resume your plan to see your staffing picture.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="hr"
+      title="HR & Staffing"
+      Icon={Users2}
+      icon={Users2}
+      verdict={notLicensed ? 'HR & Staffing isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          {notLicensed ? 'See plans' : 'Resume your plan'}
+        </AuroraButton>
+      }
+      text={
+        notLicensed
+          ? 'Add HR & Staffing to see students per teacher, staff numbers and their trend.'
+          : 'Resume your plan to see your staffing picture.'
+      }
+    />
   )
 }
 
@@ -205,10 +231,13 @@ function HrWorkspace() {
   const totalStaffFte = operational?.totalStaffFte != null ? Number(operational.totalStaffFte) : null
 
   // ── KPI row (Stats via DomainKpiCard) ────────────────────────────────────
-  const kpis = useMemo(
-    () => [
+  // The first four are the band's glass cards (the banded ratio and mix, then
+  // the evaluations register and teacher headcount); the rest ride as chips.
+  const kpis = useMemo(() => {
+    const k = [
       {
         label: 'Students per teacher',
+        icon: GraduationCap,
         value: ratio?.value != null ? formatMetric(ratio) : '—',
         status: ratio?.status ?? 'neutral',
         sub: {
@@ -218,19 +247,22 @@ function HrWorkspace() {
         },
       },
       {
-        label: 'Teaching FTE',
+        label: 'Teachers (FTE)',
+        icon: UserCog,
         value: fteText(teachingFte),
         status: 'neutral',
         sub: { icon: Users2, text: 'instructional staff', tone: 'neutral' },
       },
       {
-        label: 'Total staff FTE',
+        label: 'All staff (FTE)',
+        icon: Users2,
         value: fteText(totalStaffFte),
         status: 'neutral',
         sub: { icon: Users2, text: 'all staff', tone: 'neutral' },
       },
       {
         label: 'Teaching share',
+        icon: PieChart,
         value: share?.value != null ? formatMetric(share) : '—',
         status: share?.status ?? 'neutral',
         sub: {
@@ -240,7 +272,7 @@ function HrWorkspace() {
         },
       },
       {
-        label: 'Teaching FTE (YoY)',
+        label: 'Teachers vs. last year',
         value: fteYoy?.value != null ? signedPct(fteYoy.value) : '—',
         status: 'neutral',
         sub: {
@@ -262,6 +294,7 @@ function HrWorkspace() {
       evalSummary == null
         ? {
             label: 'Evaluations overdue',
+            icon: ClipboardCheck,
             value: '—',
             status: 'neutral',
             sub: {
@@ -272,8 +305,10 @@ function HrWorkspace() {
           }
         : {
             label: 'Evaluations overdue',
+            icon: ClipboardCheck,
             value: String(evalSummary.overdue ?? 0),
-            status: (evalSummary.overdue ?? 0) > 0 ? 'risk' : 'good',
+            // An empty register is not "Good": no cycle on file → no verdict.
+            status: (evalSummary.overdue ?? 0) > 0 ? 'risk' : (evalSummary.total ?? 0) > 0 ? 'good' : 'neutral',
             sub:
               (evalSummary.overdue ?? 0) > 0
                 ? {
@@ -288,9 +323,9 @@ function HrWorkspace() {
                   ? { icon: Check, text: `${evalSummary.total} on file`, tone: 'good' }
                   : { icon: ClipboardCheck, text: 'no cycle recorded yet', tone: 'neutral' },
           },
-    ],
-    [ratio, share, fteYoy, teachingFte, totalStaffFte, evalSummary, evalLoading],
-  )
+    ]
+    return [k[0], k[3], k[5], k[1], k[2], k[4]]
+  }, [ratio, share, fteYoy, teachingFte, totalStaffFte, evalSummary, evalLoading])
 
   // ── Needs attention (navigational) ─────────────────────────────────────────
   const attentionItems = useMemo(() => {
@@ -300,7 +335,7 @@ function HrWorkspace() {
         id: 'ratio-band',
         tone: ratio.status,
         title: `Student-teacher ratio is ${ratio.status === 'risk' ? 'at risk' : 'on watch'}`,
-        why: `${formatMetric(ratio)} students per teacher · ${bandTarget(ratio) ?? 'against the sector default band'}`,
+        why: `${formatMetric(ratio)} students per teacher, ${bandTarget(ratio) ?? 'outside the standard range'}.`,
         actions: [
           {
             label: 'View in Analytics',
@@ -315,7 +350,7 @@ function HrWorkspace() {
         id: 'share-band',
         tone: share.status,
         title: 'Teaching share of staff is slipping',
-        why: `${formatMetric(share)} of your staff FTEs are teaching · ${bandTarget(share) ?? ''}`,
+        why: `${formatMetric(share)} of staff are teaching${bandTarget(share) ? `, ${bandTarget(share)}` : ''}.`,
         actions: [
           { label: 'View in Analytics', primary: false, onClick: () => navigate('/analytics?metric=teaching_staff_share') },
         ],
@@ -344,8 +379,8 @@ function HrWorkspace() {
       items.push({
         id: 'fte-missing',
         tone: 'watch',
-        title: `Staffing FTEs not entered for ${periodLabel}`,
-        why: 'The ratio and staffing mix stay dark until both FTEs are in.',
+        title: `Staff numbers missing for ${periodLabel}`,
+        why: 'Students per teacher fills in once both are in.',
         actions: canEdit
           ? [{ label: 'Add staffing', primary: true, onClick: () => navigate('/hr?tab=add') }]
           : [],
@@ -365,12 +400,72 @@ function HrWorkspace() {
     evalSummary,
   ])
 
+  // ── The band's one sentence (real figures only; worst thing first) ────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    const BAND_WORD = { risk: 'at risk', watch: 'one to watch' }
+    const hasRatio = ratio?.value != null
+    const lead = hasRatio ? (
+      <>
+        <VerdictEm>{formatMetric(ratio)} students</VerdictEm> per teacher
+        {teachingFte != null ? (
+          <>
+            {' '}across <VerdictEm>{fteText(teachingFte)} teaching FTE</VerdictEm>
+          </>
+        ) : null}
+        .{' '}
+      </>
+    ) : null
+    // /summary is counts-only and readable by every role, and the glass card
+    // already shows it to every role — so the sentence counts it for every role
+    // too (else a viewer's band reads "healthy" over an At risk card).
+    const overdueEvals = evalSummary?.overdue ?? 0
+    const issues = [
+      ratio?.status === 'risk' && { tone: 'risk', text: `Students per teacher is ${BAND_WORD.risk}.` },
+      share?.status === 'risk' && { tone: 'risk', text: `Teaching share is ${BAND_WORD.risk}.` },
+      overdueEvals && { tone: 'risk', text: `${plural(overdueEvals, 'evaluation is', 'evaluations are')} overdue.` },
+      ratio?.status === 'watch' && { tone: 'watch', text: `Students per teacher is the ${BAND_WORD.watch}.` },
+      share?.status === 'watch' && { tone: 'watch', text: `Teaching share is the ${BAND_WORD.watch}.` },
+    ].filter(Boolean)
+    const top = issues[0]
+    if (!lead && !top) {
+      return <>Add this year&rsquo;s staff numbers and students per teacher fills in.</>
+    }
+    const banded = [ratio?.status, share?.status].filter((x) => x === 'good' || x === 'watch' || x === 'risk')
+    return (
+      <>
+        {lead}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : banded.length ? (
+          <VerdictEm tone="good">Staffing looks healthy.</VerdictEm>
+        ) : null}
+      </>
+    )
+  }, [ratio, share, teachingFte, evalSummary])
+
   // ── Staffing trends (the register slot HR shipped with): a ruled strip of
   //    the latest figure over its trend line — no mini-cards. ─────────────────
   const fmtRatio = (v) => v.toFixed(1)
   const fmtShare = (v) => `${(v * 100).toFixed(0)}%`
   const fmtFte = (v) => v.toLocaleString('en-US', { maximumFractionDigits: 1 })
-  const trendsTable = (
+  const hasTrend = TREND_KEYS.some((key) =>
+    (trends[key]?.points ?? []).some((pt) => pt?.value != null && Number.isFinite(Number(pt.value))),
+  )
+  const trendsTable = !hasTrend ? (
+    <AuroraEmpty
+      icon={LineChart}
+      text="No staffing history yet."
+      sub="Add staff numbers and the trend draws here."
+      action={
+        canEdit ? (
+          <AuroraLightButton variant="ghost" to="/hr?tab=add" icon={<BarChart3 size={15} aria-hidden="true" />}>
+            Add staffing
+          </AuroraLightButton>
+        ) : null
+      }
+    />
+  ) : (
     <StatStrip cols={3} className="stats-compact lg:!grid-cols-3">
       <Stat label="Students per teacher" value={latest(trends.student_teacher_ratio, fmtRatio)}>
         <div className="mt-2">
@@ -396,9 +491,15 @@ function HrWorkspace() {
   if (!hasModule('hr')) return <GatePanel notLicensed={entitled} />
   if (metricsLoading && !metrics.length) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <PageHeader eyebrow={`HR & Staffing · ${activeSchool?.name ?? 'School'}`} title="HR & Staffing" meta="Loading your staffing picture…" />
-      </div>
+      <DomainStatePanel
+        moduleKey="hr"
+        title="HR & Staffing"
+        Icon={Users2}
+        icon={Users2}
+        busy
+        verdict="Loading your staffing picture…"
+        text="Reading staff numbers and evaluations."
+      />
     )
   }
 
@@ -428,9 +529,10 @@ function HrWorkspace() {
     <DomainCommandCenter
       showAddData={canEdit}
       moduleKey="hr"
-      eyebrow={`HR & Staffing · ${activeSchool?.name ?? 'School'}`}
+      eyebrow={periodId ? fyLabel(periodLabel) : null}
       title="HR & Staffing"
       Icon={Users2}
+      verdict={verdict}
       attentionCount={attentionItems.length}
       kpis={kpis}
       tabs={TABS}
@@ -438,7 +540,27 @@ function HrWorkspace() {
       onTabChange={setTab}
       onNew={onNew}
       registerTable={registerTable}
+      registerSubtitle="Staff numbers over time, and evaluations"
+      registerIcon={Users2}
       attentionItems={attentionItems}
+      actions={
+        <AuroraButton to="/analytics?metric=student_teacher_ratio" icon={<BarChart3 size={19} aria-hidden="true" />}>
+          Analytics
+        </AuroraButton>
+      }
+      howItWorks={
+        <>
+          <p>
+            Students per teacher and teaching share come from the staff numbers (FTE) you enter for{' '}
+            {periodLabel}. FTE counts part-timers as fractions.
+          </p>
+          <p>Good, Watch and At risk use KYRO&rsquo;s standard range for each measure. The change on last year has no range.</p>
+          <p>
+            The evaluations register names people, so only owners and accountants can open it. Everyone else sees counts
+            only.
+          </p>
+        </>
+      }
     />
   )
 

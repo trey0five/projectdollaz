@@ -26,12 +26,17 @@ import {
   TrendingDown,
   CalendarClock,
   AlertTriangle,
+  HandCoins,
+  Megaphone,
+  Target,
+  CreditCard,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, VerdictEm } from '../components/ui/aurora/index.js'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -49,7 +54,7 @@ import {
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
-import { PageHeader, DataTable, Pill } from '../components/ui/surface/index.js'
+import { DataTable, Pill } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
 // Back-compat: the campaign form now lives with the other advancement components
@@ -85,19 +90,31 @@ function StateRow({ title, children, error }) {
 
 // ── Entitlement / license gate (shared with CampaignDetailPage) ──────────────
 export function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <PageHeader
-        eyebrow="Advancement"
-        title={notLicensed ? 'Advancement isn\u2019t on your plan yet' : 'Your subscription is paused'}
-        meta={
-          notLicensed
-            ? 'Add the Advancement module to track fundraising campaigns and their giving progress, and land its slice of the briefing here.'
-            : 'Resume your plan to manage the advancement register.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="advancement"
+      title="Advancement"
+      Icon={HeartHandshake}
+      icon={HeartHandshake}
+      verdict={notLicensed ? 'Advancement isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          {notLicensed ? 'See plans' : 'Resume your plan'}
+        </AuroraButton>
+      }
+      text={
+        notLicensed
+          ? 'Add Advancement to track campaigns and what they raise.'
+          : 'Resume your plan to manage your campaigns.'
+      }
+    />
   )
 }
 
@@ -109,7 +126,12 @@ function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, on
   if (error) return <StateRow error>{error}</StateRow>
   if (campaigns.length === 0)
     return (
-      <StateRow title="No campaigns yet">Add your first campaign to start tracking fundraising progress.</StateRow>
+      <RegisterEmpty
+        icon={HeartHandshake}
+        text="No campaigns yet."
+        sub="Add one to track its giving."
+        actionLabel="Add a campaign"
+      />
     )
 
   const detailRoute = (c) => `/advancement/campaigns/${c.id}`
@@ -257,6 +279,8 @@ function AdvancementWorkspace() {
   }
 
   // ── KPIs (computed from the summary) ───────────────────────────────────────
+  // A verdict needs a band: "on pace" is judged against the campaigns' OWN goals.
+  // No goal / no active campaign → no pill.
   const kpis = useMemo(() => {
     const totalGoal = summary.totalGoal ?? 0
     const totalRaised = summary.totalRaised ?? 0
@@ -265,19 +289,18 @@ function AdvancementWorkspace() {
     const behind = summary.behindGoalActiveCount ?? 0
     const closingSoon = summary.closingSoonActiveCount ?? 0
     const overdue = summary.overdueActiveCount ?? 0
-    const onGoalPace = typeof overallPct === 'number' && overallPct >= 0.9
+    const hasGoal = totalGoal > 0 && typeof overallPct === 'number'
+    const onGoalPace = hasGoal && overallPct >= 0.9
 
     // 1) Raised this year.
     const raisedKpi = {
       label: 'Raised this year',
+      icon: HandCoins,
       value: fmtMoney(totalRaised),
-      status: onGoalPace ? 'good' : 'watch',
+      status: !hasGoal ? 'neutral' : onGoalPace ? 'good' : 'watch',
       sub: {
         icon: onGoalPace ? Check : TrendingDown,
-        text:
-          totalGoal > 0
-            ? `${fmtPct(overallPct) ?? '0%'} of ${fmtMoney(totalGoal)} goal`
-            : 'no goal set',
+        text: totalGoal > 0 ? `${fmtPct(overallPct) ?? '0%'} of ${fmtMoney(totalGoal)} goal` : 'no goal set',
         tone: onGoalPace ? 'good' : 'neutral',
       },
     }
@@ -285,38 +308,82 @@ function AdvancementWorkspace() {
     // 2) Active campaigns.
     const activeKpi = {
       label: 'Active campaigns',
+      icon: Megaphone,
       value: String(activeCount),
-      status: behind > 0 ? 'risk' : 'good',
+      status: activeCount === 0 ? 'neutral' : behind > 0 ? 'risk' : 'good',
       sub:
-        behind > 0
-          ? { icon: TrendingDown, text: `${behind} behind goal`, tone: 'bad' }
-          : { icon: Check, text: 'on pace', tone: 'good' },
+        activeCount === 0
+          ? { icon: Megaphone, text: 'none running', tone: 'neutral' }
+          : behind > 0
+            ? { icon: TrendingDown, text: `${behind} behind goal`, tone: 'bad' }
+            : { icon: Check, text: 'on pace', tone: 'good' },
     }
 
     // 3) Behind goal.
     const behindKpi = {
       label: 'Behind goal',
+      icon: Target,
       value: String(behind),
-      status: behind > 0 ? 'risk' : 'good',
+      status: activeCount === 0 ? 'neutral' : behind > 0 ? 'risk' : 'good',
       sub:
         behind > 0
           ? { icon: TrendingDown, text: 'active campaigns under pace', tone: 'bad' }
-          : { icon: Check, text: 'all on pace', tone: 'good' },
+          : { icon: Check, text: activeCount === 0 ? 'no active campaigns' : 'all on pace', tone: 'neutral' },
     }
 
     // 4) Closing soon.
     const closingKpi = {
       label: 'Closing soon',
+      icon: CalendarClock,
       value: String(closingSoon),
-      status: closingSoon > 0 ? 'watch' : 'neutral',
+      status: overdue > 0 ? 'risk' : closingSoon > 0 ? 'watch' : 'neutral',
       sub:
         overdue > 0
           ? { icon: AlertTriangle, text: `${overdue} past close date`, tone: 'bad' }
-          : { icon: CalendarClock, text: 'within 45 days', tone: 'neutral' },
+          : { icon: CalendarClock, text: closingSoon > 0 ? 'close date is near' : 'none closing soon', tone: 'neutral' },
     }
 
     return [raisedKpi, activeKpi, behindKpi, closingKpi]
   }, [summary])
+
+  // ── The band's one sentence (real figures only; worst thing first) ────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    const totalGoal = summary.totalGoal ?? 0
+    const totalRaised = summary.totalRaised ?? 0
+    const behind = summary.behindGoalActiveCount ?? 0
+    const closingSoon = summary.closingSoonActiveCount ?? 0
+    const overdue = summary.overdueActiveCount ?? 0
+    const activeCount = summary.activeCount ?? 0
+    if (items.length === 0) return <>Add a campaign and this page tracks what it raises against its goal.</>
+    const lead = (
+      <>
+        You have raised <VerdictEm>{fmtMoney(totalRaised)}</VerdictEm>
+        {totalGoal > 0 ? (
+          <>
+            {' '}of a <VerdictEm>{fmtMoney(totalGoal)}</VerdictEm> goal
+          </>
+        ) : null}
+        .{' '}
+      </>
+    )
+    const issues = [
+      overdue && { tone: 'risk', text: `${plural(overdue, 'campaign is', 'campaigns are')} past its close date.` },
+      behind && { tone: 'risk', text: `${plural(behind, 'campaign is', 'campaigns are')} behind goal.` },
+      closingSoon && { tone: 'watch', text: `${plural(closingSoon, 'campaign closes', 'campaigns close')} soon.` },
+    ].filter(Boolean)
+    const top = issues[0]
+    return (
+      <>
+        {lead}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : activeCount > 0 ? (
+          <VerdictEm tone="good">Every active campaign is on pace.</VerdictEm>
+        ) : null}
+      </>
+    )
+  }, [summary, items])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
   const attentionItems = useMemo(() => {
@@ -332,8 +399,8 @@ function AdvancementWorkspace() {
         title: `${c.name} is past its close date`,
         why:
           typeof c.daysUntilClose === 'number'
-            ? `Closed ${Math.abs(c.daysUntilClose)} day${Math.abs(c.daysUntilClose) === 1 ? '' : 's'} ago · still open`
-            : 'Past its close date · still open',
+            ? `Closed ${Math.abs(c.daysUntilClose)} day${Math.abs(c.daysUntilClose) === 1 ? '' : 's'} ago, still open.`
+            : 'Past its close date, still open.',
         actions: canEdit ? [{ label: 'Update', primary: true, onClick: () => openEdit(c) }] : [],
       })
     }
@@ -399,9 +466,10 @@ function AdvancementWorkspace() {
     <DomainCommandCenter
       showAddData
       moduleKey="advancement"
-      eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
+      eyebrow={null}
       title="Advancement"
       Icon={HeartHandshake}
+      verdict={verdict}
       attentionCount={attentionItems.length}
       kpis={kpis}
       tabs={TABS}
@@ -409,8 +477,17 @@ function AdvancementWorkspace() {
       onTabChange={setTab}
       onNew={onNew}
       registerTable={registerTable}
-      registerTitle="Campaign register"
+      registerTitle="Campaigns"
+      registerSubtitle="Open one to log its gifts and pledges"
+      registerIcon={HeartHandshake}
       attentionItems={attentionItems}
+      howItWorks={
+        <>
+          <p>Raised is what has actually been received. Pledges still owed are counted separately.</p>
+          <p>Behind goal and closing soon are worked out from each campaign&rsquo;s own goal and close date.</p>
+          <p>Record amounts only, never donor names.</p>
+        </>
+      }
     />
   )
 

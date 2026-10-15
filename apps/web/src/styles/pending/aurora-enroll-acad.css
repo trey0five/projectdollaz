@@ -1,0 +1,403 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Aurora slice — Enrollment + Academics (2026-10-15).
+   Slice-local layout for the Enrollment and Academics pages: the grade ring on
+   the band, the "Students by grade" chart + tile stack, the grade legend, the
+   locked roster figures, and the Academics analytics door strip. Colours come
+   from the Aurora vars (--au-h …) the module root already sets — no palette
+   of its own. SCREEN ONLY: every rule is under @media screen so print output
+   is untouched.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media screen {
+  /* ── Band: the verdict's inline link, the composition ring ─────────────── */
+  .enr-verdict-link {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.55);
+    text-underline-offset: 3px;
+  }
+  .enr-verdict-link:hover {
+    text-decoration-color: #fff;
+  }
+  /* A secondary DOOR on the band ("Whole network", "Import all schools"): a
+     small white text link after the buttons, not another outline button. */
+  .enr-band-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: center;
+    padding: 6px 4px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.45);
+    text-underline-offset: 4px;
+    white-space: nowrap;
+  }
+  .enr-band-link:hover {
+    text-decoration-color: #fff;
+  }
+  .enr-band-link:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .enr-ring {
+    position: relative;
+    width: 280px;
+    min-width: 240px;
+    max-width: 100%;
+  }
+  .enr-ring svg path {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.18));
+  }
+  .enr-ring-dome {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 22%;
+    text-align: center;
+    color: #fff;
+  }
+  .enr-ring-num {
+    font-family: var(--font-display);
+    font-size: 50px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .enr-ring-cap {
+    margin-top: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.86);
+  }
+
+  /* ── Students by grade: chart card + a narrow tile stack ──────────────── */
+  .enr-grades {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  @media (min-width: 1100px) {
+    .enr-grades {
+      grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    }
+  }
+
+  /* The grade legend: a wrapped row of light chips under the columns. */
+  .enr-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0 0;
+    padding: 14px 0 0;
+    list-style: none;
+    border-top: 1px solid var(--au-line, #e3e7f0);
+  }
+  .enr-legend-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--au-h, #2563eb) 22%, var(--au-line, #e3e7f0));
+    background: color-mix(in srgb, var(--au-h, #2563eb) 5%, #fff);
+    color: var(--au-ink-1, #101c3d);
+    font-size: 13px;
+    line-height: 1.2;
+    text-align: left;
+    transition: background-color 0.15s ease;
+  }
+  button.enr-legend-row {
+    cursor: pointer;
+  }
+  button.enr-legend-row:hover,
+  button.enr-legend-row:focus-visible {
+    background: color-mix(in srgb, var(--au-h, #2563eb) 14%, #fff);
+    outline: none;
+  }
+  button.enr-legend-row:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--au-h, #2563eb) 40%, transparent);
+  }
+  .enr-legend-name {
+    font-weight: 700;
+  }
+  .enr-legend-name.is-dim {
+    opacity: 0.55;
+  }
+  .enr-legend-share {
+    color: var(--au-ink-2, #3d4865);
+    font-variant-numeric: tabular-nums;
+  }
+  .enr-legend-count {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── The locked roster figures (no student list yet) ───────────────────── */
+  .enr-locked {
+    margin-top: 22px;
+  }
+  .enr-locked-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--au-ink-2, #3d4865);
+  }
+  .enr-locked-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  @media (min-width: 1000px) {
+    .enr-locked-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .enr-locked-tile {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px dashed color-mix(in srgb, var(--au-ink-2, #3d4865) 28%, transparent);
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(148, 163, 184, 0.07) 0 8px,
+      transparent 8px 16px
+    );
+    color: var(--au-ink-2, #3d4865);
+  }
+  .enr-locked-tile > svg {
+    flex: none;
+    margin-top: 2px;
+  }
+  .enr-locked-tile b {
+    display: block;
+    font-size: 13.5px;
+    color: var(--au-ink-1, #101c3d);
+  }
+  .enr-locked-tile span span {
+    display: block;
+    font-size: 12px;
+  }
+
+  /* The divergence note inside the Grades tile. */
+  .enr-diverge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--au-ink-2, #3d4865);
+  }
+  .enr-diverge::before {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #d97706;
+  }
+
+  /* ── Analytics tab: the four doors as hue pills on a light ground ─────── */
+  .enr-doors {
+    margin-bottom: 18px;
+  }
+  .enr-doors .au-tab {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 9px 18px;
+    border-radius: 16px;
+  }
+  .enr-doors .au-tab-cap {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.8;
+  }
+  /* Enrollment's hue is a LIGHT sky: white text on the foundation's active
+     gradient measured 2.9–4.4:1. Darken the active pill so the label and its
+     caption clear 4.5:1 (lightest stop ≈ 4.7:1). */
+  .enr-doors .au-tab[aria-selected='true'] {
+    background: linear-gradient(
+      140deg,
+      color-mix(in srgb, var(--th) 72%, #0b1020),
+      color-mix(in srgb, var(--th) 50%, #0b1020)
+    );
+  }
+  .enr-doors .au-tab[aria-selected='true'] .au-tab-cap {
+    opacity: 1;
+  }
+
+  /* The heat map scrolls sideways only when it has more than three subjects;
+     then the right edge fades so the hidden column is visibly there. */
+  @media (max-width: 640px) {
+    .acad-heat-scroll[data-many='true'] {
+      -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+      mask-image: linear-gradient(90deg, #000 85%, transparent);
+    }
+  }
+
+  /* ── Charts on the analytics tabs sit in white rounded cards (a section-
+     based ChartCard keeps its own label row; no overflow clip, so its (i)
+     popover can still open past the edge). ─────────────────────────────── */
+  .au-scope .enr-chartcard {
+    position: relative;
+    margin-top: 0 !important;
+    padding: 22px 24px 20px;
+    border-radius: 22px;
+    border: 1px solid var(--au-line, #e3e7f0);
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgba(16, 28, 61, 0.04),
+      0 20px 40px -32px rgba(16, 28, 61, 0.35);
+  }
+  .au-scope .enr-chartcard::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 5px;
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(90deg, var(--au-h, #2563eb), var(--au-h2, #60a5fa));
+  }
+  .au-scope .enr-chartcard > .sec:first-child,
+  .au-scope .enr-chartcard > section {
+    margin-top: 0 !important;
+  }
+
+  /* ── Academics analysis cards (AcademicsCard) ───────────────────────── */
+  .acad-card {
+    position: relative;
+    min-width: 0;
+    padding: 22px 24px 20px;
+    border-radius: 22px;
+    border: 1px solid var(--au-line, #e3e7f0);
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgba(16, 28, 61, 0.04),
+      0 20px 40px -32px rgba(16, 28, 61, 0.35);
+  }
+  .acad-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 5px;
+    border-radius: 22px 22px 0 0;
+    background: var(--acad-rule, linear-gradient(90deg, var(--au-h, #0d9488), var(--au-h2, #2dd4bf)));
+  }
+  .acad-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .acad-card-well {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--au-h, #0d9488) 12%, #fff);
+    color: color-mix(in srgb, var(--au-h, #0d9488) 80%, #0b1020);
+  }
+  .acad-card-head > .min-w-0 {
+    flex: 1 1 14rem;
+  }
+  .acad-card-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--au-h, #0d9488) 70%, #0b1020);
+  }
+  .acad-card-title {
+    margin: 2px 0 0;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--au-ink-1, #101c3d);
+  }
+  .acad-card-aside {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  /* The view's cards stack inside one Aurora section body. */
+  .acad-view > * + * {
+    margin-top: 18px;
+  }
+
+  /* ── Phone ──────────────────────────────────────────────────────────── */
+  @media (max-width: 639px) {
+    .au-actions > .enr-band-link {
+      flex: 1 0 100%;
+      justify-content: center;
+    }
+    /* The ring repeats the headcount the title and the first glass card
+       already say, and on a phone it cost ~200px before the cards. Hidden
+       there (no hover on touch anyway); the grade chart below carries the
+       same composition with every count printed. */
+    .enr-band .au-aside {
+      display: none;
+    }
+  }
+  @media (max-width: 900px) {
+    .enr-band .au-aside {
+      justify-items: center;
+      width: 100%;
+    }
+    .enr-band .au-aside-body {
+      align-items: center;
+      width: 100%;
+    }
+    .enr-ring {
+      width: 230px;
+    }
+    .enr-ring-num {
+      font-size: 44px;
+    }
+    .au-scope .enr-chartcard {
+      padding: 18px 14px 16px;
+      border-radius: 18px;
+    }
+    .au-scope .enr-chartcard::before {
+      border-radius: 18px 18px 0 0;
+    }
+    .acad-card {
+      padding: 18px 14px 16px;
+      border-radius: 18px;
+    }
+    .acad-card::before {
+      border-radius: 18px 18px 0 0;
+    }
+  }
+}

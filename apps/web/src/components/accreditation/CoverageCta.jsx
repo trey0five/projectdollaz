@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { CalendarPlus, Sparkles } from 'lucide-react'
 import Button from '../ui/surface/Button.jsx'
+import { AuroraLightButton } from '../ui/aurora/AuroraButton.jsx'
 import '../../styles/pending/a2-carry.css'
 
 /** moduleKey → the display name used elsewhere in the app's chrome. */
@@ -93,15 +94,16 @@ export function YearsCta({ unlockableByYears = null }) {
           and the redirect drops the query string — so the old link landed on a
           generic add-data screen with no uploader open. `add=tb` picks the trial-
           balance option and `intake=bulk` opens its multi-year tab. */}
-      <Button
+      {/* AURORA: the module-hue light button, not the legacy blue primary —
+          one hue per page. */}
+      <AuroraLightButton
         to="/finance?tab=add&add=tb&intake=bulk"
-        variant="primary"
         size="sm"
         className="mt-3"
-        icon={<CalendarPlus size={14} />}
+        icon={<CalendarPlus size={14} aria-hidden="true" />}
       >
         Add years
-      </Button>
+      </AuroraLightButton>
     </Card>
   )
 }

@@ -5,8 +5,20 @@
 // leaderboards are the user's visible-metric set (passed down) so all three
 // scorecards agree.
 // ─────────────────────────────────────────────────────────────────────────────
-import Scorecard from './Scorecard.jsx'
-import { CompareLeaderboard, OrgScorecard } from './Leaderboard.jsx'
+import { Table2 } from "lucide-react";
+import Scorecard from "./Scorecard.jsx";
+import { CompareLeaderboard, OrgScorecard } from "./Leaderboard.jsx";
+import { AuroraSection } from "../../ui/aurora/index.js";
+
+// Aurora: every scope's table opens under one "Scorecard" strip; the tables
+// sit in white cards (`.fsub-tables`, the Finance sub-page sheet).
+function Frame({ subtitle, children }) {
+  return (
+    <AuroraSection first icon={Table2} title="Scorecard" subtitle={subtitle}>
+      <div className="fsub-tables">{children}</div>
+    </AuroraSection>
+  );
+}
 
 export default function ScorecardView({
   scope,
@@ -19,18 +31,33 @@ export default function ScorecardView({
   highlight,
   onHighlightConsumed,
 }) {
-  if (scope === 'compare') return <CompareLeaderboard schools={compare.schools} columns={columns} />
-  if (scope === 'org')
-    return <OrgScorecard schools={org.schools} columns={columns} orgMetrics={org.orgMetrics} />
+  if (scope === "compare")
+    return (
+      <Frame subtitle="Every measure, school by school">
+        <CompareLeaderboard schools={compare.schools} columns={columns} />
+      </Frame>
+    );
+  if (scope === "org")
+    return (
+      <Frame subtitle="Every school, plus the total">
+        <OrgScorecard
+          schools={org.schools}
+          columns={columns}
+          orgMetrics={org.orgMetrics}
+        />
+      </Frame>
+    );
   return (
-    <Scorecard
-      scope={scope}
-      schoolId={school.id}
-      metricsByKey={school.metricsByKey}
-      canCustomize={canCustomize}
-      onCrossToChart={onCrossToChart}
-      highlight={highlight}
-      onHighlightConsumed={onHighlightConsumed}
-    />
-  )
+    <Frame subtitle="Every measure, most urgent first">
+      <Scorecard
+        scope={scope}
+        schoolId={school.id}
+        metricsByKey={school.metricsByKey}
+        canCustomize={canCustomize}
+        onCrossToChart={onCrossToChart}
+        highlight={highlight}
+        onHighlightConsumed={onHighlightConsumed}
+      />
+    </Frame>
+  );
 }

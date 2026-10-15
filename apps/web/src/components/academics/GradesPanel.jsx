@@ -13,11 +13,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ColumnChart from '../analytics/charts/ColumnChart.jsx'
-import { Link2, Lock, UserRoundX } from 'lucide-react'
+import { GraduationCap, Link2, Lock, UserRoundX } from 'lucide-react'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 import { academicsApi } from '../../lib/api.js'
 import { Section, StatStrip, Stat, DataTable, Pill, Panel, Button } from '../ui/surface/index.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
-const HUE = '#0D9488'
+const HUE = moduleHue('academics')
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 
@@ -170,6 +172,21 @@ export default function GradesPanel({ schoolId, canEdit }) {
 
   if (loading) return <p className="text-small text-ink2">Loading…</p>
 
+  // Nothing at all on file: one line + the register's own "+ New" (read from
+  // the ModuleRegister shell), never three empty sections in a row.
+  const nothingOnFile =
+    !error && !(gradebook?.total > 0) && results.length === 0 && !unmatchedOnly && !year && imports.length === 0
+  if (nothingOnFile) {
+    return (
+      <RegisterEmpty
+        icon={GraduationCap}
+        text="No course marks or student results yet."
+        sub="Upload a gradebook or a student-level scores export and they land here."
+        actionLabel="Upload a gradebook"
+      />
+    )
+  }
+
   return (
     <div>
       {/* ── Gradebook summary ── */}
@@ -201,8 +218,7 @@ export default function GradesPanel({ schoolId, canEdit }) {
           </div>
         ) : (
           <p className="text-small text-ink2">
-            No course marks loaded yet. Upload a gradebook export from the Add data tab and it lands here — live SIS
-            grade sync is not available yet, whatever your roster connection.
+            No course marks yet. Upload a gradebook export from Add data — live SIS grade sync is not available yet.
           </p>
         )}
       </Section>

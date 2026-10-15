@@ -9,29 +9,73 @@
 // rule → a StatStrip (raised / pledged outstanding / remaining to goal) → the
 // gifts & pledges DataTable in a Section → notes as a Section. No cards. Deep-link safe: cold loads gate on the module 402 (GatePanel) and an
 // unknown id lands a friendly "Campaign not found". AGGREGATE only — no donor PII.
+//
+// AURORA (2026-10-15): the advancement band (school chip · type/status/FY/window
+// eyebrow · the campaign name · one plain sentence on what it has raised and
+// its pace · Add gift + Edit · glass cards for raised / still owed / left to
+// raise / entries), then medallion sections: Progress (the rule in a white
+// card), Gifts & pledges (the ledger), Notes. The privacy note sits behind
+// How this works.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
-import { Pencil, Plus, ShieldCheck } from 'lucide-react'
+import {
+  ArrowLeft,
+  Gift,
+  HandCoins,
+  HeartHandshake,
+  Hourglass,
+  NotebookText,
+  Pencil,
+  Plus,
+  Receipt,
+  Target,
+  TrendingUp,
+} from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
+import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
+import { RegisterNewContext } from '../components/module/RegisterEmpty.jsx'
+import { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import {
+  AuroraHero,
+  AuroraSection,
+  AuroraCard,
+  AuroraButton,
+  AuroraLightButton,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
 import { CampaignFormModal, campaignToForm } from '../components/advancement/CampaignFormModal.jsx'
 import { GiftFormModal } from '../components/advancement/GiftFormModal.jsx'
 import GiftsLedger from '../components/advancement/GiftsLedger.jsx'
-import CampaignProgress from '../components/advancement/CampaignProgress.jsx'
+import CampaignProgress, { campaignPace } from '../components/advancement/CampaignProgress.jsx'
 import {
   TYPE_LABEL,
   STATUS_LABEL,
   URGENCY_BADGE,
+  fmtMoney,
+  fmtMoneyFull,
+  fmtPct,
   shortDate,
 } from '../components/advancement/campaignMeta.js'
 import { GatePanel } from './AdvancementPage.jsx'
-import { PageHeader, StatStrip, Stat, Section, Pill, Button } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
+
+const PACE_VERDICT = { good: 'good', risk: 'risk' }
+
+function CampaignTrail({ name }) {
+  return (
+    <div className="mb-3">
+      <ModuleBreadcrumb
+        crumbs={[{ label: 'Dashboard', to: '/app' }, { label: 'Advancement', to: '/advancement' }, { label: name }]}
+      />
+    </div>
+  )
+}
 
 function CampaignDetailBody() {
   const { campaignId } = useParams()
@@ -112,14 +156,23 @@ function CampaignDetailBody() {
 
   if (!campaign) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <BackLink fallback="/advancement" fallbackLabel="Back to Advancement" />
-        <PageHeader
-          eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
-          title={loading ? 'Loading campaign…' : 'Campaign not found'}
-          meta={loading ? null : 'It may have been deleted, or belong to a different school.'}
-        />
-      </div>
+      <DomainStatePanel
+        showBack
+        moduleKey="advancement"
+        title={loading ? 'Loading campaign…' : 'Campaign not found'}
+        Icon={HeartHandshake}
+        icon={HeartHandshake}
+        busy={loading}
+        verdict={loading ? 'Reading the campaign and its gifts.' : 'It may have been deleted, or belong to another school.'}
+        primaryAction={
+          loading ? null : (
+            <AuroraButton variant="primary" to="/advancement" icon={<ArrowLeft size={19} aria-hidden="true" />}>
+              Back to Advancement
+            </AuroraButton>
+          )
+        }
+        text={loading ? 'One moment…' : 'No campaign at this link.'}
+      />
     )
   }
 
@@ -128,6 +181,14 @@ function CampaignDetailBody() {
   const goal = typeof campaign.goalAmount === 'number' ? campaign.goalAmount : null
   const remaining = goal != null ? Math.max(0, goal - raised - outstanding) : null
   const giftCount = gifts?.length ?? (typeof campaign.giftCount === 'number' ? campaign.giftCount : 0)
+  const pace = campaignPace({
+    raised,
+    goal,
+    startDate: campaign.startDate,
+    closeDate: campaign.closeDate,
+    status: campaign.status,
+  })
+  const pctOfGoal = goal ? raised / goal : null
 
   const giftInitial = giftModal?.entity
     ? {
@@ -150,82 +211,153 @@ function CampaignDetailBody() {
       : null,
   ].filter(Boolean)
   const urgency = URGENCY_BADGE[campaign.urgency]
+  const openAddGift = canEdit ? () => setGiftModal({ entity: null }) : null
+
+  // The band's one sentence: what it has raised, against its own goal, and its
+  // pace against its own timeline (null pace → no judgement clause).
+  const verdict = (
+    <>
+      <VerdictEm>{fmtMoneyFull(raised)} raised</VerdictEm>
+      {goal ? (
+        <>
+          {' '}of a <VerdictEm>{fmtMoneyFull(goal)}</VerdictEm> goal
+        </>
+      ) : null}
+      .{' '}
+      {pace ? (
+        <VerdictEm tone={pace.tone === 'neutral' ? null : pace.tone}>{pace.label}.</VerdictEm>
+      ) : urgency && urgency.tone !== 'neutral' ? (
+        <VerdictEm tone={urgency.tone}>{urgency.label}.</VerdictEm>
+      ) : null}
+    </>
+  )
+
+  const kpis = [
+    {
+      key: 'raised',
+      icon: HandCoins,
+      label: 'Raised',
+      value: fmtMoney(raised),
+      caption: pctOfGoal != null ? `${fmtPct(pctOfGoal) ?? '0%'} of goal` : 'No goal set',
+      // A closed campaign has an outcome, not a pace: it gets no pill.
+      verdict: pace?.closed ? null : (PACE_VERDICT[pace?.tone] ?? null),
+      verdictLabel: pace && !pace.closed && pace.tone !== 'neutral' ? pace.label : null,
+    },
+    {
+      key: 'owed',
+      icon: Hourglass,
+      label: 'Pledges still owed',
+      value: fmtMoney(outstanding),
+      caption: 'Promised, not yet received',
+    },
+    {
+      key: 'left',
+      icon: Target,
+      label: 'Left to raise',
+      value: remaining != null ? fmtMoney(remaining) : null,
+      caption: remaining != null ? 'After pledges come in' : 'No goal set',
+    },
+    {
+      key: 'entries',
+      icon: Receipt,
+      label: 'Gifts & pledges',
+      value: String(giftCount),
+      caption: giftCount === 1 ? 'entry logged' : 'entries logged',
+    },
+  ]
 
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink fallback="/advancement" fallbackLabel="Back to Advancement" />
+    <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <CampaignTrail name={campaign.name} />
 
-      {/* ── Header — the campaign's identity ─────────────────────────────────── */}
-      <PageHeader
-        eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
+      {/* ── The band — the campaign's identity, its one sentence, its jobs ── */}
+      <AuroraHero
+        moduleKey="advancement"
+        school={activeSchool?.name ?? null}
+        eyebrow={metaParts.join(' · ')}
         title={campaign.name}
+        verdict={verdict}
         actions={
           canEdit ? (
-            <Button onClick={() => setEditOpen(true)} icon={<Pencil size={14} />}>
-              Edit campaign
-            </Button>
+            <>
+              <AuroraButton variant="primary" onClick={openAddGift} icon={<Plus size={19} aria-hidden="true" />}>
+                Add gift / pledge
+              </AuroraButton>
+              <AuroraButton onClick={() => setEditOpen(true)} icon={<Pencil size={19} aria-hidden="true" />}>
+                Edit campaign
+              </AuroraButton>
+            </>
           ) : null
         }
-      >
-        <div className="pg-meta flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>{metaParts.join(' · ')}</span>
-          {urgency ? (
-            <Pill variant="status" tone={urgency.tone}>
-              {urgency.label}
-            </Pill>
-          ) : null}
-        </div>
-      </PageHeader>
+        kpis={kpis}
+      />
 
-      {/* ── Progress rule + the three figures ────────────────────────────────── */}
-      <div className="mt-6">
-        <CampaignProgress
-          size="hero"
-          raised={raised}
-          pledgedOutstanding={outstanding}
-          goal={campaign.goalAmount}
-          startDate={campaign.startDate}
-          closeDate={campaign.closeDate}
-          reduce={reduce}
-        />
-      </div>
-      <StatStrip cols={3} className="mt-6">
-        <Stat label="Raised" value={raised} format="currency" />
-        <Stat label="Pledged outstanding" value={outstanding} format="currency" />
-        <Stat label="Remaining to goal" value={remaining != null ? remaining : '—'} format="currency" />
-      </StatStrip>
+      {/* ── Progress — the rule in a white card ───────────────────────────── */}
+      <AuroraSection
+        first
+        icon={TrendingUp}
+        title="Progress"
+        subtitle="Raised and pledged against the goal"
+        count={pctOfGoal != null ? `${fmtPct(pctOfGoal) ?? '0%'} of goal` : null}
+      >
+        <AuroraCard>
+          <CampaignProgress
+            size="hero"
+            raised={raised}
+            pledgedOutstanding={outstanding}
+            goal={campaign.goalAmount}
+            startDate={campaign.startDate}
+            closeDate={campaign.closeDate}
+            status={campaign.status}
+            reduce={reduce}
+          />
+        </AuroraCard>
+      </AuroraSection>
 
       {/* ── Gifts & pledges ──────────────────────────────────────────────────── */}
-      <Section
-        label={giftCount > 0 ? `Gifts & pledges · ${giftCount}` : 'Gifts & pledges'}
+      <AuroraSection
+        icon={Gift}
+        title="Gifts & pledges"
+        subtitle="Amounts only, never donor names"
+        count={giftCount > 0 ? `${giftCount} logged` : null}
         aside={
-          canEdit ? (
-            <Button variant="primary" size="sm" onClick={() => setGiftModal({ entity: null })} icon={<Plus size={14} />}>
-              Add gift / pledge
-            </Button>
+          openAddGift ? (
+            <AuroraLightButton size="sm" onClick={openAddGift} icon={<Plus size={15} aria-hidden="true" />}>
+              New
+            </AuroraLightButton>
           ) : null
         }
       >
-        <p className="mb-3 flex items-center gap-1.5 text-[12px] text-ink2">
-          <ShieldCheck size={13} aria-hidden="true" />
-          Aggregate only. Record amounts, never donor names. &ldquo;Raised&rdquo; is the sum of what has been received.
-        </p>
-        <GiftsLedger
-          gifts={gifts}
-          loading={giftsLoading}
-          canEdit={canEdit}
-          onEdit={(g) => setGiftModal({ entity: g })}
-          onWriteOff={onWriteOff}
-          onDelete={onGiftDelete}
-        />
-      </Section>
+        <div className="au-card au-card-flat au-register min-w-0">
+          <RegisterNewContext.Provider value={openAddGift}>
+            <GiftsLedger
+              gifts={gifts}
+              loading={giftsLoading}
+              canEdit={canEdit}
+              onEdit={(g) => setGiftModal({ entity: g })}
+              onWriteOff={onWriteOff}
+              onDelete={onGiftDelete}
+            />
+          </RegisterNewContext.Provider>
+        </div>
+      </AuroraSection>
 
       {/* ── Notes ────────────────────────────────────────────────────────────── */}
       {campaign.notes ? (
-        <Section label="Notes">
-          <p className="max-w-prose whitespace-pre-wrap text-[14px] leading-relaxed text-ink2">{campaign.notes}</p>
-        </Section>
+        <AuroraSection icon={NotebookText} title="Notes">
+          <AuroraCard>
+            <p className="max-w-prose whitespace-pre-wrap text-[14px] leading-relaxed text-ink2">{campaign.notes}</p>
+          </AuroraCard>
+        </AuroraSection>
       ) : null}
+
+      <HowThisWorks>
+        <p>Raised is the sum of what has been received. Pledges still owed are promised but not yet in.</p>
+        <p>
+          Pace compares how much of the goal is raised with how much of the campaign&rsquo;s own window has passed.
+        </p>
+        <p>Record amounts only, never donor names.</p>
+      </HowThisWorks>
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
       {editOpen ? (

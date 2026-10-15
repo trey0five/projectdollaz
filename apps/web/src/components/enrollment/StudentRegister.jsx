@@ -37,6 +37,7 @@ import StudentFilterBar, {
   buildStudentParams,
 } from './studentFilters.jsx'
 import StudentSlideOver, { StatusPill, FlagBadges, STATUS_TONE } from './StudentSlideOver.jsx'
+import RegisterEmpty from '../module/RegisterEmpty.jsx'
 
 const ENROLL_HUE = '#0EA5E9'
 
@@ -483,6 +484,24 @@ export default function StudentRegister({
   }
 
   const noFilters = !Object.keys(buildStudentParams(filters)).length
+
+  // Nothing on the list and nothing narrowing it: no search bar, no eight
+  // "— none" filters, no table — one line, one button (the register's own
+  // "+ New", which opens the Add-data student flow). The sub-line says the
+  // thing that was missing: an enrollment HEADCOUNT does not put anyone in this
+  // register, and a school looking at "436 enrolled" one tab away has every
+  // reason to expect that it does.
+  if (!error && data && !loading && total === 0 && noFilters) {
+    return (
+      <RegisterEmpty
+        icon={UsersRound}
+        text="No students on the list yet."
+        sub="A headcount on the Enrollment overview does not add students here — upload that file again from the Add data tab."
+        actionLabel="Upload the student list"
+      />
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -538,16 +557,8 @@ export default function StudentRegister({
           markOf={(s) => STATUS_TONE[s.status] ?? 'neutral'}
           onRowClick={(s) => setPanelStudent(s)}
           caption="Student roster"
-          empty={
-            total === 0 && noFilters
-              ? // Says the thing that was missing: an enrollment HEADCOUNT does not
-                // put anyone in this register, and a school looking at "436 enrolled"
-                // one tab away has every reason to expect that it does.
-                'No students on the roster yet. Uploading a roster file here creates the student records. A headcount on the ' +
-                'Enrollment overview does not — if you have a total there but nothing here, ' +
-                'upload that file again from the Add data tab.'
-              : 'No students match these filters. Loosen a filter or clear the search.'
-          }
+          // The unfiltered empty register returns early above (RegisterEmpty).
+          empty="No students match these filters. Loosen a filter or clear the search."
         />
       )}
 

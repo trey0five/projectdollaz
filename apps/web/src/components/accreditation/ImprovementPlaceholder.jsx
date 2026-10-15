@@ -30,7 +30,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom'
 import { ArrowRight, TrendingUp } from 'lucide-react'
-import { Button, DataTable, Section } from '../ui/surface/index.js'
+import { DataTable, Section } from '../ui/surface/index.js'
+import { AuroraLightButton } from '../ui/aurora/AuroraButton.jsx'
 import '../../styles/pending/a2-carry.css'
 
 /**
@@ -45,6 +46,15 @@ import '../../styles/pending/a2-carry.css'
  * silently doing nothing. An unknown key is still ADVISORY — it opens the flow,
  * it never errors.
  */
+/**
+ * The candidates: open, not already adopted by an initiative, and not merely
+ * informational. ONE selection, shared with the Records tile's count on
+ * AccreditationPage so the tile and this tab can never disagree.
+ */
+export function improvementCandidates(findings = []) {
+  return (findings ?? []).filter((f) => !f.initiativeId && f.severity !== 'info' && !f.findingCleared)
+}
+
 export function workThisGapHref(finding) {
   const key = finding?.findingKey ?? finding?.factKey ?? null
   if (!key) return '/improvement'
@@ -58,9 +68,7 @@ export default function ImprovementPlaceholder({ findings = [], loading = false 
   // Candidates: open, not already adopted by an initiative, and not merely
   // informational. Filtering is selection, not composition — no number, sentence
   // or status is invented here.
-  const candidates = findings.filter(
-    (f) => !f.initiativeId && f.severity !== 'info' && !f.findingCleared,
-  )
+  const candidates = improvementCandidates(findings)
 
   const heading =
     loading && candidates.length === 0
@@ -112,10 +120,10 @@ export default function ImprovementPlaceholder({ findings = [], loading = false 
           Turning a finding into owned, dated work — with a milestone plan and progress computed
           from your own numbers — happens in the Continuous Improvement Manager.
         </p>
-        <Button to="/improvement" variant="primary" icon={<TrendingUp size={14} />}>
+        <AuroraLightButton to="/improvement" icon={<TrendingUp size={14} aria-hidden="true" />}>
           Open Improvement
           <ArrowRight size={13} aria-hidden />
-        </Button>
+        </AuroraLightButton>
       </div>
 
       <Section label="Candidates" aside={<span>Open, not informational, not yet on a plan</span>}>

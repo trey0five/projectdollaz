@@ -9,8 +9,9 @@
 // (`?tab=analytics&view=…`, the URL model EnrollmentAnalyticsTabs owns). The
 // Stat teaches what the tab holds by SHOWING a bite of it.
 //
-// PREMIUM UI P4: a `Section` ("Analytics") holding a `StatStrip` of three
-// linking `Stat`s on the ground — vertical rules, no tiles, no shadows.
+// AURORA (2026-10-15): a "Look deeper" section strip over colourful tiles —
+// Headcount · Grades · Cohorts, each a live link with its figure, plus any
+// `extra` tile the page passes (the diocesan import door).
 //
 // ── SERVER COMPUTES, THIS FILE PAINTS ───────────────────────────────────────
 // Everything drawn here is read from the SAME `GET …/enrollment/analytics`
@@ -27,45 +28,61 @@
 // nothing drawable: the strip degrades to the SAME compact text pointer it
 // replaced — the door to Analytics never disappears, it just loses its preview.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Link } from 'react-router-dom'
-import { ArrowRight, BarChart3 } from 'lucide-react'
+import { BarChart3, GraduationCap, LineChart, Users } from 'lucide-react'
+import { healthStatus, bandsFor } from '@finrep/analytics'
 import Sparkline from '../analytics/charts/Sparkline.jsx'
 import { useEnrollmentAnalytics } from '../../hooks/useEnrollmentAnalytics.js'
-import { Section, StatStrip, Stat, Pill } from '../ui/surface/index.js'
+import {
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+  VerdictPill,
+} from '../ui/aurora/index.js'
 import { ENROLL_HUE, fmtCount, schoolYearLabel, signedCount, signedShare } from './enrollmentAnalyticsKit.jsx'
 
-/** The plain door, kept as the degraded state — never a dead end. */
-function PointerFallback() {
+/** The section frame every state shares. */
+function LookDeeper({ children, ...rest }) {
   return (
-    <Link to="/enrollment?tab=analytics" className="sec-more">
-      <BarChart3 size={14} aria-hidden="true" />
-      Trends, grade mix and cohorts <span className="font-semibold text-ink">→ Analytics</span>
-      <ArrowRight size={13} aria-hidden="true" />
-    </Link>
+    <AuroraSection icon={BarChart3} hue="var(--au-h2)" title="Look deeper" subtitle="Analytics for this school" {...rest}>
+      {children}
+    </AuroraSection>
+  )
+}
+
+/** The plain door, kept as the degraded state — never a dead end. */
+function PointerFallback({ extra = null }) {
+  return (
+    <LookDeeper>
+      <AuroraTileGrid cols={extra ? 2 : 3}>
+        <AuroraTile
+          to="/enrollment?tab=analytics"
+          icon={BarChart3}
+          title="Analytics"
+          desc="Trends, grade mix and cohorts"
+        />
+        {extra}
+      </AuroraTileGrid>
+    </LookDeeper>
   )
 }
 
 /** The little grew/shrank/steady tally pills — server verdicts, counted only. */
 function PulsePill({ tone, n, word }) {
   if (!n) return null
-  return (
-    <Pill variant="status" tone={tone}>
-      {n} {word}
-    </Pill>
-  )
+  return <VerdictPill verdict={tone === 'neutral' ? null : tone} label={`${n} ${word}`} className="au-pill-sm" />
 }
 
-export default function EnrollmentAnalyticsPreview({ schoolId, periodId }) {
+export default function EnrollmentAnalyticsPreview({ schoolId, periodId, extra = null }) {
   const { data, loading, error, notLicensed, notEntitled } = useEnrollmentAnalytics(schoolId, periodId)
 
   if (loading && !data) {
     return (
-      <Section label="Analytics">
-        <div className="h-24 animate-pulse rounded-lg bg-ink/[.04]" aria-hidden="true" />
-      </Section>
+      <LookDeeper>
+        <div className="h-40 animate-pulse rounded-2xl bg-ink/[.04]" aria-hidden="true" />
+      </LookDeeper>
     )
   }
-  if (error || notLicensed || notEntitled || !data) return <PointerFallback />
+  if (error || notLicensed || notEntitled || !data) return <PointerFallback extra={extra} />
 
   const { trend, vsPlan, gradeByYear, cohortSize } = data
   const points = trend?.points ?? []
@@ -76,107 +93,96 @@ export default function EnrollmentAnalyticsPreview({ schoolId, periodId }) {
   const latest = points.length ? points[points.length - 1] : null
 
   // Nothing drawable at all (brand-new school): the plain pointer says it best.
-  if (!latest && !totals && !gradeByYear?.grades?.length && cohorts.length === 0) return <PointerFallback />
+  if (!latest && !totals && !gradeByYear?.grades?.length && cohorts.length === 0) return <PointerFallback extra={extra} />
 
   const yearsOnFile = gradeByYear?.years?.length ?? 0
-  const gapTone = totals ? (totals.gap === 0 ? 'neutral' : totals.gap < 0 ? 'risk' : 'good') : null
+  // The gap's verdict from the CANONICAL enrollment_vs_plan bands — the same
+  // healthStatus call the band's "Gap to plan" card (EnrollmentHero) and the
+  // VsPlanKpi tile make, so one gap never wears two verdicts on one page
+  // (verifier 2026-10-15: the band said "At risk" while this tile said a grey
+  // "Behind plan" for the same −11 / −7.1%). No share → no pill, never a guess.
+  const gapVerdict =
+    totals && totals.gapPct != null && Number.isFinite(Number(totals.gapPct))
+      ? healthStatus(Number(totals.gapPct), bandsFor('enrollment_vs_plan'), true)
+      : null
+  const gapTone = gapVerdict && gapVerdict !== 'neutral' ? gapVerdict : null
 
   return (
-    <Section
-      label="Analytics"
-      aside={
-        <Link to="/enrollment?tab=analytics" className="sec-more !mt-0">
-          Open analytics <ArrowRight size={13} aria-hidden="true" />
-        </Link>
-      }
-      aria-label="Enrollment analytics preview"
-    >
-      <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
+    <LookDeeper aria-label="Enrollment analytics preview">
+      <AuroraTileGrid cols={extra ? 4 : 3}>
         {/* ── 1 · The headcount sparkline → Trend ── */}
-        <Stat
+        <AuroraTile
           to="/enrollment?tab=analytics&view=trend"
-          aria-label="Open the headcount trend in Analytics"
-          label="Headcount · how it moved"
-          value={latest ? latest.total : '—'}
-          note={
-            latest
-              ? trend?.planTotal != null
-                ? `students · plan ${fmtCount(trend.planTotal)}`
-                : 'students'
-              : 'No enrollment reading filed yet.'
-          }
+          ariaLabel="Open the headcount trend in Analytics"
+          icon={LineChart}
+          title="Headcount"
+          figure={latest ? fmtCount(latest.total) : '—'}
+          unit={latest ? (trend?.planTotal != null ? `of ${fmtCount(trend.planTotal)} planned` : 'students') : null}
+          desc={latest ? 'How the count has moved.' : 'No enrollment reading filed yet.'}
         >
           {latest && points.length >= 2 ? (
-            <div className="mt-2 h-8">
+            <div className="mt-1 h-8">
               <Sparkline vals={points.map((p) => p.total)} color={ENROLL_HUE} h={32} fill stretch />
             </div>
-          ) : latest ? (
-            <p className="mt-2 text-[12px] italic leading-snug text-ink2">the line starts with your next reading</p>
           ) : null}
-        </Stat>
+        </AuroraTile>
 
         {/* ── 2 · The vs-plan headline → Grades ── */}
-        <Stat
+        <AuroraTile
           to="/enrollment?tab=analytics&view=grades"
-          aria-label="Open the grade breakdown in Analytics"
-          label="Grades · where the miss is"
-          value={totals ? totals.actual : yearsOnFile ? gradeByYear.grades.length : '—'}
-          status={totals ? gapTone : null}
-          delta={
+          ariaLabel="Open the grade breakdown in Analytics"
+          icon={GraduationCap}
+          hue="var(--au-h2)"
+          title="Grades"
+          figure={totals ? signedCount(totals.gap) : yearsOnFile ? gradeByYear.grades.length : '—'}
+          unit={totals ? (totals.gapPct != null ? signedShare(totals.gapPct) : null) : yearsOnFile ? 'grades' : null}
+          desc={
             totals
-              ? {
-                  text: `${signedCount(totals.gap)}${totals.gapPct != null ? ` ${signedShare(totals.gapPct)}` : ''} vs plan`,
-                  tone: gapTone,
-                }
-              : null
-          }
-          note={
-            totals
-              ? null
+              ? `Which grades the gap sits in (plan ${fmtCount(totals.plan)}).`
               : yearsOnFile
-                ? `grades across ${yearsOnFile} school ${yearsOnFile === 1 ? 'year' : 'years'}${
+                ? `${yearsOnFile} school ${yearsOnFile === 1 ? 'year' : 'years'}${
                     yearsOnFile > 1
                       ? ` (${schoolYearLabel(gradeByYear.years[0])} → ${schoolYearLabel(gradeByYear.years[yearsOnFile - 1])})`
                       : ''
                   } — no plan set yet.`
                 : 'No grade-level reading on file yet.'
           }
+          // The band's own Good / Watch / At risk word for this gap.
+          verdict={gapTone}
         >
-          {totals ? <p className="mt-1 text-small text-ink2">of {fmtCount(totals.plan)} planned — by grade inside</p> : null}
           {/* DIVERGENCE, said out loud (mirrors EnrollmentVsPlanChart's note,
               in its smallest honest form): when the server says this vs-plan
               total and the promoted headline headcount are two different
-              observations, this Stat and the vitals print two different
-              percentages side by side — never average them, name it. */}
+              observations, this tile and the band print two different
+              percentages — never average them, name it. */}
           {totals && totals.agreesWithTile === false ? (
-            <p className="mt-2 flex items-center gap-1.5 text-[12px] leading-snug text-ink2">
-              <span className="mark tone-watch" aria-hidden="true" />
-              differs from the headline figure — see Analytics
-            </p>
+            <p className="enr-diverge">differs from the headline figure — see Analytics</p>
           ) : null}
-        </Stat>
+        </AuroraTile>
 
         {/* ── 3 · The cohort pulse → Cohorts ── */}
-        <Stat
+        <AuroraTile
           to="/enrollment?tab=analytics&view=cohorts"
-          aria-label="Open the cohort progression in Analytics"
-          label="Cohorts · following a class"
-          value={cohorts.length ? cohorts.length : '—'}
-          note={
-            cohorts.length
-              ? `${cohorts.length === 1 ? 'class' : 'classes'} followed up the grades`
-              : 'Unlocks with a second school year of grade-level readings.'
+          ariaLabel="Open the cohort progression in Analytics"
+          icon={Users}
+          hue="var(--au-h3)"
+          title="Cohorts"
+          figure={cohorts.length ? cohorts.length : '—'}
+          unit={cohorts.length ? (cohorts.length === 1 ? 'class' : 'classes') : null}
+          desc={cohorts.length ? 'Each class followed up the grades.' : 'Unlocks with a second year of grade counts.'}
+          foot={
+            cohorts.length ? (
+              <span className="flex flex-wrap gap-1.5">
+                <PulsePill tone="good" n={dirCount('grew')} word="grew" />
+                <PulsePill tone="risk" n={dirCount('shrank')} word="shrank" />
+                <PulsePill tone="neutral" n={dirCount('held')} word="steady" />
+              </span>
+            ) : null
           }
-        >
-          {cohorts.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <PulsePill tone="good" n={dirCount('grew')} word="grew" />
-              <PulsePill tone="risk" n={dirCount('shrank')} word="shrank" />
-              <PulsePill tone="neutral" n={dirCount('held')} word="steady" />
-            </div>
-          ) : null}
-        </Stat>
-      </StatStrip>
-    </Section>
+        />
+
+        {extra}
+      </AuroraTileGrid>
+    </LookDeeper>
   )
 }

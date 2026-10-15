@@ -1,18 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Monthly Actuals — Reports-hub section wrapper. The hub isn't pinned to a single
-// period, so this thin wrapper supplies a period <select> (defaulting to the live
-// snapshot period) and derives canEdit from the active school's role, then mounts
-// the self-contained MonthlyActualsPanel. Additive surface only — it does NOT
-// touch the annual intake, the board report, or the granularity selector.
+// period, so this thin wrapper supplies the band's year switch (defaulting to the
+// live snapshot period) and derives canEdit from the active school's role, then
+// mounts the self-contained MonthlyActualsPanel. Additive surface only — it does
+// NOT touch the annual intake, the board report, or the granularity selector.
+//
+// Aurora: "Upload a month" is the band's ONE primary button — the panel's upload
+// state is lifted here (controlled `upload` / `onUploadChange`) so the panel
+// drops its own two copies of that button.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
+import { CalendarClock, Plus } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
-import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
-import MonthlyActualsPanel, { MONTHLY_BLURB } from './MonthlyActualsPanel.jsx'
-import { PageHeader } from '../ui/surface/index.js'
+import { useBilling } from '../../context/BillingContext.jsx'
+import MonthlyActualsPanel from './MonthlyActualsPanel.jsx'
+import { AuroraButton, AuroraSection, HowThisWorks } from '../ui/aurora/index.js'
+import { FinanceSubBand, FinancePeriodSwitch } from '../statements/financeSub.jsx'
 
 export default function MonthlyActualsSection({ periods = [], initialPeriodId = null }) {
   const { activeSchool } = useSchools()
+  const { entitled } = useBilling()
   const canEdit =
     activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
@@ -20,51 +27,47 @@ export default function MonthlyActualsSection({ periods = [], initialPeriodId = 
   const [periodId, setPeriodId] = useState(
     initialPeriodId || periodOptions[0]?.id || '',
   )
-
-  const periodLabel = (p) => {
-    const kind = PERIOD_LABELS[p.periodType] || ''
-    const date = formatShortDate(p.periodEndDate)
-    return [p.label, kind, date].filter(Boolean).join(' · ')
+  // null = idle; { month } = the upload card is open ('' = pick a month).
+  const [upload, setUpload] = useState(null)
+  const pickPeriod = (id) => {
+    setUpload(null)
+    setPeriodId(id)
   }
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Reports · Monthly actuals"
-        title="Monthly actuals"
-        meta={MONTHLY_BLURB}
-        hue="37 99 235"
+      <FinanceSubBand
+        eyebrow="Month by month"
+        title="Monthly Actuals"
+        verdict={<>Add each month&rsquo;s numbers to see where the year stands as it goes.</>}
         actions={
-          periodOptions.length === 0 ? (
-            <span className="text-small italic text-ink2">No saved periods yet.</span>
-          ) : (
-            <label className="flex items-center gap-2">
-              <span className="toolbar-label">Fiscal period</span>
-              <select
-                id="monthly-period"
-                value={periodId}
-                onChange={(e) => setPeriodId(e.target.value)}
-                className="sel h-9 w-auto"
-                // .sel caps at 16rem, which clipped "… · Jun 30, 2026" mid-date.
-                style={{ maxWidth: 'min(24rem, 100%)' }}
-              >
-                {periodOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {periodLabel(p)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )
+          canEdit && periodId && entitled !== false && !upload ? (
+            <AuroraButton variant="primary" onClick={() => setUpload({ month: '' })} icon={<Plus size={19} aria-hidden="true" />}>
+              Upload a month
+            </AuroraButton>
+          ) : null
         }
+        tools={periodOptions.length === 0 ? <span className="pill">No saved years yet</span> : null}
+        aside={<FinancePeriodSwitch periods={periodOptions} activeId={periodId} onSelect={pickPeriod} label="Fiscal period" />}
       />
 
-      <MonthlyActualsPanel
-        schoolId={activeSchool?.id ?? null}
-        periodId={periodId || null}
-        canEdit={canEdit}
-        hosted
-      />
+      <AuroraSection first icon={CalendarClock} title="Your months" subtitle="One year-to-date trial balance per month-end">
+        <MonthlyActualsPanel
+          schoolId={activeSchool?.id ?? null}
+          periodId={periodId || null}
+          canEdit={canEdit}
+          hosted
+          upload={upload}
+          onUploadChange={setUpload}
+        />
+      </AuroraSection>
+
+      <HowThisWorks>
+        <p>
+          Add each month-end trial balance (year-to-date figures) as the year goes on, so you can see where the year
+          stands month by month — not just at year-end.
+        </p>
+      </HowThisWorks>
     </div>
   )
 }

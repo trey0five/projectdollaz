@@ -27,7 +27,9 @@ import {
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import { PageHeader, Section, Panel, Pill } from '../components/ui/surface/index.js'
+import { Panel, Pill } from '../components/ui/surface/index.js'
+import { AuroraEmpty, AuroraLightButton, AuroraSection, HowThisWorks, VerdictEm } from '../components/ui/aurora/index.js'
+import { FinanceSubPage, FinanceSubBand } from '../components/statements/financeSub.jsx'
 import '../styles/pending/b2-finance.css'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useScope } from '../context/ScopeContext.jsx'
@@ -361,57 +363,57 @@ export default function DataHubPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <main className="mx-auto max-w-page px-4 py-6 sm:px-10">
-        {/* Header (Premium UI P4): PageHeader on the hairline; the period select,
-            the readiness Pill and the tour live in its actions. */}
-        <PageHeader
-          eyebrow={['Data', activeSchool?.name].filter(Boolean).join(' · ')}
+      <FinanceSubPage crumbs={[{ label: 'Dashboard', to: '/app' }, { label: 'Get your numbers in' }]}>
+        <FinanceSubBand
+          eyebrow={periodLabel ? `Working on ${periodLabel}` : null}
           title="Get your numbers in"
-          meta="This is the one place to bring your school's data into KYRO. Add what you have — we'll turn it into your statements, board reports, and readiness checks. KYRO AI will walk you through it. Most schools finish the essentials in a few minutes."
-          hue="37 99 235"
-          actions={!noPeriods ? (
-            <div className="flex flex-col items-start gap-2 sm:items-end">
-              <label className="flex items-center gap-2">
-                <span className="toolbar-label">Working on</span>
-                <select
-                  id="datahub-period-select"
-                  value={periodId || ''}
-                  onChange={(e) => setPeriodId(e.target.value)}
-                  className="sel"
-                >
-                  {(periods || []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill variant="status" tone={allReady ? 'good' : 'watch'}>
-                  {allReady ? (
-                    <>
-                      <CircleCheck size={11} aria-hidden="true" /> All set
-                    </>
-                  ) : (
-                    <>
-                      {needsYou} need you · {inProgress} in progress
-                    </>
-                  )}
-                </Pill>
+          verdict={
+            noPeriods ? (
+              <>Start with this year&rsquo;s trial balance. KYRO builds everything else from it.</>
+            ) : !summary ? null : allReady ? (
+              <>
+                <VerdictEm tone="good">All set.</VerdictEm> Your statements, reports and checks are up to date.
+              </>
+            ) : (
+              <>
+                <VerdictEm tone={needsYou ? 'watch' : null}>
+                  {needsYou} {needsYou === 1 ? 'step needs' : 'steps need'} you
+                </VerdictEm>
+                {inProgress ? `, ${inProgress} in progress` : ''}. Add what you have and KYRO does the rest.
+              </>
+            )
+          }
+          tools={
+            !noPeriods ? (
+              <>
+                <label className="flex items-center gap-2">
+                  <span className="toolbar-label">Working on</span>
+                  <select
+                    id="datahub-period-select"
+                    value={periodId || ''}
+                    onChange={(e) => setPeriodId(e.target.value)}
+                    className="sel"
+                  >
+                    {(periods || []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   id="datahub-tour-button"
                   type="button"
                   onClick={() => penny.runTour(tourSteps)}
                   className="btn btn-quiet btn-sm"
                 >
-                  <Sparkles size={13} aria-hidden="true" className="text-penny" /> Show me around
+                  <Sparkles size={13} aria-hidden="true" /> Show me around
                 </button>
-              </div>
-            </div>
-          ) : null}
+              </>
+            ) : null
+          }
         />
-        <div className="mt-6" />
+        <div className="mt-8" />
 
         {noPeriods ? (
           <NoPeriodCard onAdd={() => setModalKey('trialBalances')} />
@@ -432,22 +434,22 @@ export default function DataHubPage() {
                 where data-status is null — so we never flash the empty "all
                 optional / 0 need you" cards for a school that actually has data. */}
             {notEntitled ? (
-              <div className="b2-note">
-                <p className="b2-note-title">Your subscription is paused</p>
-                <p>
-                  Reactivate your plan to load and review your data — see the banner above to manage billing.
-                </p>
-              </div>
+              <AuroraEmpty
+                icon={CircleCheck}
+                text="Your subscription is paused."
+                sub="Reactivate your plan to load and review your data — see the banner above."
+              />
             ) : error ? (
-              <div className="b2-note">
-                <p className="b2-note-title">Couldn’t load your data status</p>
-                <p>{error}</p>
-                <div className="pt-2">
-                  <button type="button" onClick={refetch} className="btn btn-secondary">
+              <AuroraEmpty
+                icon={Sparkles}
+                text="Couldn’t load your data status."
+                sub={error}
+                action={
+                  <AuroraLightButton variant="ghost" onClick={refetch}>
                     Try again
-                  </button>
-                </div>
-              </div>
+                  </AuroraLightButton>
+                }
+              />
             ) : !sources ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleSources.map((s) => (
@@ -455,7 +457,13 @@ export default function DataHubPage() {
                 ))}
               </div>
             ) : (
-              <Section label="Your data, step by step" className="!mt-8">
+              <AuroraSection
+                first
+                icon={CircleCheck}
+                title="Your data, step by step"
+                subtitle="Add what you have"
+                count={summary ? (allReady ? 'All set' : `${needsYou} need you · ${inProgress} in progress`) : null}
+              >
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleSources.map((s) => (
                   <SourceCard
@@ -467,11 +475,17 @@ export default function DataHubPage() {
                   />
                 ))}
               </div>
-              </Section>
+              </AuroraSection>
             )}
           </>
         )}
-      </main>
+
+        <HowThisWorks>
+          <p>This is the one place to bring your school&rsquo;s data into KYRO.</p>
+          <p>Add what you have — we turn it into your statements, board reports and readiness checks.</p>
+          <p>KYRO AI walks you through it. Most schools finish the essentials in a few minutes.</p>
+        </HowThisWorks>
+      </FinanceSubPage>
 
       {/* Embed modal (Monthly / Operational / Budget) — opens instead of expanding inline. */}
       <DataEmbedModal

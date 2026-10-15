@@ -33,7 +33,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { Target, Users } from 'lucide-react'
-import { Section, DataTable, Button } from '../ui/surface/index.js'
+import { Button } from '../ui/surface/index.js'
+import { AuroraEmpty, AuroraSection, AuroraTile, AuroraTileGrid, HowThisWorks } from '../ui/aurora/index.js'
 import '../../styles/pending/b1-domain.css'
 import BulkAdoptFlow from './BulkAdoptFlow.jsx'
 import { humanizeToken } from './AttentionBandChip.jsx'
@@ -44,85 +45,57 @@ const count = (v) => (Number.isFinite(v) ? v : '—')
 const priorityKey = (p) => p?.catalogStandardId ?? p?.code
 
 /**
- * The priorities as ONE ledger table (standard × the five counts × share), in the
- * server's order — no sortable column, because the order is frozen server-side.
+ * The priorities as Aurora TILES, in the server's order — nothing is sorted
+ * here, because the order is frozen server-side. Each tile carries the server's
+ * frozen headline verbatim (the decision), the standard's own words (one
+ * clamped line, full text as a tooltip) and the counts as ONE short facts line.
  * The per-standard detail (which schools, run one intervention) opens BELOW the
- * table for the one row asked about, instead of every row carrying its own
- * disclosure and button.
+ * grid for the one standard asked about.
  */
-function PriorityTable({ priorities, openKey, onOpen }) {
-  const columns = [
-    {
-      key: 'standard',
-      header: 'Standard',
-      render: (p) => (
-        <div className="min-w-[16rem] max-w-[34rem] py-1.5">
-          {/* The server's frozen headline template, verbatim. */}
-          <span className="font-semibold leading-snug text-ink">{p?.headline ?? p?.code ?? 'Standard'}</span>
-          <span className="dt-sub mt-0.5">
-            {p?.code ? <span className="font-semibold">{p.code}</span> : null}
-            {p?.title ? ` · ${p.title}` : ''}
-            {p?.domainKey ? ` · ${humanizeToken(p.domainKey)}` : ''}
-          </span>
-        </div>
-      ),
-    },
-    { key: 'below', header: 'Below', num: true, render: (p) => <span className="font-semibold">{count(p?.schoolsBelowThreshold)}</span> },
-    { key: 'inScope', header: 'In scope', num: true, render: (p) => count(p?.schoolsInScope) },
-    { key: 'scored', header: 'Scored', num: true, render: (p) => count(p?.schoolsScored) },
-    { key: 'gap', header: 'No evidence', num: true, render: (p) => count(p?.schoolsWithEvidenceGap) },
-    {
-      key: 'median',
-      header: 'Median self-score',
-      num: true,
-      render: (p) =>
-        // NOT a zero. Nothing scored and "scored 1" are different facts.
-        p?.medianRubricScore == null ? (
-          <span className="text-ink2">Not scored</span>
-        ) : (
-          <span className="whitespace-nowrap">
-            {p.medianRubricScore}
-            <span className="text-ink2"> / 4</span>
-          </span>
-        ),
-    },
-    {
-      key: 'share',
-      header: 'Share of schools',
-      num: true,
-      render: (p) => (Number.isFinite(p?.sharePct) ? `${p.sharePct}%` : '—'),
-    },
-  ]
-  // Only when the breakdown exists (the viewer lens omits the key entirely).
-  if (priorities.some((p) => Array.isArray(p?.schools)))
-    columns.push({
-      key: 'open',
-      header: <span className="sr-only">Detail</span>,
-      headerClassName: 'dt-num',
-      className: 'dt-num',
-      render: (p) =>
-        Array.isArray(p?.schools) ? (
-          <button
-            type="button"
-            className="dt-link dt-actions whitespace-nowrap"
-            aria-expanded={openKey === priorityKey(p)}
-            aria-controls="portfolio-priority-detail"
-            onClick={() => onOpen(openKey === priorityKey(p) ? null : priorityKey(p))}
-          >
-            <Users size={13} aria-hidden="true" />
-            {openKey === priorityKey(p) ? 'Close' : `Schools (${p.schools.length})`}
-          </button>
-        ) : null,
-    })
+function PriorityTiles({ priorities, openKey, onOpen }) {
+  const hasBreakdown = priorities.some((p) => Array.isArray(p?.schools))
   return (
-    <DataTable
-      caption="Standards weak across the organization"
-      columns={columns}
-      rows={priorities}
-      rowKey={(p, i) => priorityKey(p) ?? i}
-      rowClassName={(p) => (openKey === priorityKey(p) ? 'dt-subtotal' : '')}
-      className="mt-3 [&_.dt]:min-w-[46rem]"
-    />
+    <AuroraTileGrid cols={3} className="pf-prio" data-testid="portfolio-priorities">
+      {priorities.map((p, i) => {
+        const key = priorityKey(p) ?? i
+        const on = openKey === priorityKey(p)
+        const kicker = [p?.code, p?.domainKey ? humanizeToken(p.domainKey) : null].filter(Boolean).join(' · ')
+        // NOT a zero. Nothing scored and "scored 1" are different facts.
+        const median = p?.medianRubricScore == null ? 'Not scored' : `Median ${p.medianRubricScore} / 4`
+        const facts = [
+          `${count(p?.schoolsScored)} scored`,
+          `${count(p?.schoolsWithEvidenceGap)} no proof`,
+          median,
+        ].join(' · ')
+        return (
+          <AuroraTile
+            key={key}
+            icon={Target}
+            art={false}
+            kicker={kicker || null}
+            title={p?.headline ?? p?.code ?? 'Standard'}
+            desc={p?.title ?? null}
+            className={on ? 'pf-prio-on' : ''}
+            foot={
+              hasBreakdown && Array.isArray(p?.schools) ? (
+                <button
+                  type="button"
+                  className="dt-link whitespace-nowrap"
+                  aria-expanded={on}
+                  aria-controls="portfolio-priority-detail"
+                  onClick={() => onOpen(on ? null : priorityKey(p))}
+                >
+                  <Users size={13} aria-hidden="true" />
+                  {on ? 'Close' : `Schools (${p.schools.length})`}
+                </button>
+              ) : null
+            }
+          >
+            <p className="pf-facts">{facts}</p>
+          </AuroraTile>
+        )
+      })}
+    </AuroraTileGrid>
   )
 }
 
@@ -131,7 +104,7 @@ function PriorityDetail({ priority, thresholdScore, canWrite, onPropose, onConfi
   const [adopting, setAdopting] = useState(false)
   const schools = Array.isArray(priority?.schools) ? priority.schools : []
   return (
-    <div id="portfolio-priority-detail" className="mt-4">
+    <div id="portfolio-priority-detail" className="au-card pf-card mt-4 min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hair pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
           {priority?.code ?? 'Standard'} · which schools ({schools.length})
@@ -186,16 +159,16 @@ export default function InterventionPriorities({
   const [openKey, setOpenKey] = useState(null)
   if (loading) {
     return (
-      <Section label="Intervention priorities">
-        <p className="text-[13.5px] text-ink2">Looking for standards weak across the diocese…</p>
-      </Section>
+      <AuroraSection id="priorities" icon={Target} title="Shared weak standards" subtitle="One workshop instead of nine projects">
+        <AuroraEmpty icon={Target} text="Looking for standards weak across the diocese…" aria-busy="true" />
+      </AuroraSection>
     )
   }
   if (error) {
     return (
-      <Section label="Intervention priorities">
-        <p className="text-[13.5px] text-ink2">{error}</p>
-      </Section>
+      <AuroraSection id="priorities" icon={Target} title="Shared weak standards" subtitle="One workshop instead of nine projects">
+        <AuroraEmpty icon={Target} text={error} />
+      </AuroraSection>
     )
   }
   if (!data) return null
@@ -216,38 +189,44 @@ export default function InterventionPriorities({
     openKey != null ? priorities.find((p) => priorityKey(p) === openKey && Array.isArray(p?.schools)) ?? null : null
 
   return (
-    <Section
+    <AuroraSection
+      id="priorities"
       aria-labelledby="portfolio-priorities"
-      label={<span id="portfolio-priorities">Intervention priorities</span>}
+      icon={Target}
+      title={<span id="portfolio-priorities">Shared weak standards</span>}
+      subtitle="One workshop instead of nine projects"
+      count={total !== null ? `${total} standard${total === 1 ? '' : 's'}` : null}
     >
-      <p className="max-w-prose text-[13px] leading-relaxed text-ink2">
-        Standards weak at enough schools to be worth one diocesan workshop rather than nine separate
-        school projects. Grouped by the shared catalog standard — never by a code a school can edit.
-        {threshold != null ? ` "Below the threshold" means a self-score at or under ${threshold}.` : ''}
+      {/* Grouped by the shared catalog standard — never by a code a school can
+          edit. The threshold is the server's. The section stands on tiles (no
+          card around a tile grid); the few facts about the list sit in one line. */}
+      <p className="pf-lead">
+        {threshold != null ? <>Below the threshold = self-scored {threshold} or under. </> : null}
+        {(Number.isFinite(data.schoolsConsidered) || Number.isFinite(data.schoolsWithFramework)) && (
+          <>
+            {Number.isFinite(data.schoolsWithFramework) ? data.schoolsWithFramework : '—'} of{' '}
+            {Number.isFinite(data.schoolsConsidered) ? data.schoolsConsidered : '—'} schools hold a framework to
+            measure.
+          </>
+        )}
       </p>
       {withheld && (
-        <p className="mt-1 text-[12.5px] font-semibold text-ink">
-          Showing the top {priorities.length} of {total}. {total - priorities.length} further
-          standard{total - priorities.length === 1 ? ' is' : 's are'} below the threshold
-          somewhere in this organization and {total - priorities.length === 1 ? 'is' : 'are'} not
-          listed here.
-        </p>
-      )}
-      {(Number.isFinite(data.schoolsConsidered) || Number.isFinite(data.schoolsWithFramework)) && (
-        <p className="mt-1 text-[12px] text-ink2">
-          {Number.isFinite(data.schoolsWithFramework) ? data.schoolsWithFramework : '—'} of{' '}
-          {Number.isFinite(data.schoolsConsidered) ? data.schoolsConsidered : '—'} schools hold a
-          framework this can be measured against.
+        <p className="pf-lead pf-lead-strong">
+          Showing the top {priorities.length} of {total}; {total - priorities.length} further
+          standard{total - priorities.length === 1 ? '' : 's'} below the threshold{' '}
+          {total - priorities.length === 1 ? 'is' : 'are'} not listed.
         </p>
       )}
 
       {priorities.length === 0 ? (
-        <div className="b1-empty mt-3">
-          <p>No standard is weak at enough schools to name a shared intervention.</p>
-        </div>
+        <AuroraEmpty
+          className="mt-3"
+          icon={Target}
+          text="No standard is weak at enough schools to name a shared intervention."
+        />
       ) : (
         <>
-          <PriorityTable priorities={priorities} openKey={openKey} onOpen={setOpenKey} />
+          <PriorityTiles priorities={priorities} openKey={openKey} onOpen={setOpenKey} />
           {opened ? (
             <PriorityDetail
               key={openKey}
@@ -262,15 +241,15 @@ export default function InterventionPriorities({
         </>
       )}
 
-      {notes.length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {notes.map((n, i) => (
-            <li key={i} className="text-[12.5px] leading-snug text-ink2">
-              {n}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
+      {/* The server's notes and the method, word for word, behind one closed
+          disclosure — delivered, not dropped, and off the main read. */}
+      <HowThisWorks inline className="mt-4" title="How these are picked">
+        <p>Standards weak at enough schools to be worth one diocesan workshop.</p>
+        {threshold != null ? <p>&quot;Below the threshold&quot; means a self-score at or under {threshold}.</p> : null}
+        {notes.map((n, i) => (
+          <p key={i}>{n}</p>
+        ))}
+      </HowThisWorks>
+    </AuroraSection>
   )
 }

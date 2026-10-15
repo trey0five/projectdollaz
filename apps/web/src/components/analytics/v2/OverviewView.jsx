@@ -15,35 +15,19 @@
 // switches.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { formatMetricValue, deltaTone } from '../../../lib/metricMeta.js'
+import { formatMetricValue } from '../../../lib/metricMeta.js'
 import { schoolColor } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import ColumnChart from '../charts/ColumnChart.jsx'
 import FancyDonut from '../charts/FancyDonut.jsx'
 import Legend from '../charts/Legend.jsx'
-import Sparkline from '../charts/Sparkline.jsx'
 import ChartCard from './ChartCard.jsx'
-import { lightStatus, DELTA_TONE, MARK } from './statusStyle.js'
-import { formatMetric, formatMetricDeltaOf, foldMixComponents, metricFormat } from './helpers.js'
-import { Section, StatStrip, Stat, DataTable, Pill } from '../../ui/surface/index.js'
-
-const SCHOOL_KPI_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency']
+import { MARK } from './statusStyle.js'
+import { formatMetric, formatMetricDeltaOf, foldMixComponents } from './helpers.js'
+import { Building2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { AuroraSection, AuroraTile, AuroraTileGrid, verdictCountLabel } from '../../ui/aurora/index.js'
 
 const money = (v) => formatMetricValue(v, 'currency')
-
-/** A MetricResult → the Stat props (value parity: number + canonical format). */
-function statPropsOf(metric) {
-  const deltaText = formatMetricDeltaOf(metric)
-  const tone = DELTA_TONE[deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)] ?? 'neutral'
-  const numeric = typeof metric.value === 'number' && Number.isFinite(metric.value)
-  return {
-    label: metric.label,
-    value: numeric ? metric.value : formatMetric(metric),
-    format: numeric ? metricFormat(metric.key, metric.unit) : undefined,
-    status: MARK[metric.status],
-    delta: deltaText ? { text: deltaText, tone } : null,
-  }
-}
 
 /** Composition as a BAR LIST (the dataviz "magnitude" form) with the total as a
     headline. School revenue is heavily skewed (tuition ≈ 87%), which turns a
@@ -89,87 +73,67 @@ function trendSeries(schools, bySchool) {
   return { series, labels }
 }
 
-const CHANGE_COLUMNS = [
-  { key: 'label', header: 'Metric', render: (m) => <span className="font-semibold text-ink">{m.label}</span> },
-  { key: 'now', header: 'Now', num: true, render: (m) => formatMetric(m) },
-  {
-    key: 'change',
-    header: 'Change',
-    num: true,
-    render: (m) => (
-      <Pill variant="status" tone={DELTA_TONE[deltaTone(m.periodOverPeriodDelta, m.goodDirection)] ?? 'neutral'}>
-        {formatMetricDeltaOf(m)}
-      </Pill>
-    ),
-  },
-]
-
 function SchoolOverview({ school }) {
   const m = school.metricsByKey
   const cashTrend = school.sparkTrends?.days_cash_on_hand
   const callouts = useMemo(
     () =>
       (school.metrics || [])
-        .filter((x) => x.available && x.periodOverPeriodDelta != null && x.status && x.status !== 'neutral')
+        .filter((x) => x.available && x.periodOverPeriodDelta != null && x.periodOverPeriodDelta !== 0 && x.status && x.status !== 'neutral')
         .sort((a, b) => Math.abs(b.periodOverPeriodDelta) - Math.abs(a.periodOverPeriodDelta))
         .slice(0, 3),
     [school.metrics],
   )
-  const kpis = SCHOOL_KPI_KEYS.filter((k) => m[k])
+  // The four vitals live on the band (AnalyticsV2) — here: what moved, then
+  // the two charts.
   return (
     <div>
-      <Section label="School vitals" aside={school.asOf} className="!mt-0" aria-label="School vitals">
-        {kpis.length ? (
-          <StatStrip cols={kpis.length}>
-            {kpis.map((k) => {
-              const metric = m[k]
-              const spark = (school.sparkTrends?.[k]?.points ?? []).map((p) => p.value).filter((v) => Number.isFinite(v))
+      {callouts.length > 0 && (
+        <AuroraSection
+          first
+          icon={Sparkles}
+          title="What changed"
+          subtitle="The biggest moves since last year"
+          count={verdictCountLabel(callouts.map((c) => c.status))}
+        >
+          <AuroraTileGrid cols={Math.max(2, callouts.length)}>
+            {callouts.map((c) => {
+              const delta = formatMetricDeltaOf(c)
               return (
-                <Stat key={`${k}:${school.periodId}`} {...statPropsOf(metric)}>
-                  {spark.length >= 2 ? (
-                    <div className="mt-2 h-8">
-                      <Sparkline vals={spark} color={lightStatus(metric.status).dot} h={32} fill stretch />
-                    </div>
-                  ) : null}
-                </Stat>
+                <AuroraTile
+                  key={c.key}
+                  icon={c.periodOverPeriodDelta >= 0 ? TrendingUp : TrendingDown}
+                  title={c.label}
+                  figure={formatMetric(c)}
+                  desc={delta ? `${delta} since last year` : null}
+                  verdict={c.status}
+                />
               )
             })}
-          </StatStrip>
-        ) : (
-          <p className="py-6 text-small italic text-ink2">No vitals for this period yet.</p>
-        )}
-      </Section>
-
-      {/* Asymmetric split: donut 1/3 · days-cash area 2/3 — both on the ground. */}
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <ChartCard title="Where the money comes from" sub="Revenue mix" asOf={school.asOf} delay={0.06}>
-          <MixBars metric={m.revenue_mix} />
-        </ChartCard>
-        <ChartCard title="Days cash on hand" sub="Liquidity across your saved periods" asOf={school.asOf} delay={0.12} className="lg:col-span-2">
-          {cashTrend?.points?.length >= 2 ? (
-            <LineChart
-              series={[{ id: 'cash', label: 'Days cash', color: schoolColor(0), vals: cashTrend.points.map((p) => p.value ?? 0) }]}
-              labels={cashTrend.points.map((p) => p.label)}
-              area
-              formatter={(v) => Math.round(v).toLocaleString()}
-            />
-          ) : (
-            <p className="py-8 text-center text-small italic text-ink2">Not enough history yet.</p>
-          )}
-        </ChartCard>
-      </div>
-
-      {callouts.length > 0 && (
-        <Section label="What changed" aside="largest moves vs. the prior period">
-          <DataTable
-            columns={CHANGE_COLUMNS}
-            rows={callouts}
-            rowKey="key"
-            markOf={(r) => MARK[r.status] ?? null}
-            caption="What changed since the prior period"
-          />
-        </Section>
+          </AuroraTileGrid>
+        </AuroraSection>
       )}
+
+      <AuroraSection first={!callouts.length} icon={Wallet} title="Money and cash" subtitle="Where income comes from, and days of cash" count={school.asOf}>
+        {/* Asymmetric split: donut 1/3 · days-cash area 2/3. */}
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+          <ChartCard title="Where the money comes from" sub="Revenue mix" delay={0.06}>
+            <MixBars metric={m.revenue_mix} />
+          </ChartCard>
+          <ChartCard title="Days cash on hand" sub="Across your saved years" delay={0.12} className="lg:col-span-2">
+            {cashTrend?.points?.length >= 2 ? (
+              <LineChart
+                series={[{ id: 'cash', label: 'Days cash', color: schoolColor(0), vals: cashTrend.points.map((p) => p.value ?? 0) }]}
+                labels={cashTrend.points.map((p) => p.label)}
+                area
+                formatter={(v) => Math.round(v).toLocaleString()}
+              />
+            ) : (
+              <p className="py-8 text-center text-small italic text-ink2">Not enough history yet.</p>
+            )}
+          </ChartCard>
+        </div>
+      </AuroraSection>
     </div>
   )
 }
@@ -190,16 +154,24 @@ function CompareOverview({ compare }) {
   return (
     <div>
       {leaders.length > 0 && (
-        <Section label="Liquidity leaders" aside={compare.asOf} className="!mt-0">
-          <StatStrip cols={leaders.length}>
+        <AuroraSection first icon={Wallet} title="Cash, best and worst" subtitle="Days of cash across the schools" count={compare.asOf}>
+          <AuroraTileGrid cols={2}>
             {leaders.map((l) => (
-              <Stat key={l.key} label={l.label} value={l.cell.formatted ?? '—'} status={MARK[l.cell.status]} note={l.note} />
+              <AuroraTile
+                key={l.key}
+                icon={l.key === 'best' ? TrendingUp : TrendingDown}
+                title={l.label}
+                figure={l.cell.formatted ?? '—'}
+                unit="days"
+                desc={l.note}
+                verdict={MARK[l.cell.status] ? l.cell.status : null}
+              />
             ))}
-          </StatStrip>
-        </Section>
+          </AuroraTileGrid>
+        </AuroraSection>
       )}
-      <div className="mt-8">
-        <ChartCard title="Days cash on hand, by school" sub="Every selected school — hover a name to spotlight it" asOf={compare.asOf} delay={0.06}>
+      <AuroraSection first={!leaders.length} icon={Building2} title="Days of cash, by school" subtitle="Hover a name to spotlight it">
+        <ChartCard title="Days cash on hand, by school" sub="Every selected school" asOf={compare.asOf} delay={0.06}>
           <Legend items={series.map((s) => ({ id: s.id, label: s.label, color: s.color }))} onSpotlight={setSpotlight} />
           {series.length ? (
             <LineChart series={series} labels={labels} spotlightId={spotlight} formatter={(v) => Math.round(v).toLocaleString()} />
@@ -207,7 +179,7 @@ function CompareOverview({ compare }) {
             <p className="py-8 text-center text-small italic text-ink2">No trend history for the selected schools.</p>
           )}
         </ChartCard>
-      </div>
+      </AuroraSection>
     </div>
   )
 }
@@ -239,28 +211,17 @@ function OrgOverview({ org }) {
       ...r,
       meta: contribTotal > 0 ? [{ label: 'Share of system', value: `${Math.round((100 * r.value) / contribTotal)}%` }] : [],
     }))
-  const margin = orgByKey.operating_margin
-  const cash = orgByKey.days_cash_on_hand
+  // The system figures (schools, margin, days cash) live on the band.
   return (
-    <div>
-      <Section label="System vitals" aside={org.asOf} className="!mt-0">
-        <StatStrip cols={4}>
-          <Stat label="Schools" value={om?.schoolCount ?? '—'} note={`${om?.reportedCount ?? 0} reporting this year`} />
-          <Stat label="Coverage" value={om ? `${om.reportedCount}/${om.schoolCount}` : '—'} note="Schools with a saved FY" />
-          <Stat label="System operating margin" value={margin ? formatMetric(margin) : '—'} status={MARK[margin?.status]} />
-          <Stat label="System days cash" value={cash ? formatMetric(cash) : '—'} status={MARK[cash?.status]} />
-        </StatStrip>
-      </Section>
-      <div className="mt-8">
-        <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" asOf={org.asOf} delay={0.06}>
-          {rows.length ? (
-            <ColumnChart rows={rows} formatter={money} ariaLabel="Revenue by school, largest first" showValues="selective" />
-          ) : (
-            <p className="py-8 text-center text-small italic text-ink2">No revenue reported yet.</p>
-          )}
-        </ChartCard>
-      </div>
-    </div>
+    <AuroraSection first icon={Building2} title="Revenue by school" subtitle="Who drives the system’s income" count={org.asOf}>
+      <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" delay={0.06}>
+        {rows.length ? (
+          <ColumnChart rows={rows} formatter={money} ariaLabel="Revenue by school, largest first" showValues="selective" />
+        ) : (
+          <p className="py-8 text-center text-small italic text-ink2">No revenue reported yet.</p>
+        )}
+      </ChartCard>
+    </AuroraSection>
   )
 }
 

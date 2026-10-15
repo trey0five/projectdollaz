@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { TrendingUp, Clock } from 'lucide-react'
+import { TrendingUp, Clock, Users, ArrowDownLeft, ArrowUpRight, Scale, Table2 } from 'lucide-react'
 import {
   REVENUE_LINE_KEYS,
   EXPENSE_LINE_KEYS,
@@ -25,7 +25,9 @@ import {
 } from '@finrep/analytics'
 import { useForecast } from '../../hooks/useAnalytics.js'
 import { useBilling } from '../../context/BillingContext.jsx'
-import { PageHeader, StatStrip, Stat, Section, Pill, Button } from '../ui/surface/index.js'
+import { AuroraButton, AuroraEmpty, AuroraSection, HowThisWorks, VerdictEm } from '../ui/aurora/index.js'
+import { FinanceSubBand } from '../statements/financeSub.jsx'
+import { moneyShort } from '../finance/financeAurora.js'
 import '../../styles/pending/b2-finance.css'
 
 // ── Where "enter the forecast" actually goes ─────────────────────────────────
@@ -146,8 +148,11 @@ export default function ForecastView({ schoolId, periodId }) {
   // (a) Loading note (mirrors ForecastWorkspace).
   if (loading) {
     return (
-      <div className="b2-note" aria-busy="true">
-        <p>Loading the forecast…</p>
+      <div>
+        <FinanceSubBand eyebrow="Fiscal-year-end forecast" title="FYE Forecast" verdict="Opening the forecast…" />
+        <div className="mt-8" aria-busy="true">
+          <AuroraEmpty icon={TrendingUp} text="Loading the forecast…" />
+        </div>
       </div>
     )
   }
@@ -157,21 +162,26 @@ export default function ForecastView({ schoolId, periodId }) {
   if (!forecast) {
     return (
       <div>
-      <PageHeader eyebrow="Reports · FYE forecast" title="Fiscal-year-end forecast" hue="37 99 235" />
-      <div className="b2-note mt-8">
-        <TrendingUp size={22} aria-hidden="true" className="mx-auto text-ink2" />
-        <p className="b2-note-title">No forecast saved yet for this period.</p>
-        <p className="mx-auto max-w-md">
-          {hasModule('planning')
-            ? 'Project where the year lands — revise your driver assumptions and add anticipated feeder enrollment in Planning & Forecasting. The saved forecast appears here and flows into your board packet.'
-            : 'Projecting where the year lands — driver assumptions and anticipated feeder enrollment — is part of the Planning & Forecasting add-on. Once it is on your plan, the saved forecast appears here and flows into your board packet.'}
-        </p>
-        <div className="pt-2">
-          <Button variant="primary" to={entry.to}>
-            {entry.label}
-          </Button>
+        <FinanceSubBand
+          eyebrow="Fiscal-year-end forecast"
+          title="FYE Forecast"
+          verdict={<>No forecast is saved for this year yet.</>}
+          actions={
+            <AuroraButton variant="primary" to={entry.to} icon={<TrendingUp size={19} aria-hidden="true" />}>
+              {entry.label}
+            </AuroraButton>
+          }
+        />
+        <div className="mt-8">
+          <AuroraEmpty
+            icon={TrendingUp}
+            text={
+              hasModule('planning')
+                ? 'Save a forecast in Planning & Forecasting and it shows here.'
+                : 'Projecting the year-end is part of the Planning & Forecasting add-on.'
+            }
+          />
         </div>
-      </div>
       </div>
     )
   }
@@ -208,18 +218,30 @@ export default function ForecastView({ schoolId, periodId }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <PageHeader
-        eyebrow="Reports · FYE forecast"
-        title="Fiscal-year-end forecast"
-        meta={
-          isRollforward
-            ? 'This year’s roster rolled forward a grade with retention plus new entrants — where the year lands compared to the budget you set.'
-            : 'Revised assumptions and anticipated feeder enrollment — where the year lands compared to the budget you set.'
+      <FinanceSubBand
+        eyebrow="Fiscal-year-end forecast"
+        title="FYE Forecast"
+        verdict={
+          Number.isFinite(kpis.netIncome) ? (
+            <>
+              The year is forecast to end with a{' '}
+              <VerdictEm tone={kpis.netIncome >= 0 ? null : 'risk'}>
+                {money(Math.abs(kpis.netIncome))} {kpis.netIncome >= 0 ? 'surplus' : 'deficit'}
+              </VerdictEm>
+              .
+            </>
+          ) : (
+            <>Where the year is likely to land, from your saved assumptions.</>
+          )
         }
-        hue="37 99 235"
         actions={
+          <AuroraButton variant="primary" to={entry.to} icon={<TrendingUp size={19} aria-hidden="true" />}>
+            {hasModule('planning') ? 'Revise the forecast' : 'Add Planning & Forecasting'}
+          </AuroraButton>
+        }
+        tools={
           savedAt ? (
-            <Pill>
+            <span className="pill">
               <Clock size={11} aria-hidden="true" /> Saved{' '}
               {new Date(savedAt).toLocaleString('en-US', {
                 month: 'short',
@@ -227,106 +249,114 @@ export default function ForecastView({ schoolId, periodId }) {
                 hour: 'numeric',
                 minute: '2-digit',
               })}
-            </Pill>
+            </span>
           ) : null
         }
+        kpis={[
+          {
+            key: 'students',
+            icon: Users,
+            label: 'Projected students',
+            value: Number.isFinite(kpis.enrollmentTotal) ? kpis.enrollmentTotal.toLocaleString('en-US') : null,
+            caption: isRollforward ? 'Roster rolled forward + new' : 'Base enrollment + feeder',
+          },
+          { key: 'rev', icon: ArrowDownLeft, label: 'Forecast revenue', value: moneyShort(kpis.totalRevenue ?? null), caption: 'Total projected income' },
+          { key: 'exp', icon: ArrowUpRight, label: 'Forecast expense', value: moneyShort(kpis.totalExpense ?? null), caption: 'Total projected spending' },
+          {
+            key: 'net',
+            icon: Scale,
+            label: 'Net surplus / (deficit)',
+            value: Number.isFinite(kpis.netIncome) ? signed(kpis.netIncome) : null,
+            caption: 'Revenue minus expense',
+            // A SIGN, not a band.
+            verdict: Number.isFinite(kpis.netIncome) ? (kpis.netIncome >= 0 ? 'good' : 'risk') : null,
+            verdictLabel: Number.isFinite(kpis.netIncome) ? (kpis.netIncome >= 0 ? 'Surplus' : 'Deficit') : null,
+          },
+        ]}
       />
 
-      {/* The headline figures */}
-      <StatStrip cols={4}>
-        <Stat
-          label="Projected students"
-          value={kpis.enrollmentTotal ?? 0}
-          title={isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder'}
-        />
-        <Stat label="Forecast revenue" value={kpis.totalRevenue ?? null} format="currency" title="Total projected revenue" />
-        <Stat label="Forecast expense" value={kpis.totalExpense ?? null} format="currency" title="Total projected expense" />
-        <Stat
-          label="Net surplus / (deficit)"
-          value={signed(kpis.netIncome)}
-          status={(kpis.netIncome ?? 0) >= 0 ? 'good' : 'risk'}
-          title="Forecast revenue − expense"
-        />
-      </StatStrip>
-
       {/* Variance table (read-only) */}
-      <Section label="Forecast vs. budget">
-        <p className="mb-3 text-small text-ink2">
-          Where the year lands under the saved assumptions, compared to the active budget.
-        </p>
-        <div className="dt-wrap">
-          <table className="dt">
-            <thead>
-              <tr>
-                <th scope="col">Line</th>
-                <th scope="col" className="dt-num">Forecast</th>
-                <th scope="col" className="dt-num">Budget</th>
-                <th scope="col" className="dt-num">Variance</th>
-                <th scope="col" className="dt-num">%</th>
-                <th scope="col">Comment</th>
-              </tr>
-            </thead>
-            <tbody>
-              <GroupHeader title="Revenue" />
-              {REVENUE_LINE_KEYS.map((key) => (
-                <ForecastRow
-                  key={`rev-${key}`}
+      <AuroraSection first icon={Table2} title="Forecast vs. budget" subtitle="Line by line, against your budget">
+        <div className="au-card au-card-flat au-register">
+          <div className="dt-wrap">
+            <table className="dt">
+              <thead>
+                <tr>
+                  <th scope="col">Line</th>
+                  <th scope="col" className="dt-num">Forecast</th>
+                  <th scope="col" className="dt-num">Budget</th>
+                  <th scope="col" className="dt-num">Variance</th>
+                  <th scope="col" className="dt-num">%</th>
+                  <th scope="col">Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                <GroupHeader title="Revenue" />
+                {REVENUE_LINE_KEYS.map((key) => (
+                  <ForecastRow
+                    key={`rev-${key}`}
+                    kind="revenue"
+                    label={REVENUE_LINE_LABELS[key] ?? key}
+                    forecast={projectedRevenue[key]}
+                    budget={hasBaseBudget ? baseRevenue[key] ?? 0 : null}
+                    variance={varRevenue[key] ?? 0}
+                    explanation={explanations?.revenue?.[key]}
+                  />
+                ))}
+                <TotalRow
                   kind="revenue"
-                  label={REVENUE_LINE_LABELS[key] ?? key}
-                  forecast={projectedRevenue[key]}
-                  budget={hasBaseBudget ? baseRevenue[key] ?? 0 : null}
-                  variance={varRevenue[key] ?? 0}
-                  explanation={explanations?.revenue?.[key]}
+                  label="Total revenue"
+                  forecast={revForecastTotal}
+                  budget={hasBaseBudget ? revBudgetTotal : null}
+                  variance={revVarTotal}
                 />
-              ))}
-              <TotalRow
-                kind="revenue"
-                label="Total revenue"
-                forecast={revForecastTotal}
-                budget={hasBaseBudget ? revBudgetTotal : null}
-                variance={revVarTotal}
-              />
 
-              <GroupHeader title="Expenses" />
-              {EXPENSE_LINE_KEYS.map((key) => (
-                <ForecastRow
-                  key={`exp-${key}`}
+                <GroupHeader title="Expenses" />
+                {EXPENSE_LINE_KEYS.map((key) => (
+                  <ForecastRow
+                    key={`exp-${key}`}
+                    kind="expense"
+                    label={EXPENSE_LINE_LABELS[key] ?? key}
+                    forecast={projectedExpense[key]}
+                    budget={hasBaseBudget ? baseExpense[key] ?? 0 : null}
+                    variance={varExpense[key] ?? 0}
+                    explanation={explanations?.expense?.[key]}
+                  />
+                ))}
+                <TotalRow
                   kind="expense"
-                  label={EXPENSE_LINE_LABELS[key] ?? key}
-                  forecast={projectedExpense[key]}
-                  budget={hasBaseBudget ? baseExpense[key] ?? 0 : null}
-                  variance={varExpense[key] ?? 0}
-                  explanation={explanations?.expense?.[key]}
+                  label="Total expenses"
+                  forecast={expForecastTotal}
+                  budget={hasBaseBudget ? expBudgetTotal : null}
+                  variance={expVarTotal}
                 />
-              ))}
-              <TotalRow
-                kind="expense"
-                label="Total expenses"
-                forecast={expForecastTotal}
-                budget={hasBaseBudget ? expBudgetTotal : null}
-                variance={expVarTotal}
-              />
 
-              <TotalRow
-                net
-                label="Net surplus / (deficit)"
-                forecast={revForecastTotal - expForecastTotal}
-                budget={hasBaseBudget ? revBudgetTotal - expBudgetTotal : null}
-                variance={revVarTotal - expVarTotal}
-              />
-            </tbody>
-          </table>
+                <TotalRow
+                  net
+                  label="Net surplus / (deficit)"
+                  forecast={revForecastTotal - expForecastTotal}
+                  budget={hasBaseBudget ? revBudgetTotal - expBudgetTotal : null}
+                  variance={revVarTotal - expVarTotal}
+                />
+              </tbody>
+            </table>
+          </div>
         </div>
-      </Section>
+      </AuroraSection>
 
-      <p className="sec-note">
-        To revise the forecast,{' '}
-        <Link to={entry.to} className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
-          {hasModule('planning')
-            ? 'open Planning & Forecasting →'
-            : 'add Planning & Forecasting to your plan →'}
-        </Link>
-      </p>
+      <HowThisWorks>
+        <p>
+          {isRollforward
+            ? 'This year’s roster is rolled forward a grade with retention plus new entrants, then compared with the budget you set.'
+            : 'Your revised assumptions and expected feeder enrollment, compared with the budget you set.'}
+        </p>
+        <p>
+          The forecast is entered in Planning &amp; Forecasting and only shown here.{' '}
+          <Link to={entry.to} className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
+            {hasModule('planning') ? 'Open Planning & Forecasting →' : 'Add Planning & Forecasting to your plan →'}
+          </Link>
+        </p>
+      </HowThisWorks>
     </motion.div>
   )
 }

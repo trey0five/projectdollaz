@@ -31,10 +31,13 @@ import {
   Clock,
   FileText,
   FileWarning,
+  FileSignature,
   Printer,
   ScrollText,
   UserRound,
   Users,
+  Users2,
+  CreditCard,
 } from 'lucide-react'
 import EntityFormModal, {
   Field,
@@ -44,9 +47,10 @@ import EntityFormModal, {
 } from '../components/ui/EntityFormModal.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
-import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainCommandCenter, { DomainStatePanel } from '../components/domain/DomainCommandCenter.jsx'
+import { AuroraButton, VerdictEm } from '../components/ui/aurora/index.js'
+import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -56,7 +60,7 @@ import { usePolicies } from '../hooks/usePolicies.js'
 import { useCommittees } from '../hooks/useCommittees.js'
 import { useMeetings } from '../hooks/useMeetings.js'
 import { usePeople } from '../hooks/usePeople.js'
-import { PageHeader, DataTable, Toolbar, Pill, Button } from '../components/ui/surface/index.js'
+import { DataTable, Toolbar, Pill } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 import PersonFormModal from '../components/governance/PersonFormModal.jsx'
 import PersonDetailPanel from '../components/governance/PersonDetailPanel.jsx'
@@ -74,21 +78,33 @@ const COMMITTEE_KINDS = ['board', 'finance', 'governance', 'advancement', 'acade
 const MEETING_STATUSES = ['scheduled', 'held', 'cancelled']
 const MINUTES_STATUSES = ['none', 'draft', 'pending_approval', 'approved']
 
-// ── Light-theme entitlement / license gate ───────────────────────────────────
+// ── Entitlement / license gate: the Aurora band + one line + one button ─────
 function GatePanel({ notLicensed }) {
+  const { activeSchool } = useSchools()
+  const isOwner = activeSchool?.role === 'owner'
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <PageHeader
-        eyebrow="Governance"
-        title={notLicensed ? 'Governance isn\u2019t on your plan yet' : 'Your subscription is paused'}
-        meta={
-          notLicensed
-            ? 'Add the Governance module to track board policies, committees, and meetings, and land its slice of the briefing here.'
-            : 'Resume your plan to manage governance records.'
-        }
-      />
-    </div>
+    <DomainStatePanel
+      showBack
+      moduleKey="governance"
+      title="Governance"
+      Icon={Landmark}
+      icon={Landmark}
+      verdict={notLicensed ? 'Governance isn\u2019t on your plan yet.' : 'Your subscription is paused.'}
+      primaryAction={
+        <AuroraButton
+          variant="primary"
+          to={isOwner ? '/settings/billing' : '/settings'}
+          icon={<CreditCard size={19} aria-hidden="true" />}
+        >
+          {notLicensed ? 'See plans' : 'Resume your plan'}
+        </AuroraButton>
+      }
+      text={
+        notLicensed
+          ? 'Add Governance to track your board, meetings and policies.'
+          : 'Resume your plan to manage governance records.'
+      }
+    />
   )
 }
 
@@ -506,7 +522,7 @@ function PoliciesTable({ policies, loading, error, canEdit, onEdit, onDelete, on
   if (error) return <StateRow error>{error}</StateRow>
   if (policies.length === 0)
     return (
-      <StateRow title="No policies yet">Add your first policy to start tracking review cycles.</StateRow>
+      <RegisterEmpty icon={ScrollText} text="No policies yet." sub="Add one to track its review dates." actionLabel="Add a policy" />
     )
 
   const columns = [
@@ -612,9 +628,12 @@ function PeopleTable({ people, loading, error, filter, onFilter, canEdit, onOpen
     return (
       <>
         {toolbar}
-        <StateRow title="No people yet">
-          Add your board members and finance team to track terms, committees, and credentials.
-        </StateRow>
+        <RegisterEmpty
+          icon={UserRound}
+          text="No people yet."
+          sub="Add your board and finance team."
+          actionLabel="Add a person"
+        />
       </>
     )
 
@@ -708,7 +727,7 @@ function CommitteesTable({ committees, loading, error, canEdit, onEdit, onDelete
   if (loading) return <StateRow>Loading committees…</StateRow>
   if (error) return <StateRow error>{error}</StateRow>
   if (committees.length === 0)
-    return <StateRow title="No committees yet">Add a committee to organize your meetings.</StateRow>
+    return <RegisterEmpty icon={Users2} text="No committees yet." actionLabel="Add a committee" />
 
   const colCount = canEdit ? 6 : 5
 
@@ -798,7 +817,9 @@ function MeetingsTable({ meetings, loading, error, canEdit, onEdit, onDelete, on
   if (loading) return <StateRow>Loading meetings…</StateRow>
   if (error) return <StateRow error>{error}</StateRow>
   if (meetings.length === 0)
-    return <StateRow title="No meetings yet">Schedule a meeting to track its agenda and minutes.</StateRow>
+    return (
+      <RegisterEmpty icon={CalendarClock} text="No meetings yet." sub="Track agendas and minutes here." actionLabel="Add a meeting" />
+    )
 
   const columns = [
     { key: 'title', header: 'Meeting', sortable: true, render: (m) => <span className="font-semibold">{m.title}</span> },
@@ -995,9 +1016,12 @@ function GovernanceWorkspace() {
     const dueSoon = policies.filter((p) => p.reviewStatus === 'due-soon').length
     const flagged = overdue + dueSoon
     const policiesKpi = {
-      label: 'Policies past review',
-      value: `${flagged}/${total}`,
-      status: overdue > 0 ? 'risk' : dueSoon > 0 ? 'watch' : 'good',
+      label: 'Policies to review',
+      icon: ScrollText,
+      value: String(flagged),
+      unit: total > 0 ? `of ${total}` : null,
+      // No policies yet → no verdict (a 0/0 is not "Good").
+      status: overdue > 0 ? 'risk' : dueSoon > 0 ? 'watch' : total === 0 ? 'neutral' : 'good',
       sub:
         overdue > 0
           ? { icon: TrendingDown, text: `${overdue} overdue`, tone: 'bad' }
@@ -1010,9 +1034,11 @@ function GovernanceWorkspace() {
     const pending = summary.minutesPendingCount ?? 0
     const minutesOverdue = summary.minutesOverdueCount ?? 0
     const minutesKpi = {
-      label: 'Minutes awaiting sign-off',
+      label: 'Minutes to sign off',
+      icon: FileSignature,
       value: minutesOverdue > 0 ? `${pending} · ${minutesOverdue} overdue` : String(pending),
-      status: minutesOverdue > 0 ? 'risk' : pending > 0 ? 'watch' : 'good',
+      // No meetings on record → nothing to sign off, so no verdict.
+      status: minutesOverdue > 0 ? 'risk' : pending > 0 ? 'watch' : meetings.length === 0 ? 'neutral' : 'good',
       sub:
         minutesOverdue > 0
           ? { icon: AlertTriangle, text: `${minutesOverdue} overdue`, tone: 'bad' }
@@ -1026,8 +1052,9 @@ function GovernanceWorkspace() {
     const noChair = active.filter((c) => !effectiveChair(c).name).length
     const committeesKpi = {
       label: 'Committees',
+      icon: Users2,
       value: String(active.length),
-      status: noChair > 0 ? 'watch' : 'good',
+      status: noChair > 0 ? 'watch' : active.length === 0 ? 'neutral' : 'good',
       sub:
         noChair > 0
           ? { icon: AlertTriangle, text: `${noChair} without a chair`, tone: 'neutral' }
@@ -1039,6 +1066,7 @@ function GovernanceWorkspace() {
     const boardPeople = activePeople.filter((p) => p.groups?.includes('board'))
     const boardKpi = {
       label: 'Board members',
+      icon: Users,
       value: String(boardPeople.length),
       status: boardPeople.length > 0 ? 'good' : 'neutral',
       sub:
@@ -1050,22 +1078,25 @@ function GovernanceWorkspace() {
     const expiredTerms = boardPeople.filter((p) => termStatusOf(p) === 'expired').length
     const expiringTerms = boardPeople.filter((p) => termStatusOf(p) === 'expiring_90d').length
     const termsKpi = {
-      label: 'Terms expiring (90d)',
+      label: 'Terms ending soon',
+      icon: CalendarRange,
       value: expiredTerms > 0 ? `${expiringTerms} · ${expiredTerms} expired` : String(expiringTerms),
-      status: expiredTerms > 0 ? 'risk' : expiringTerms > 0 ? 'watch' : 'good',
+      status: expiredTerms > 0 ? 'risk' : expiringTerms > 0 ? 'watch' : boardPeople.length === 0 ? 'neutral' : 'good',
       sub:
         expiredTerms > 0
           ? { icon: AlertTriangle, text: `${expiredTerms} already expired`, tone: 'bad' }
           : expiringTerms > 0
             ? { icon: CalendarRange, text: 'renewals to plan', tone: 'neutral' }
-            : { icon: Check, text: 'no terms at risk', tone: 'good' },
+            : { icon: Check, text: 'none in the next 90 days', tone: 'good' },
     }
 
     const financePeople = activePeople.filter((p) => p.groups?.includes('finance_team'))
     const withDocs = financePeople.filter((p) => (p.documentCount ?? 0) > 0).length
     const credentialsKpi = {
-      label: 'Finance credentials on file',
-      value: `${withDocs}/${financePeople.length}`,
+      label: 'Finance team credentials',
+      icon: FileText,
+      value: String(withDocs),
+      unit: financePeople.length > 0 ? `of ${financePeople.length}` : null,
       status:
         financePeople.length === 0
           ? 'neutral'
@@ -1093,10 +1124,12 @@ function GovernanceWorkspace() {
     const noAgenda = nextMeeting ? nextMeeting.agendaMissing : false
     const nextKpi = {
       label: 'Next meeting',
-      value: nextIso ? (shortDate(nextIso) ?? '—') : 'None scheduled',
-      status: !nextIso ? 'good' : noAgenda ? 'watch' : 'good',
+      icon: CalendarClock,
+      value: nextIso ? (shortDate(nextIso) ?? '—') : '—',
+      // Nothing scheduled is a fact, not a verdict.
+      status: !nextIso ? 'neutral' : noAgenda ? 'watch' : 'good',
       sub: !nextIso
-        ? { icon: CalendarClock, text: 'nothing on the calendar', tone: 'neutral' }
+        ? { icon: CalendarClock, text: 'none scheduled', tone: 'neutral' }
         : noAgenda
           ? {
               icon: FileWarning,
@@ -1110,7 +1143,9 @@ function GovernanceWorkspace() {
             },
     }
 
-    return [boardKpi, termsKpi, credentialsKpi, policiesKpi, minutesKpi, committeesKpi, nextKpi]
+    // The first four are the band's glass cards (what needs a decision, then
+    // the board itself); the rest ride as the band's small "more figures" chips.
+    return [policiesKpi, minutesKpi, boardKpi, nextKpi, termsKpi, committeesKpi, credentialsKpi]
   }, [policies, committees, meetings, summary, people])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
@@ -1128,8 +1163,8 @@ function GovernanceWorkspace() {
         sortKey: m.minutesOverdue ? 0 : 2,
         title: `${m.title} minutes await sign-off`,
         why: m.minutesOverdue
-          ? 'You are the current approver · past the sign-off SLA'
-          : 'You are the current approver · awaiting your approval',
+          ? 'Past the sign-off deadline. You are the approver.'
+          : 'Waiting for your approval.',
         actions:
           canEdit && m.minutesStatus === 'pending_approval'
             ? [
@@ -1152,7 +1187,7 @@ function GovernanceWorkspace() {
         tone: 'watch',
         sortKey: 1,
         title: `${m.committeeName ?? m.title} needs an agenda`,
-        why: days != null ? `Meets in ${days} day${days === 1 ? '' : 's'} · no agenda posted` : 'No agenda posted',
+        why: days != null ? `Meets in ${days} day${days === 1 ? '' : 's'}, no agenda yet.` : 'No agenda yet.',
         actions: canEdit
           ? [{ label: 'Draft agenda', primary: false, onClick: () => openEdit('meeting', m) }]
           : [],
@@ -1168,7 +1203,7 @@ function GovernanceWorkspace() {
         tone: 'risk',
         sortKey: 0,
         title: `${p.title} review`,
-        why: days != null ? `${days} day${days === 1 ? '' : 's'} overdue on its annual cycle` : 'Overdue on its review cycle',
+        why: days != null ? `${days} day${days === 1 ? '' : 's'} past its review date.` : 'Past its review date.',
         actions: [
           {
             label: 'Review',
@@ -1196,8 +1231,8 @@ function GovernanceWorkspace() {
           status === 'expired' ? `${p.name}'s board term has expired` : `${p.name}'s term expires soon`,
         why:
           status === 'expired'
-            ? `Term ended ${shortDate(end) ?? end} · reappoint or retire the seat`
-            : `Term ends ${shortDate(end) ?? end} · plan the renewal`,
+            ? `Ended ${shortDate(end) ?? end}. Reappoint or retire the seat.`
+            : `Ends ${shortDate(end) ?? end}. Plan the renewal.`,
         actions: [
           {
             label: 'View',
@@ -1219,7 +1254,7 @@ function GovernanceWorkspace() {
         tone: 'watch',
         sortKey: 2,
         title: `${p.name} has no credentials on file`,
-        why: 'Accreditors ask for CVs and licenses · upload them to their profile',
+        why: 'Upload their CV or license. Accreditors ask for them.',
         meta: (
           <span className="mt-1 inline-flex items-center gap-1 text-[12px] text-ink2">
             <UserRound size={12} aria-hidden="true" />
@@ -1249,7 +1284,7 @@ function GovernanceWorkspace() {
         tone: 'watch',
         sortKey: 2,
         title: `${c.name} has no members`,
-        why: 'Seat people on it so its meetings have owners',
+        why: 'Add people so its meetings have owners.',
         actions: [
           {
             label: 'Add members',
@@ -1265,6 +1300,61 @@ function GovernanceWorkspace() {
 
     return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
   }, [meetings, policies, people, committees, canEdit, approveMinutes])
+
+  // ── The band's one sentence (real counts only; worst thing first) ─────────
+  const verdict = useMemo(() => {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+    const board = people.filter((p) => p.active && p.groups?.includes('board'))
+    const overdueP = policies.filter((p) => p.reviewStatus === 'overdue').length
+    const dueSoonP = policies.filter((p) => p.reviewStatus === 'due-soon').length
+    const minutesOverdue = summary.minutesOverdueCount ?? 0
+    const minutesPending = summary.minutesPendingCount ?? 0
+    const expired = board.filter((p) => termStatusOf(p) === 'expired').length
+    const expiring = board.filter((p) => termStatusOf(p) === 'expiring_90d').length
+    const nextIso = summary.nextMeetingAt
+    const noChair = committees.filter((c) => c.active && !effectiveChair(c).name).length
+    const hasAnything = board.length + policies.length + meetings.length + committees.length > 0
+    if (!hasAnything) return <>Add your board, meetings and policies, and this page keeps them on schedule.</>
+
+    const lead =
+      board.length > 0 ? (
+        <>
+          Your board has <VerdictEm>{plural(board.length, 'member', 'members')}</VerdictEm>
+          {nextIso && shortDate(nextIso) ? (
+            <>
+              {' '}and meets next on <VerdictEm>{shortDate(nextIso)}</VerdictEm>
+            </>
+          ) : null}
+          .{' '}
+        </>
+      ) : (
+        <>No board roster yet. </>
+      )
+    const issues = [
+      overdueP && { tone: 'risk', text: `${plural(overdueP, 'policy is', 'policies are')} past review.` },
+      minutesOverdue && { tone: 'risk', text: `${plural(minutesOverdue, 'set of minutes is', 'sets of minutes are')} overdue.` },
+      expired && { tone: 'risk', text: `${plural(expired, 'board term has', 'board terms have')} ended.` },
+      minutesPending && { tone: 'watch', text: `${plural(minutesPending, 'set of minutes awaits', 'sets of minutes await')} sign-off.` },
+      dueSoonP && { tone: 'watch', text: `${plural(dueSoonP, 'policy is', 'policies are')} due for review soon.` },
+      expiring && { tone: 'watch', text: `${plural(expiring, 'board term ends', 'board terms end')} within 90 days.` },
+      noChair && { tone: 'watch', text: `${plural(noChair, 'committee has', 'committees have')} no chair.` },
+      attentionItems.length && {
+        tone: 'watch',
+        text: `${plural(attentionItems.length, 'item needs', 'items need')} a decision.`,
+      },
+    ].filter(Boolean)
+    const top = issues[0]
+    return (
+      <>
+        {lead}
+        {top ? (
+          <VerdictEm tone={top.tone}>{top.text}</VerdictEm>
+        ) : (
+          <VerdictEm tone="good">Everything is up to date.</VerdictEm>
+        )}
+      </>
+    )
+  }, [people, policies, meetings, committees, summary, attentionItems])
 
   // ── Gate (shared across all four registers) ────────────────────────────────
   const notLicensed =
@@ -1430,18 +1520,24 @@ function GovernanceWorkspace() {
   // The accreditation-ready governance report — a dedicated print route (opens in
   // a new tab so the command center stays put; auto-fires the print dialog there).
   const reportButton = (
-    <Button href="/governance/report/print" target="_blank" rel="noopener noreferrer" icon={<Printer size={14} />}>
+    <AuroraButton
+      href="/governance/report/print"
+      target="_blank"
+      rel="noopener noreferrer"
+      icon={<Printer size={19} aria-hidden="true" />}
+    >
       Governance report
-    </Button>
+    </AuroraButton>
   )
 
   const commandCenter = (
     <DomainCommandCenter
       showAddData
       moduleKey="governance"
-      eyebrow={`Governance · ${activeSchool?.name ?? 'School'}`}
+      eyebrow={null}
       title="Governance"
       Icon={Landmark}
+      verdict={verdict}
       attentionCount={attentionItems.length}
       kpis={kpis}
       tabs={TABS}
@@ -1449,8 +1545,22 @@ function GovernanceWorkspace() {
       onTabChange={setTab}
       onNew={onNew}
       registerTable={registerTable}
+      registerSubtitle="Your board, meetings, committees and policies"
+      registerIcon={Landmark}
       attentionItems={attentionItems}
-      headerAside={reportButton}
+      actions={reportButton}
+      howItWorks={
+        <>
+          <p>Everything here comes from the people, meetings, committees and policies you add.</p>
+          <p>
+            A policy is due for review on its own cycle (12 months unless you set another). Board terms count as
+            ending soon inside 90 days.
+          </p>
+          <p>
+            Good, Watch and At risk only appear when there is something to judge. An empty list shows no label.
+          </p>
+        </>
+      }
     />
   )
 

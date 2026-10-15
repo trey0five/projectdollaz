@@ -39,8 +39,19 @@ import OverviewView from './OverviewView.jsx'
 import ChartsView from './ChartsView.jsx'
 import ScorecardView from './ScorecardView.jsx'
 import PeersView from './PeersView.jsx'
-import BackLink from '../../ui/BackLink.jsx'
-import { PageHeader } from '../../ui/surface/index.js'
+import { CalendarPlus, FileBarChart2, FileStack, Landmark, Percent, PieChart, Wallet, School } from 'lucide-react'
+import { AuroraButton, AuroraSwitch, HowThisWorks, VerdictEm, fyLabel as formatFyLabel } from '../../ui/aurora/index.js'
+import { FinanceSubPage, FinanceSubBand, FinanceMore } from '../../statements/financeSub.jsx'
+import { comparisonBasis, financeVerdict, kpiCaption, kpiFigure, metricVerdict } from '../../finance/financeAurora.js'
+import { metricFormat } from '../../../lib/metricMeta.js'
+
+// The four headline vitals on the band (school scope), in plain words.
+const BAND_VITALS = [
+  { key: 'operating_margin', label: 'Operating margin', icon: Percent },
+  { key: 'days_cash_on_hand', label: 'Days of cash', icon: Wallet },
+  { key: 'months_operating_reserve', label: 'Reserve', icon: Landmark },
+  { key: 'tuition_dependency', label: 'Tuition share of income', icon: PieChart },
+]
 
 const SCHOOL_TREND_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency', 'enrollment_change_yoy',
@@ -55,7 +66,7 @@ const DEFAULT_COLS = [
 
 export default function AnalyticsV2() {
   const reduce = useReducedMotion()
-  const { scope: globalScope, isMultiSchool, orgId, orgResolved } = useScope()
+  const { scope: globalScope, isMultiSchool, orgId, orgResolved, orgName } = useScope()
   const { activeSchool, setActiveSchool } = useSchools()
   const { loading: billingLoading, entitled, isOwner } = useBilling()
 
@@ -261,9 +272,9 @@ export default function AnalyticsV2() {
   const schoolAsOf = activePeriod?.periodEndDate
     ? `as of ${new Date(`${activePeriod.periodEndDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     : fyLabel
-      ? `FY${fyLabel}`
+      ? `FY ${fyLabel}`
       : null
-  const orgAsOf = fyLabel ? `FY${fyLabel}` : null
+  const orgAsOf = fyLabel ? `FY ${fyLabel}` : null
 
   // ── Shaped context per scope ─────────────────────────────────────────────────
   const schoolCtx = { id: primarySchool, periodId, metrics, metricsByKey, sparkTrends, asOf: schoolAsOf }
@@ -274,48 +285,183 @@ export default function AnalyticsV2() {
   const canCustomize = isOwner && entitled
 
   const schoolName = roster.find((r) => r.id === primarySchool)?.name ?? activeSchool?.name ?? null
-  const scopeWord = { school: schoolName, compare: 'Compare', org: 'All schools', peers: 'Peers' }[nav.scope]
-  const eyebrow = ['Analytics', scopeWord, fyLabel ? `FY ${fyLabel}` : null].filter(Boolean).join(' · ')
-  const meta = [isSchool ? schoolAsOf : orgAsOf, scopeWord && !isSchool ? scopeWord : null].filter(Boolean).join(' · ') || null
+
+  // ── The band: ONE sentence + the glass figures for this scope ──────────────
+  const fyName = fyLabel ? `FY ${fyLabel}` : null
+  const bandChip = isSchool || isPeers ? schoolName : (orgName ?? null)
+  const bandEyebrow = [fyName, isSchool ? schoolAsOf : null].filter(Boolean).join(' · ') || null
+  const omByKey = {}
+  for (const mm of orgMetrics?.metrics ?? []) omByKey[mm.key] = mm
+
+  let bandVerdict = null
+  let bandKpis = null
+  if (isSchool) {
+    const vitals = BAND_VITALS.map((v) => metricsByKey[v.key]).filter(Boolean)
+    const v = financeVerdict({ metrics: vitals })
+    bandVerdict = !metrics.length ? (
+      <>No numbers for {fyName ?? 'this year'} yet. Add the year&rsquo;s numbers and the charts fill in.</>
+    ) : v.tail ? (
+      <>
+        {fyName ? `${fyName}: ` : ''}
+        <VerdictEm tone={v.tailTone}>{v.tail}</VerdictEm>
+      </>
+    ) : (
+      <>Your key numbers for {fyName ?? 'this year'}, year by year.</>
+    )
+    bandKpis = metrics.length
+      ? BAND_VITALS.map(({ key, label, icon }) => {
+          const m = metricsByKey[key]
+          const fmt = metricFormat(key, m?.unit)
+          return {
+            key,
+            icon,
+            label,
+            ...kpiFigure(m, fmt),
+            caption: kpiCaption(m, fmt, activePeriod?.periodEndDate ? schoolAsOf?.replace(/^as of /, '') : null, activePeriod ? comparisonBasis(periods, activePeriod, formatFyLabel) : undefined),
+            // The metric's own band — or no pill.
+            verdict: metricVerdict(m),
+          }
+        })
+      : null
+  } else if (isOrg) {
+    const margin = omByKey.operating_margin
+    const cash = omByKey.days_cash_on_hand
+    bandVerdict = orgMetrics ? (
+      <>
+        Every school added together — <VerdictEm>{orgMetrics.reportedCount ?? 0} of {orgMetrics.schoolCount ?? 0}</VerdictEm>{' '}
+        reporting {fyName ?? 'this year'}.
+      </>
+    ) : null
+    bandKpis = orgMetrics
+      ? [
+          {
+            key: 'schools',
+            icon: School,
+            label: 'Schools reporting',
+            value: `${orgMetrics.reportedCount ?? 0}/${orgMetrics.schoolCount ?? 0}`,
+            caption: 'With a saved year',
+          },
+          {
+            key: 'margin',
+            icon: Percent,
+            label: 'System operating margin',
+            ...kpiFigure(margin, metricFormat('operating_margin', margin?.unit)),
+            caption: 'All schools combined',
+            verdict: metricVerdict(margin),
+          },
+          {
+            key: 'cash',
+            icon: Wallet,
+            label: 'System days of cash',
+            ...kpiFigure(cash, metricFormat('days_cash_on_hand', cash?.unit)),
+            caption: 'All schools combined',
+            verdict: metricVerdict(cash),
+          },
+        ]
+      : null
+  } else if (isCompare) {
+    bandVerdict = (
+      <>
+        <VerdictEm>{selectedSchools.length} {selectedSchools.length === 1 ? 'school' : 'schools'}</VerdictEm> side by side for{' '}
+        {fyName ?? 'this year'}.
+      </>
+    )
+  } else if (isPeers) {
+    bandVerdict = <>How {schoolName ?? 'this school'} compares with similar schools.</>
+  }
+
+  const noNumbers = isSchool && !metrics.length
+  const fySwitch =
+    fyOptions.length > 1 ? (
+      <AuroraSwitch
+        label="School year"
+        value={fiscalYearStart}
+        options={fyOptions.map((o) => ({ value: o.start, label: `FY ${o.label}` }))}
+        onChange={setFiscalYearStart}
+      />
+    ) : null
+
+  const band = (
+    <FinanceSubBand
+      school={bandChip}
+      eyebrow={bandEyebrow}
+      title="Analytics"
+      verdict={bandVerdict}
+      actions={
+        // ONE white primary — the page's main job. With no numbers for the
+        // year (the same test the verdict uses) that is adding them; once the
+        // charts have numbers it is turning them into the board report.
+        noNumbers ? (
+          <>
+            <AuroraButton variant="primary" to="/finance" icon={<CalendarPlus size={19} aria-hidden="true" />}>
+              Add the year&rsquo;s numbers
+            </AuroraButton>
+            <AuroraButton to="/statements" icon={<FileStack size={19} aria-hidden="true" />}>
+              Statements
+            </AuroraButton>
+          </>
+        ) : (
+          <>
+            <AuroraButton variant="primary" to="/reports" icon={<FileBarChart2 size={19} aria-hidden="true" />}>
+              Reports
+            </AuroraButton>
+            <AuroraButton to="/statements" icon={<FileStack size={19} aria-hidden="true" />}>
+              Statements
+            </AuroraButton>
+          </>
+        )
+      }
+      aside={fySwitch}
+      kpis={bandKpis}
+    />
+  )
 
   if (!billingLoading && !entitled) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <Shell eyebrow={eyebrow} meta={meta} />
-        <EntitlementPausedPanel />
-      </div>
+      <FinanceSubPage crumb="Analytics">
+        {band}
+        <div className="mt-8">
+          <EntitlementPausedPanel />
+        </div>
+      </FinanceSubPage>
     )
   }
 
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <Shell eyebrow={eyebrow} meta={meta} />
+    <FinanceSubPage crumb="Analytics">
+      {band}
 
-      <AnalyticsScopeBar
-        scopes={scopes}
-        scope={nav.scope}
-        onScope={nav.setScope}
-        roster={roster}
-        school={primarySchool}
-        onSchool={handleSchoolPick}
-        selectedSchools={selectedSchools.map((s) => s.schoolId)}
-        onToggleSchool={(id) => {
-          const cur = selectedSchools.map((s) => s.schoolId)
-          const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
-          nav.setSchools(next.length ? next : cur) // keep min 1
-        }}
-        fyOptions={fyOptions}
-        fiscalYearStart={fiscalYearStart}
-        onFy={setFiscalYearStart}
-        focus={focusId}
-        onFocus={nav.setFocus}
-        dims={nav.dims}
-        onDims={nav.setDims}
-      />
+      {/* The two axes under the band: WHAT you see (Overview · Charts ·
+          Scorecard) and WHOSE numbers (My school · Compare · …). */}
+      <div className="fsub-navrow">
+        <div className="fsub-nav">
+          <AnalyticsSubTabs view={nav.view} onView={nav.setView} />
+        </div>
+        <AnalyticsScopeBar
+          hideFy
+          scopes={scopes}
+          scope={nav.scope}
+          onScope={nav.setScope}
+          roster={roster}
+          school={primarySchool}
+          onSchool={handleSchoolPick}
+          selectedSchools={selectedSchools.map((s) => s.schoolId)}
+          onToggleSchool={(id) => {
+            const cur = selectedSchools.map((s) => s.schoolId)
+            const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+            nav.setSchools(next.length ? next : cur) // keep min 1
+          }}
+          fyOptions={fyOptions}
+          fiscalYearStart={fiscalYearStart}
+          onFy={setFiscalYearStart}
+          focus={focusId}
+          onFocus={nav.setFocus}
+          dims={nav.dims}
+          onDims={nav.setDims}
+        />
+      </div>
 
-      <AnalyticsSubTabs view={nav.view} onView={nav.setView} />
-
-      <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-6">
+      <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-2">
         {isPeers ? (
           <PeersView peers={peersCtx} view={nav.view} />
         ) : (
@@ -342,15 +488,16 @@ export default function AnalyticsV2() {
           </>
         )}
       </div>
-    </div>
-  )
-}
 
-function Shell({ eyebrow, meta }) {
-  return (
-    <div className="mb-5">
-      <BackLink className="mb-2" />
-      <PageHeader eyebrow={eyebrow} title="Analytics" meta={meta} hue="37 99 235" />
-    </div>
+      <FinanceMore current="analytics" />
+
+      <HowThisWorks>
+        <p>Every number comes from your saved statements, using one shared set of formulas.</p>
+        <p>
+          Good, Watch and At risk come from each measure&rsquo;s own range. A measure with no range carries no pill.
+        </p>
+        <p>Compare and All schools use your organization&rsquo;s schools; Peers compares with similar schools.</p>
+      </HowThisWorks>
+    </FinanceSubPage>
   )
 }

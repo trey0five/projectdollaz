@@ -37,19 +37,50 @@
 // viewer sees every act plus the draft plan with no adopt control (the write is
 // owner/accountant, server-enforced — a dead button would be worse than none).
 //
-// PREMIUM UI P4: a light `PageHeader` (eyebrow ACCREDITATION · MOCK VISIT, the
-// print documents and the narration control on the hairline) over the executive
-// summary, then the six acts as `Section`s on the ground. No cards.
+// AURORA (2026-10-15): the Accreditation band (school chip · "Mock visit" ·
+// one plain sentence from the payload's own counts · the print documents and
+// the narration control as the band's buttons · four glass figures), then the
+// executive summary and the six acts as Aurora sections, each act's body in
+// one white card. The long per-act explanations live in "How this works".
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReducedMotion } from 'framer-motion'
-import { Award, BadgeCheck, ClipboardList, FileText, Landmark, Lightbulb, Pause, Play, Printer, ScanSearch } from 'lucide-react'
+import {
+  Award,
+  BadgeCheck,
+  ClipboardList,
+  FileText,
+  Gauge,
+  Landmark,
+  Lightbulb,
+  Pause,
+  Play,
+  Printer,
+  ScanSearch,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
-import { PageHeader, Panel, Button, Pill } from '../components/ui/surface/index.js'
+import { Pill } from '../components/ui/surface/index.js'
+import {
+  AuroraButton,
+  AuroraCard,
+  AuroraEmpty,
+  AuroraHero,
+  AuroraSection,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
+import { moduleAccentVars } from '../components/module/moduleAnatomy.js'
+import '../styles/pending/aurora-accred.css'
 import ExecutiveSummary from '../components/accreditation/ExecutiveSummary.jsx'
 import ActSection from '../components/accreditation/visit/ActSection.jsx'
-import ActArrival from '../components/accreditation/visit/ActArrival.jsx'
+import ActArrival, {
+  BAND_QUALIFIER,
+  BELOW_THRESHOLD_LABEL,
+  projectedBandVerdict,
+} from '../components/accreditation/visit/ActArrival.jsx'
 import ActCommendations from '../components/accreditation/visit/ActCommendations.jsx'
 import ActFindings from '../components/accreditation/visit/ActFindings.jsx'
 import ActRequests from '../components/accreditation/visit/ActRequests.jsx'
@@ -61,7 +92,9 @@ import { useSchools } from '../context/SchoolContext.jsx'
 import { useVisit } from '../hooks/useVisit.js'
 import { improvementApi, schoolsApi } from '../lib/api.js'
 
-const HUE = '#F59E0B'
+// The page paints from the ONE module hue registry (the Accreditation hue):
+// every Aurora section, tile and card under the band inherits --au-* from here.
+const ACCENT = moduleAccentVars('accreditation')
 
 /** The six acts, in the order a visiting team lives them. Frozen. */
 const ACTS = [
@@ -73,7 +106,19 @@ const ACTS = [
   { key: 'plan', title: "So here's the plan", Icon: Lightbulb },
 ]
 
+// ONE short line under each act's title. The longer standing explanation of
+// each act (what it is, never about the school) moved to "How this works" at
+// the foot of the page — the same sentences, one click away.
 const KICKERS = {
+  arrival: 'What a team sees on day one',
+  commendations: 'Strengths you can prove three ways',
+  findings: "Grouped under the standards they'd cite",
+  requests: 'The proof a team will work from',
+  unanswered: "What we couldn't check — and why",
+  plan: 'Drafted from your gaps. Nothing saves until you confirm.',
+}
+
+const EXPLAIN = {
   arrival:
     'What a visiting team would see on arrival: the framework, what you have documented, what you can defend, and how much of our rule catalog we could evaluate at all.',
   commendations:
@@ -87,44 +132,30 @@ const KICKERS = {
   plan: 'Drafted from your own gaps and warnings. Nothing is written until you confirm.',
 }
 
-function CenteredPanel({ children }) {
+// ── The page shell for the states before there is a visit to show (gate,
+// loading, unavailable): the same band with one plain sentence, then a
+// designed empty state — one line and one way out.
+function VisitState({ school, verdict, icon, text, sub = null, busy = false }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" />
-      <Panel className="text-center">
-        <BadgeCheck size={22} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
-        {children}
-      </Panel>
+    <div className="au-scope mx-auto max-w-page px-4 pb-12 sm:px-10" style={ACCENT}>
+      <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" className="mt-4" />
+      <AuroraHero
+        moduleKey="accreditation"
+        className="mt-3"
+        school={school}
+        eyebrow="Accreditation"
+        title="Mock visit"
+        verdict={verdict}
+        actions={
+          <AuroraButton variant="primary" to="/accreditation" icon={<BadgeCheck size={19} aria-hidden="true" />}>
+            Open Accreditation
+          </AuroraButton>
+        }
+      />
+      <div className="mt-8" aria-busy={busy || undefined}>
+        <AuroraEmpty icon={icon} text={text} sub={sub} />
+      </div>
     </div>
-  )
-}
-
-function GatePanel({ notLicensed }) {
-  return (
-    <CenteredPanel>
-      {notLicensed ? (
-        <>
-          <h2 className="font-serif text-title font-medium text-ink">The mock visit rides on Accreditation</h2>
-          <p className="mx-auto mt-2 max-w-md text-body text-ink2">
-            Add the Accreditation module to rehearse the visit — what a team would commend, what
-            they would likely find under each standard, and what we cannot answer for you yet.
-          </p>
-        </>
-      ) : (
-        <>
-          <h2 className="font-serif text-title font-medium text-ink">Your subscription is paused</h2>
-          <p className="mx-auto mt-2 max-w-md text-body text-ink2">Resume your plan to run the mock visit.</p>
-        </>
-      )}
-    </CenteredPanel>
-  )
-}
-
-function PrintLink({ to, children }) {
-  return (
-    <Button to={to} variant="secondary" size="sm" icon={<Printer size={13} aria-hidden />}>
-      {children}
-    </Button>
   )
 }
 
@@ -273,26 +304,47 @@ function VisitWorkspace() {
     [schoolId],
   )
 
-  if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
+  const schoolName = activeSchool?.name ?? null
+
+  if (notLicensed || notEntitled) {
+    return notLicensed ? (
+      <VisitState
+        school={schoolName}
+        verdict="The mock visit rides on Accreditation."
+        icon={BadgeCheck}
+        text="Add the Accreditation module to rehearse the visit."
+        sub="What a team would commend, what they would likely find, and what we cannot answer yet."
+      />
+    ) : (
+      <VisitState
+        school={schoolName}
+        verdict="Your subscription is paused."
+        icon={BadgeCheck}
+        text="Resume your plan to run the mock visit."
+      />
+    )
+  }
 
   if (loading && !visit) {
     return (
-      <div className="mx-auto max-w-page space-y-3 px-4 py-8 sm:px-10">
-        <div className="h-24 animate-pulse rounded-lg bg-ink/[.04]" />
-        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
-        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
-      </div>
+      <VisitState
+        school={schoolName}
+        verdict="Setting up the rehearsal…"
+        icon={Landmark}
+        text="Loading the mock visit…"
+        busy
+      />
     )
   }
 
   if (!visit) {
     return (
-      <CenteredPanel>
-        <h2 className="font-serif text-title font-medium text-ink">The mock visit is unavailable right now</h2>
-        <p className="mx-auto mt-2 max-w-md text-body text-ink2">
-          {error || 'Reload to try again. Nothing about your register has changed.'}
-        </p>
-      </CenteredPanel>
+      <VisitState
+        school={schoolName}
+        verdict="The mock visit is unavailable right now."
+        icon={Landmark}
+        text={error || 'Reload to try again. Nothing about your register has changed.'}
+      />
     )
   }
 
@@ -337,40 +389,170 @@ function VisitWorkspace() {
       ) : null,
   }
 
+  // ── The band: one plain sentence + the four headline figures ───────────────
+  // Every figure is the payload's own (arrival / findings / commendations); the
+  // judged pills are Likely findings (from the server's severities) and the
+  // projected score (the framework's own bands, judged as /accreditation does). A figure the payload does not carry renders "—", never 0.
+  const counts = findings?.severityCounts ?? null
+  const strengths = Array.isArray(commendations?.commendations) ? commendations.commendations.length : null
+  const findingTone = counts ? (counts.critical > 0 ? 'risk' : counts.warn > 0 ? 'watch' : null) : null
+  const verdict = counts ? (
+    counts.total > 0 ? (
+      <>
+        A visiting team would likely raise{' '}
+        <VerdictEm tone={findingTone}>
+          {counts.total} finding{counts.total === 1 ? '' : 's'}
+        </VerdictEm>
+        {counts.critical > 0 ? (
+          <>
+            , <VerdictEm tone="risk">{counts.critical} serious</VerdictEm>
+          </>
+        ) : null}
+        .
+        {strengths != null ? (
+          strengths > 0 ? (
+            <>
+              {' '}
+              You could defend{' '}
+              <VerdictEm tone="good">
+                {strengths} strength{strengths === 1 ? '' : 's'}
+              </VerdictEm>
+              .
+            </>
+          ) : (
+            <> No strength clears the bar yet.</>
+          )
+        ) : null}
+      </>
+    ) : (
+      <>A visiting team would raise nothing we could check on today&apos;s data.</>
+    )
+  ) : (
+    <>Here is what a visiting team would see today.</>
+  )
+  // The jump bar's counts — lengths of what each act lists, never a new claim.
+  const actCounts = {
+    commendations: strengths,
+    findings: counts ? counts.total : null,
+    plan: planItems.length > 0 ? planItems.length : null,
+  }
+  const kpis = [
+    {
+      key: 'index',
+      icon: Gauge,
+      label: 'Projected score',
+      value: arrival?.projectedIndex != null ? String(arrival.projectedIndex) : null,
+      // Judged EXACTLY as the Accreditation band judges it (below every status
+      // band → At risk, landed in one → Good; no band → no pill), with the same
+      // short word in the pill. The server's band phrase moves to the caption,
+      // still qualified as a projection (BAND_QUALIFIER) when it names a band.
+      verdict: projectedBandVerdict(arrival?.band),
+      caption:
+        typeof arrival?.band === 'string' && arrival.band
+          ? arrival.band === BELOW_THRESHOLD_LABEL
+            ? arrival.band
+            : `${BAND_QUALIFIER} · ${arrival.band}`
+          : "On today's scores",
+    },
+    {
+      key: 'defensible',
+      icon: ShieldCheck,
+      label: 'Backed by proof',
+      value: arrival?.defensible != null ? String(arrival.defensible) : null,
+      unit: '%',
+      caption: arrival?.documented != null ? `Self-scored ${arrival.documented}%` : null,
+    },
+    {
+      key: 'findings',
+      icon: BadgeCheck,
+      label: 'Likely findings',
+      value: counts ? String(counts.total) : null,
+      caption: counts ? `${counts.critical} serious · ${counts.warn} to watch` : null,
+      verdict: findingTone,
+    },
+    {
+      key: 'strengths',
+      icon: Award,
+      label: 'Strengths to commend',
+      value: strengths != null ? String(strengths) : null,
+      caption: 'Proven three ways',
+    },
+  ]
+
   return (
-    <div className="mx-auto max-w-page px-4 pb-12 sm:px-10">
+    <div className="au-scope mx-auto max-w-page px-4 pb-12 sm:px-10" style={ACCENT}>
       <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" className="mt-4" />
 
-      {/* ── The header + the executive summary, printed and speakable ─────── */}
-      <PageHeader
-        eyebrow={['Accreditation', 'Mock visit', activeSchool?.name].filter(Boolean).join(' · ')}
-        title="The mock visit"
-        meta={[visit.framework?.name ?? null, arrival?.asOfLine ? String(arrival.asOfLine).replace(/[.\s]+$/, '') : null, 'A rehearsal, not a verdict'].filter(Boolean).join(' · ')}
-        hue="245 158 11"
+      {/* ── The band ─────────────────────────────────────────────────────── */}
+      <AuroraHero
+        moduleKey="accreditation"
+        className="mt-3"
+        school={schoolName}
+        eyebrow={['Accreditation', arrival?.asOfLine ? String(arrival.asOfLine).replace(/[.\s]+$/, '') : null]
+          .filter(Boolean)
+          .join(' · ')}
+        title="Mock visit"
+        verdict={verdict}
         actions={
           <>
+            <AuroraButton variant="primary" to="/accreditation/visit/print" icon={<Printer size={19} aria-hidden="true" />}>
+              Visiting-team preview
+            </AuroraButton>
+            <AuroraButton to="/accreditation/board/print" icon={<FileText size={19} aria-hidden="true" />}>
+              Board one-pager
+            </AuroraButton>
             {player.supported && summarySegments.length > 0 ? (
-              <Button
-                variant="quiet"
+              <AuroraButton
                 onClick={() => (player.playing ? player.pause() : player.play())}
-                icon={player.playing ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
+                icon={player.playing ? <Pause size={19} aria-hidden="true" /> : <Play size={19} aria-hidden="true" />}
               >
                 {player.playing ? 'Pause' : 'Read it to me'}
-              </Button>
+              </AuroraButton>
             ) : null}
-            <PrintLink to="/accreditation/board/print">Board one-pager</PrintLink>
-            <PrintLink to="/accreditation/visit/print">Visiting-team preview</PrintLink>
           </>
         }
+        kpis={kpis}
       />
 
       {error ? (
-        <Panel tone="attention" className="mt-4">
+        <AuroraCard tone="risk" className="mt-6">
           <p className="text-small font-semibold text-risk">{error}</p>
-        </Panel>
+        </AuroraCard>
       ) : null}
 
-      <ExecutiveSummary segments={summarySegments} title="The executive summary" className="mt-6" />
+      {/* ── Jump to an act — six acts run long, so the reader can go straight
+          to the one they need (each act keeps every row; nothing is hidden). */}
+      <nav aria-label="Jump to an act" className="acc-actnav" data-testid="act-jump-bar">
+        {ACTS.map((act, i) => {
+          const n = actCounts[act.key]
+          return (
+            <a
+              key={act.key}
+              href={`#act-${act.key}`}
+              className="acc-actnav-link"
+              onClick={(e) => {
+                const el = document.getElementById(`act-${act.key}`)
+                if (!el) return
+                e.preventDefault()
+                el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+              }}
+            >
+              <span className="acc-actnav-num" aria-hidden="true">
+                {i + 1}
+              </span>
+              {act.title}
+              {n != null ? <span className="acc-actnav-count">{n}</span> : null}
+            </a>
+          )
+        })}
+      </nav>
+
+      {/* ── The executive summary, printed and speakable ─────────────────── */}
+      <AuroraSection first icon={Sparkles} title="In short" subtitle="A rehearsal, not a verdict">
+        <AuroraCard>
+          <ExecutiveSummary segments={summarySegments} />
+        </AuroraCard>
+      </AuroraSection>
 
       {/* ── The six acts. All open. Always all six. ─────────────────────────── */}
       {ACTS.map((act, i) => (
@@ -381,7 +563,6 @@ function VisitWorkspace() {
           title={act.title}
           kicker={KICKERS[act.key]}
           Icon={act.Icon}
-          hue={HUE}
           reduce={reduce}
           aside={asideFor[act.key] ?? null}
         >
@@ -392,18 +573,29 @@ function VisitWorkspace() {
       {/* The disclaimer. The server's one sentence, verbatim, on screen as well as
           on all four print surfaces — the screen is where most readers meet it. */}
       {disclaimer ? (
-        <p className="sec-note mt-8 flex items-start gap-2 border-t border-hair pt-3">
+        <p className="sec-note mt-10 flex items-start gap-2 border-t border-hair pt-3">
           <FileText size={13} className="mt-[2px] shrink-0" aria-hidden />
           <span>{disclaimer}</span>
         </p>
       ) : null}
+
+      <HowThisWorks className="!mt-4">
+        {ACTS.map((act, i) => (
+          <p key={act.key}>
+            <b>
+              Act {i + 1} · {act.title}.
+            </b>{' '}
+            {EXPLAIN[act.key]}
+          </p>
+        ))}
+      </HowThisWorks>
     </div>
   )
 }
 
 export default function VisitPage() {
   return (
-    <div className="min-h-screen">
+    <div className="acc-hue min-h-screen">
       <BillingBanner />
       <VisitWorkspace />
     </div>

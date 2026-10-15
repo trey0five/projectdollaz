@@ -25,7 +25,16 @@ import {
   ArrowRight,
   Sparkles,
   ChevronUp,
-  Activity,
+  Percent,
+  Landmark,
+  PieChart,
+  Target,
+  AlertTriangle,
+  Compass,
+  Printer,
+  Table2,
+  CheckCircle2,
+  ArrowLeft,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -41,18 +50,41 @@ import LightUpReveal from '../components/finance/LightUpReveal.jsx'
 import UploadsSummary from '../components/finance/UploadsSummary.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
-import { metricFormat, formatMetricValue, deltaTone, formatDelta, isBandedStatus } from '../lib/metricMeta.js'
+import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
 import { addDataHref } from '../lib/dataDestinations.js'
-import { fmtDollar } from '../lib/format.js'
-import AnimatedMetricValue from '../components/analytics/AnimatedMetricValue.jsx'
-import { MARK, DELTA_TONE } from '../components/analytics/v2/statusStyle.js'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../components/analytics/skeletons.jsx'
 import { toSignals } from '../components/home/HomeHero.jsx'
-import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
-import { PageHeader, Pill, Button, Section, Tile, Panel } from '../components/ui/surface/index.js'
+import { Section, Panel } from '../components/ui/surface/index.js'
 import { formatShortDate } from '../lib/format.js'
 import BoardPacketExportButton from '../components/reports/BoardPacketExportButton.jsx'
+import {
+  AuroraHero,
+  AuroraButton,
+  AuroraPeriodSwitch,
+  fyLabel,
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+  AuroraCard,
+  AuroraCols,
+  AuroraColumns,
+  AuroraEmpty,
+  AuroraLightButton,
+  HowThisWorks,
+  VerdictEm,
+  verdictCountLabel,
+} from '../components/ui/aurora/index.js'
+import {
+  financeVerdict,
+  kpiCaption,
+  comparisonBasis,
+  kpiFigure,
+  metricVerdict,
+  money,
+  moneyShort,
+  warningTiles,
+} from '../components/finance/financeAurora.js'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
 
@@ -75,147 +107,127 @@ function budOf(lines, kind, key) {
   return Number.isFinite(Number(v)) ? Number(v) : null
 }
 
-// ── Page header (Premium UI P2, plan sketch 1): eyebrow FINANCE · SCHOOL · FY,
-// the title in Garamond, a meta line that carries what the second dark hero
-// used to say (the period, the signal count), the period selector + actions on
-// the hairline, a 2px finance-blue rule. The "Command center — Welcome back"
-// stage that repeated the title below it is gone. ─────────────────────────────
+// ── The Finance BAND (Aurora, owner-approved 2026-10-15) ─────────────────────
+// School chip + "Year ended …" eyebrow, the serif title, ONE plain verdict
+// sentence built from this period's real figures, the period switcher on the
+// right, the page's three jobs as buttons (Add data · Board packet ·
+// Workspaces) and up to four frosted-glass figures with their own Good /
+// Watch / At risk pills. The replay of the first-upload celebration lives
+// under the switcher as a small "What changed" control. Every argument is
+// optional: the entitlement-gate and first-run screens render the bare band.
 function FinanceHeader({
   onWhatLitUp = null,
   schoolName = null,
   periods = null,
   selectedPeriodId = null,
   onSelectPeriod = null,
-  statusLine = null,
-  insightKind = null,
-  billing = null,
+  verdict = null,
+  kpis = null,
+  boardPacket = false,
 }) {
   // Under v2 the ModuleTabs shell already renders the breadcrumb, so this header
   // omits its own back link; v1 (standalone page, no ModuleTabs) keeps it.
   const uiV2 = useUiV2()
   const period = (periods ?? []).find((p) => p.id === selectedPeriodId) ?? null
-  const signals = statusLine && insightKind ? toSignals(statusLine) : []
-  const eyebrow = ['Finance', schoolName, period?.label].filter(Boolean).join(' · ')
-  const trial =
-    billing?.status === 'trialing'
-      ? typeof billing.daysLeft === 'number'
-        ? `${billing.daysLeft} day${billing.daysLeft === 1 ? '' : 's'} left in trial`
-        : 'Free trial'
-      : null
-  const meta = [
-    period ? `Period end ${formatShortDate(period.periodEndDate)}` : null,
-    signals.length ? `${signals.length} signal${signals.length === 1 ? '' : 's'}` : null,
-    trial,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  // The period ONLY — billing (days left in trial) is the app-wide banner's job,
+  // not the module verdict's.
+  const eyebrow = period ? `Year ended ${formatShortDate(period.periodEndDate)}` : null
+  // One period is nothing to switch to (AuroraPeriodSwitch renders nothing).
+  const showSwitch = periods && periods.length > 1 && onSelectPeriod
   return (
     <div className="mb-2">
       {!uiV2 && (
-        <Link to="/app" className={`${BACK_PILL} mb-2`}>
+        <Link to="/app" className={`${BACK_PILL} mb-3`}>
           <BackPillBody label="Back to dashboard" />
         </Link>
       )}
-      <PageHeader
-        eyebrow={eyebrow}
+      <AuroraHero
+        moduleKey="finance"
+        school={schoolName}
+        eyebrow={eyebrow || null}
         title="Finance"
-        meta={meta || 'Statements, cash and budget vs. actuals — board-ready.'}
-        hue="37 99 235"
+        verdict={verdict}
         actions={
-          <>
-            {periods && periods.length > 0 && onSelectPeriod ? (
-              <PeriodSelector periods={periods} activeId={selectedPeriodId} onSelect={onSelectPeriod} light />
-            ) : null}
-            {/* THE REPLAY, ON THE OVERVIEW TOO. The celebration used to be
-                reachable only from the first-run screen — the one place a user
-                leaves and cannot get back to. Rendered only when there is
-                something to show. */}
-            {onWhatLitUp && (
-              <Button variant="quiet" onClick={onWhatLitUp} icon={<Sparkles size={14} />}>
-                What lit up
-              </Button>
-            )}
-            {/* On-page Add-data + Records entries (mirror the sidebar tabs) — v2 only. */}
-            {uiV2 && <RecordsCta module="finance" />}
-            {uiV2 && <AddDataCta />}
-          </>
+          uiV2 || boardPacket ? (
+            <>
+              {/* On-page Add-data + Workspaces entries (mirror the sidebar tabs) — v2 only. */}
+              {uiV2 && <AddDataCta />}
+              {boardPacket ? <BoardPacketExportButton periodId={selectedPeriodId} /> : null}
+              {uiV2 && <RecordsCta module="finance" />}
+            </>
+          ) : null
         }
+        aside={
+          showSwitch || onWhatLitUp ? (
+            <>
+              {showSwitch ? (
+                <AuroraPeriodSwitch periods={periods} activeId={selectedPeriodId} onSelect={onSelectPeriod} />
+              ) : null}
+              {/* THE REPLAY, ON THE OVERVIEW TOO. The celebration used to be
+                  reachable only from the first-run screen — the one place a user
+                  leaves and cannot get back to. Rendered only when there is
+                  something to show. */}
+              {onWhatLitUp && (
+                <button type="button" onClick={onWhatLitUp} className="au-switch-btn inline-flex items-center gap-1.5">
+                  <Sparkles size={14} aria-hidden="true" /> What changed
+                </button>
+              )}
+            </>
+          ) : null
+        }
+        kpis={kpis}
       />
-      {/* The read: the AI / smart insight as a ruled signal list under the
-          header — ink on the ground, a 2px semantic mark per line. */}
-      {statusLine ? (
-        <div className="mt-4 flex items-start gap-3">
-          <span className="mt-0.5 shrink-0 text-ink2" aria-hidden="true">
-            {insightKind ? <Sparkles size={14} /> : <Activity size={14} />}
-          </span>
-          {signals.length ? (
-            <ul className="flex flex-col gap-1.5" aria-label={insightKind === 'llm' ? 'AI insight' : 'Smart insight'}>
-              {signals.map((sg, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-body text-ink">
-                  <Pill variant="status" tone={SIGNAL_TONE[sg.category] ?? 'neutral'} className="mt-0.5 shrink-0">
-                    {SIGNAL_LABEL[sg.category] ?? 'Note'}
-                  </Pill>
-                  <span>{sg.text}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-body text-ink">{statusLine}</p>
-          )}
-        </div>
-      ) : null}
     </div>
   )
 }
 
-const SIGNAL_TONE = { risk: 'risk', watch: 'watch', strength: 'good', neutral: 'neutral' }
-const SIGNAL_LABEL = { risk: 'Risk', watch: 'Watch', strength: 'Strength', neutral: 'Note' }
-
-// ── A finance COLUMN (Premium UI P3, plan sketch 1): a `Section` label row, a
-// list of ruled figure lines, and ONE quiet ink link under it — no box, no
-// stretched hit, no uppercase gold. Six of these sit in `.sec-cols` on the
-// ground. Module-scope helper (React-compiler discipline). ───────────────────
-function FinanceColumn(props) {
-  const { to, title, viewLabel, children } = props
-  const ColIcon = props.Icon
+// ── ui.v2 Records panel ("Workspaces"): doors into the finance sub-registers
+// (Statements, Cash & Collections, Cash Forecast, Budget). Pure navigation —
+// Aurora tiles, no new API. ─────────────────────────────────────────────────
+function FinanceRecords() {
   return (
-    <Section
-      label={
-        <span className="inline-flex items-center gap-1.5">
-          {ColIcon ? <ColIcon size={13} aria-hidden="true" /> : null}
-          {title}
-        </span>
-      }
-      className="min-w-0"
-    >
-      {children}
-      <Link to={to} className="sec-more" aria-label={`${viewLabel} — ${title}`}>
-        {viewLabel} <ArrowRight size={13} aria-hidden="true" />
-      </Link>
-    </Section>
+    <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <ModuleOverviewLink module="finance" className="mb-1" />
+      <AuroraSection first icon={Table2} title="Workspaces" subtitle="Statements, cash, forecast and budget.">
+        <AuroraTileGrid cols={4}>
+          <AuroraTile to="/statements" icon={FileStack} title="Statements" desc="Your statements and every saved year." />
+          <AuroraTile to="/cash" icon={CircleDollarSign} title="Cash & Collections" desc="Cash on hand and who still owes you." />
+          {/* The FORWARD view, deliberately its own tile rather than folded into
+              Cash & Collections. That page answers "what is outstanding today";
+              this one answers "when do we run low" — different questions, and
+              burying the second inside the first is how it stops being found. */}
+          <AuroraTile to="/cash-flow" icon={TrendingUp} title="Cash Forecast" desc="When cash may run low, and why." />
+          <AuroraTile to="/budget" icon={Wallet} title="Budget" desc="Plan vs. actual, line by line." />
+        </AuroraTileGrid>
+      </AuroraSection>
+    </div>
   )
 }
 
-// ── ui.v2 Records panel: a link board into the finance sub-registers (Statements,
-// Cash & Collections, Budget). Pure navigation — `Tile` is the one card family
-// that stays for doors (plan §2.4), no new API. ───────────────────────────────
-function FinanceRecords() {
+// ── ui.v2 Add-data step (also where /data lands under ui.v2) ────────────────
+// The Aurora band every Finance screen opens with — school chip, "Add data",
+// the module name, one plain line and a way back to the overview — over the
+// shared Add-data wizard. The wizard keeps its step line and stepper; its own
+// eyebrow + title are folded into the band (aurora.css .au-addstep) so the
+// page has ONE heading, not two.
+function FinanceAddData({ schoolName, children }) {
   return (
-    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <ModuleOverviewLink module="finance" className="mb-3" />
-      <p className="mb-4 text-body text-ink2">
-        Your finance workspaces — statements, cash, forecast and budget, each one click away.
-      </p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Tile to="/statements" hue="37 99 235" icon={<FileStack size={22} />} title="Statements" body="Your financial statements and every saved period." />
-        <Tile to="/cash" hue="37 99 235" icon={<CircleDollarSign size={22} />} title="Cash & Collections" body="Cash position, runway, and collections aging." />
-        {/* The FORWARD view, deliberately its own tile rather than folded into
-            Cash & Collections. That page answers "what is outstanding today";
-            this one answers "when do we run low" — different questions, and
-            burying the second inside the first is how it stops being found. */}
-        <Tile to="/cash-flow" hue="37 99 235" icon={<TrendingUp size={22} />} title="Cash Forecast" body="When cash is projected to run low, by how much, and what is driving it." />
-        <Tile to="/budget" hue="37 99 235" icon={<Wallet size={22} />} title="Budget" body="Budget vs. actual and the annual spread." />
+    <div className="au-scope au-addstep">
+      <div className="mx-auto max-w-page px-4 pt-6 sm:px-10 sm:pt-8">
+        <AuroraHero
+          moduleKey="finance"
+          school={schoolName}
+          eyebrow="Add data"
+          title="Finance"
+          verdict="Get your finance numbers in: choose what to add, then follow the steps."
+          actions={
+            <AuroraButton to="/finance" icon={<ArrowLeft size={18} aria-hidden="true" />}>
+              Back to Finance
+            </AuroraButton>
+          }
+        />
       </div>
+      {children}
     </div>
   )
 }
@@ -224,69 +236,48 @@ function FinanceRecords() {
 // documents. Finance is the only module with real report surfaces (locked D2). ──
 function FinanceReports({ periodId }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <ModuleOverviewLink module="finance" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Tile to="/reports" hue="37 99 235" icon={<FileBarChart2 size={22} />} title="Reports workspace" body="Export a board-ready finance-committee packet for the selected period, or open the Reports workspace.">
-          {periodId && (
-            <div className="tile-lift relative z-[2]">
-              <BoardPacketExportButton periodId={periodId} />
-            </div>
-          )}
-        </Tile>
-        <Tile hue="37 99 235" icon={<FileStack size={22} />} title="Print documents" body="Open a print-ready board document in a new tab." arrow={false}>
-          <div className="mt-1 flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" to="/board-packet/print">
-              Board packet <ArrowRight size={13} />
-            </Button>
-            <Button variant="secondary" size="sm" to="/reports/board/print">
-              Board report <ArrowRight size={13} />
-            </Button>
-          </div>
-        </Tile>
-      </div>
-    </div>
-  )
-}
-
-// ── Figure lines for the columns ─────────────────────────────────────────────
-// Values at rest are always the real figures (never a fabricated number; nulls
-// stay dashed); a numeric figure counts up ONCE on mount (AnimatedMetricValue).
-
-// A single labeled figure line (Statements column): label + tabular value.
-function FigureRow({ label, amount, format = 'currency' }) {
-  return (
-    <div className="fig">
-      <span className="fig-label">{label}</span>
-      <span className="fig-value">
-        {amount == null ? '—' : <AnimatedMetricValue value={format === 'currency' ? Math.round(amount) : amount} format={format} />}
-      </span>
-    </div>
-  )
-}
-
-// A single Tier-1 vital line (Analytics column): status mark + label + value + Δ.
-function VitalRow({ metric }) {
-  const available = metric?.available
-  const fmt = metric ? metricFormat(metric.key, metric.unit) : 'ratio'
-  const mark = available && isBandedStatus(metric.status) ? MARK[metric.status] : 'neutral'
-  const deltaText = available && metric.periodOverPeriodDelta != null ? formatDelta(metric.periodOverPeriodDelta, fmt) : null
-  return (
-    <div className="fig">
-      <span className="fig-label min-w-0">
-        <i className={`mark tone-${mark}`} aria-hidden="true" />
-        <span className="min-w-0 break-words">{metric?.label ?? 'Metric'}</span>
-      </span>
-      <span className="inline-flex shrink-0 items-center gap-2">
-        {deltaText ? (
-          <Pill variant="status" tone={DELTA_TONE[deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)] ?? 'neutral'}>
-            {deltaText}
-          </Pill>
-        ) : null}
-        <span className="fig-value">
-          {available ? <AnimatedMetricValue value={metric.value} format={fmt} /> : '—'}
-        </span>
-      </span>
+    <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <ModuleOverviewLink module="finance" className="mb-1" />
+      <AuroraSection first icon={FileBarChart2} title="Reports" subtitle="Packets and print-ready documents.">
+        <AuroraTileGrid cols={2}>
+          <AuroraTile
+            to="/reports"
+            icon={FileBarChart2}
+            title="Reports workspace"
+            desc="Every finance report in one place."
+            foot={periodId ? <BoardPacketExportButton periodId={periodId} /> : null}
+          />
+          <AuroraTile
+            icon={Printer}
+            title="Print documents"
+            desc="Open a print-ready board document."
+            foot={
+              // Both print routes read the year from ?period= (as ReportsPage
+              // links them) — bare, they have no year to load and hang.
+              periodId ? (
+                <div className="flex flex-wrap gap-2">
+                  <AuroraLightButton
+                    variant="ghost"
+                    size="sm"
+                    to={`/board-packet/print?period=${encodeURIComponent(periodId)}`}
+                  >
+                    Board packet <ArrowRight size={13} aria-hidden="true" />
+                  </AuroraLightButton>
+                  <AuroraLightButton
+                    variant="ghost"
+                    size="sm"
+                    to={`/reports/board/print?period=${encodeURIComponent(periodId)}`}
+                  >
+                    Board report <ArrowRight size={13} aria-hidden="true" />
+                  </AuroraLightButton>
+                </div>
+              ) : (
+                <span className="text-small text-ink2">Save a year&rsquo;s numbers first.</span>
+              )
+            }
+          />
+        </AuroraTileGrid>
+      </AuroraSection>
     </div>
   )
 }
@@ -300,7 +291,7 @@ export default function FinancePage() {
   // and the Budget org roll-up tabs, so we never null the schoolId for org mode.
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
-  const { billing, loading: billingLoading, entitled, hasModule } = useBilling()
+  const { loading: billingLoading, entitled, hasModule } = useBilling()
   const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
 
   const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
@@ -467,10 +458,10 @@ export default function FinancePage() {
       const material = complianceSummary.counts?.material ?? 0
       const reportable = complianceSummary.counts?.reportable ?? 0
       if (material > 0)
-        return `${material} material finding${material === 1 ? '' : 's'} to address before review.`
+        return `${material} serious finding${material === 1 ? '' : 's'} to fix before review.`
       if (reportable > 0)
-        return `${reportable} reportable item${reportable === 1 ? '' : 's'} to review.`
-      return 'On track for review — no exceptions found.'
+        return `${reportable} item${reportable === 1 ? '' : 's'} to report.`
+      return 'Ready for review — no problems found.'
     }
     return null
   }, [insightText, complianceSummary])
@@ -535,8 +526,10 @@ export default function FinancePage() {
     // ── Entitlement gate (mirror AnalyticsDashboard) — FIRST ─────────────────────
     overview = (
       <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <FinanceHeader />
-        <EntitlementPausedPanel />
+        <FinanceHeader schoolName={activeSchool?.name} />
+        <div className="mt-8">
+          <EntitlementPausedPanel />
+        </div>
       </div>
     )
   } else if (initialLoading) {
@@ -568,12 +561,25 @@ export default function FinancePage() {
     const readyFileCount = (hydratedFiles || []).filter((f) => f?.role).length
     overview = (
       <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <FinanceHeader />
+        <FinanceHeader
+          schoolName={activeSchool?.name}
+          // THE CLAIM FOLLOWS THE NUMBERS (finance-honesty). A saved year whose
+          // accounts we cannot read yet is NOT "in": the card below asks the
+          // user to sort the accounts, so the band must not invite them to an
+          // overview built from zeros.
+          verdict={
+            savedPeriods.length > 0
+              ? statementsHaveNumbers
+                ? 'Your first year is in. Open your overview whenever you like.'
+                : 'Your books are saved, but we can’t read them yet. Sort the accounts below and this page fills in.'
+              : 'Add this year’s numbers and everything here fills in.'
+          }
+        />
         <motion.div
           initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="space-y-5"
+          className="mt-8 space-y-5"
         >
           {/* THE HERO IS THE NEXT STEP, not a status announcement.
               "Finance is lit up" told the user something they had just watched
@@ -617,7 +623,7 @@ export default function FinancePage() {
                   onClick={() => setRevealSchoolId(schoolId)}
                   className="btn btn-secondary shrink-0"
                 >
-                  <Sparkles size={14} /> What lit up
+                  <Sparkles size={14} /> What changed
                 </button>
                 <button
                   type="button"
@@ -762,128 +768,327 @@ export default function FinancePage() {
       </div>
     )
   } else {
+    // ── THE AURORA OVERVIEW ──────────────────────────────────────────────────
+    // Band (verdict + four glass figures) → Warnings (KYRO's read, as tiles) →
+    // This year's numbers (two charts) → Go further (one tile per workspace).
+    // Every figure is read from the hooks above; a missing one is a dash, and a
+    // verdict pill only ever comes from a metric's own band.
+    const selPeriod = savedPeriods.find((p) => p.id === selectedPeriodId) ?? null
+    const periodLabel = selPeriod?.label ? fyLabel(selPeriod.label) : null
+    const periodEnd = selPeriod?.periodEndDate ? formatShortDate(selPeriod.periodEndDate) : null
+    // Which year the cards' change is against (the API diffs with the nearest
+    // EARLIER saved year): null → "No last-year numbers yet"; an older year is
+    // named, never called "last year".
+    const basis = selPeriod ? comparisonBasis(savedPeriods, selPeriod, fyLabel) : undefined
+
+    // The four glass figures: margin, cash, reserve + the budget gap (or, with
+    // no budget, tuition's share of income — both carry real bands/signs).
+    const glass = (key, label, Icon) => {
+      const m = metricsByKey[key]
+      const fmt = m ? metricFormat(m.key, m.unit) : 'ratio'
+      const { value, unit } = kpiFigure(m, fmt)
+      return {
+        key,
+        icon: Icon,
+        label,
+        value: vitalsLoading ? '…' : value,
+        unit,
+        caption: m?.available ? kpiCaption(m, fmt, periodEnd, basis) : 'Not in this year’s numbers',
+        verdict: metricVerdict(m),
+      }
+    }
+    const tuitionM = metricsByKey.tuition_dependency
+    const kpis = [
+      glass('operating_margin', 'Operating margin', Percent),
+      glass('days_cash_on_hand', 'Days of cash', Wallet),
+      glass('months_operating_reserve', 'Reserve', Landmark),
+      budgetSummary.available
+        ? {
+            key: 'budget',
+            icon: Target,
+            label: 'Against budget',
+            value: `${budgetSummary.netVar >= 0 ? '+' : ''}${moneyShort(budgetSummary.netVar)}`,
+            caption: 'Against your own budget',
+            // A SIGN, not a band: budget has no standard range, so the pill
+            // says ahead/behind (the colour still carries the sign).
+            verdict: budgetSummary.netVar >= 0 ? 'good' : 'risk',
+            verdictLabel: budgetSummary.netVar >= 0 ? 'Ahead of plan' : 'Behind plan',
+          }
+        : tuitionM?.available
+          ? glass('tuition_dependency', 'Tuition share of income', PieChart)
+          : { key: 'budget', icon: Target, label: 'Against budget', value: null, caption: 'No budget for this year yet' },
+    ]
+
+    // ONE sentence for the band.
+    const v = financeVerdict({
+      periodLabel,
+      periodEndDate: selPeriod?.periodEndDate,
+      change: statementsHaveNumbers ? changeInNetAssets : null,
+      metrics: [...VITAL_KEYS, 'tuition_dependency'].map((k) => metricsByKey[k]).filter(Boolean),
+    })
+    const verdict = !statementsHaveNumbers ? (
+      <>We can’t read these accounts yet. Sort them in Add data and this page fills in.</>
+    ) : v.lead || v.tail ? (
+      <>
+        {v.lead ? (
+          <>
+            {v.lead} <VerdictEm tone={v.emTone}>{v.em}</VerdictEm>.{' '}
+          </>
+        ) : null}
+        {v.tail ? <VerdictEm tone={v.tailTone}>{v.tail}</VerdictEm> : null}
+      </>
+    ) : null
+
+    // Warnings: KYRO's insight lines (or the readiness line) as tiles.
+    const warnings = insightText
+      ? warningTiles(toSignals(statusLine))
+      : statusLine
+        ? [{ id: 'readiness', title: statusLine.replace(/\.$/, ''), desc: null, verdict: readinessTone, icon: ShieldCheck, to: '/readiness' }]
+        : []
+    const worst = warnings.find((w) => w.verdict === 'risk') ? 'risk' : warnings.find((w) => w.verdict === 'watch') ? 'watch' : 'good'
+
+    // Chart colours: the module hue + its companion; "left over" wears its sign.
+    const leftColor = changeInNetAssets != null && changeInNetAssets < 0 ? '#e11d48' : '#059669'
+    const vitalsAvailable = VITAL_KEYS.filter((k) => metricsByKey[k]?.available).length
+
     overview = (
-    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+    <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <FinanceHeader
         onWhatLitUp={statementsHaveNumbers ? () => setRevealSchoolId(schoolId) : null}
         schoolName={activeSchool?.name}
         periods={savedPeriods}
         selectedPeriodId={selectedPeriodId}
         onSelectPeriod={setSelectedPeriodId}
-        statusLine={statusLine}
-        insightKind={insightText ? insightSource : null}
-        billing={billing}
+        verdict={verdict}
+        kpis={kpis}
+        boardPacket
       />
 
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        className="sec-cols"
+      {/* ── Warnings — what KYRO spotted this year ─────────────────────────── */}
+      <AuroraSection
+        first
+        icon={AlertTriangle}
+        tone={warnings.length ? worst : 'good'}
+        title="Warnings"
+        subtitle={periodLabel ? `What KYRO spotted in ${periodLabel}` : 'What KYRO spotted this year'}
+        count={warnings.length ? verdictCountLabel(warnings.map((w) => w.verdict)) || `${warnings.length} notes` : null}
       >
-        {/* (1) STATEMENTS — ruled figure lines, counting up once. */}
-        <FinanceColumn to="/statements" Icon={FileStack} title="Statements" viewLabel="View statements">
-          <FigureRow label="Total revenue" amount={totalRevenue} />
-          <FigureRow label="Total expense" amount={totalExpense} />
-          <FigureRow label="Change in net assets" amount={changeInNetAssets} />
-        </FinanceColumn>
+        {warnings.length ? (
+          <AuroraTileGrid cols={Math.min(4, Math.max(2, warnings.length))}>
+            {warnings.map((w) => (
+              <AuroraTile
+                key={w.id}
+                icon={w.icon}
+                tone={w.verdict ?? 'neutral'}
+                title={w.title}
+                desc={w.desc}
+                verdict={w.verdict}
+                to={w.to ?? '/analytics'}
+              />
+            ))}
+          </AuroraTileGrid>
+        ) : (
+          <AuroraEmpty
+            icon={CheckCircle2}
+            hue="#059669"
+            text={periodLabel ? `Nothing flagged for ${periodLabel}.` : 'Nothing flagged yet.'}
+            action={
+              <AuroraLightButton variant="ghost" to="/analytics" icon={<BarChart3 size={15} aria-hidden="true" />}>
+                Open analytics
+              </AuroraLightButton>
+            }
+          />
+        )}
+      </AuroraSection>
 
-        {/* (2) ANALYTICS — Tier-1 vitals */}
-        <FinanceColumn to="/analytics" Icon={BarChart3} title="Analytics" viewLabel="View analytics">
-          {vitalsLoading ? (
-            <div className="space-y-2 py-1">
-              {VITAL_KEYS.map((k) => (
-                <div key={k} className="shimmer-bar h-6 w-full rounded" />
-              ))}
-            </div>
-          ) : (
-            VITAL_KEYS.map((k) => <VitalRow key={k} metric={metricsByKey[k]} />)
-          )}
-        </FinanceColumn>
+      {/* ── This year's numbers — money in vs out, and against the budget ──── */}
+      <AuroraSection
+        icon={BarChart3}
+        title="This year’s numbers"
+        subtitle="Money in, money out, and the budget"
+        count={periodLabel}
+      >
+        <AuroraCols>
+          <AuroraCard
+            title="Money in vs. money out"
+            subtitle="Total income and total spending"
+            verdict={changeInNetAssets == null ? null : changeInNetAssets >= 0 ? 'good' : 'risk'}
+            verdictLabel={changeInNetAssets == null ? null : changeInNetAssets >= 0 ? 'Ahead' : 'Behind'}
+            big={
+              changeInNetAssets == null || !statementsHaveNumbers
+                ? null
+                : changeInNetAssets >= 0
+                  ? `+${money(changeInNetAssets)} left over`
+                  : `${money(Math.abs(changeInNetAssets))} short`
+            }
+            bigTone={changeInNetAssets == null ? null : changeInNetAssets >= 0 ? 'good' : 'risk'}
+            footer={
+              <AuroraLightButton to="/statements" icon={<FileStack size={15} aria-hidden="true" />}>
+                View statements
+              </AuroraLightButton>
+            }
+          >
+            {statementsHaveNumbers ? (
+              <AuroraColumns
+                ariaLabel={`Money in, money out and left over for ${periodLabel ?? 'this year'}`}
+                bars={[
+                  { key: 'in', label: 'Money in', value: totalRevenue, display: moneyShort(totalRevenue), full: money(totalRevenue) },
+                  { key: 'out', label: 'Money out', value: totalExpense, display: moneyShort(totalExpense), full: money(totalExpense), color: 'var(--au-h2, #7c3aed)' },
+                  {
+                    key: 'left',
+                    label: 'Left over',
+                    value: changeInNetAssets,
+                    display: changeInNetAssets == null ? null : `${changeInNetAssets >= 0 ? '+' : ''}${moneyShort(changeInNetAssets)}`,
+                    full: money(changeInNetAssets),
+                    color: leftColor,
+                  },
+                ]}
+              />
+            ) : (
+              <p className="mt-3 text-small text-ink2">No totals yet — the accounts still need sorting.</p>
+            )}
+          </AuroraCard>
 
-        {/* (3) BUDGET VS ACTUAL — net variance or link-through */}
-        <FinanceColumn to="/budget" Icon={Wallet} title="Budget vs actual" viewLabel="View budget">
-          {budgetSummary.available ? (
-            <>
-              <div className="fig">
-                <span className="fig-label">Net vs. budget</span>
-                <span className="inline-flex items-center gap-2">
-                  <Pill variant="status" tone={budgetSummary.netVar >= 0 ? 'good' : 'risk'}>
-                    {budgetSummary.netVar >= 0 ? 'favorable' : 'unfavorable'}
-                  </Pill>
-                  <span className="fig-value">
-                    {budgetSummary.netVar >= 0 ? '+' : '−'}
-                    {fmtDollar(Math.abs(budgetSummary.netVar))}
-                  </span>
-                </span>
-              </div>
-              <FigureRow label="Actual net" amount={budgetSummary.netAct} />
-              <FigureRow label="Budgeted net" amount={budgetSummary.netBud} />
-            </>
-          ) : (
-            <p className="py-2 text-small text-ink2">
-              No budget vs. actual yet for this period. Open Budget to set one up — guided,
-              advanced, or import.
-            </p>
-          )}
-        </FinanceColumn>
+          <AuroraCard
+            tone={budgetSummary.available ? (budgetSummary.netVar >= 0 ? 'good' : 'risk') : null}
+            title="Budget vs. what happened"
+            subtitle="What was left over: planned and actual"
+            verdict={budgetSummary.available ? (budgetSummary.netVar >= 0 ? 'good' : 'risk') : null}
+            verdictLabel={budgetSummary.available ? (budgetSummary.netVar >= 0 ? 'Ahead' : 'Behind') : null}
+            big={
+              budgetSummary.available
+                ? budgetSummary.netVar >= 0
+                  ? `${money(budgetSummary.netVar)} better than budget`
+                  : `${money(Math.abs(budgetSummary.netVar))} short of budget`
+                : null
+            }
+            bigTone={budgetSummary.available ? (budgetSummary.netVar >= 0 ? 'good' : 'risk') : null}
+            footer={
+              budgetSummary.available ? (
+                <AuroraLightButton to="/budget" hue={budgetSummary.netVar >= 0 ? '#059669' : '#e11d48'} icon={<Target size={15} aria-hidden="true" />}>
+                  View budget
+                </AuroraLightButton>
+              ) : null
+            }
+          >
+            {budgetSummary.available ? (
+              <AuroraColumns
+                ariaLabel="Left over: planned versus actual"
+                bars={[
+                  { key: 'plan', label: 'Planned', value: budgetSummary.netBud, display: moneyShort(budgetSummary.netBud), full: money(budgetSummary.netBud), dashed: true },
+                  {
+                    key: 'actual',
+                    label: 'Actual',
+                    value: budgetSummary.netAct,
+                    display: moneyShort(budgetSummary.netAct),
+                    full: money(budgetSummary.netAct),
+                    color: budgetSummary.netVar >= 0 ? '#059669' : '#e11d48',
+                  },
+                ]}
+              />
+            ) : (
+              <AuroraEmpty
+                className="mt-4"
+                icon={Wallet}
+                text={periodLabel ? `No budget for ${periodLabel} yet.` : 'No budget yet.'}
+                action={
+                  <AuroraLightButton variant="ghost" to={addDataHref(uiV2, { add: 'budget' })} icon={<Wallet size={15} aria-hidden="true" />}>
+                    Set up a budget
+                  </AuroraLightButton>
+                }
+              />
+            )}
+          </AuroraCard>
+        </AuroraCols>
+      </AuroraSection>
 
-        {/* (4) CASH FORECAST — the FORWARD view.
-            Its own column rather than a line inside Cash & Collections: that page
-            answers "what is outstanding today", this one answers "when do we run
-            low". Different questions, and folding the second into the first is
-            how it stops being found. Description-only, like Reports — the figures
-            need a projection run, and a column that invented one to look livelier
-            would be the exact thing this feature refuses to do. */}
-        <FinanceColumn to="/cash-flow" Icon={TrendingUp} title="Cash Forecast" viewLabel="Open forecast">
-          <p className="py-2 text-small text-ink2">
-            When cash is projected to run low, by how much, and how many days&apos; notice you
-            have. Built from your payroll calendar, budget phasing and enrollment.
-          </p>
-        </FinanceColumn>
+      {/* ── Go further — one tile per finance workspace ───────────────────── */}
+      <AuroraSection icon={Compass} title="Go further" subtitle="Open a tool">
+        <AuroraTileGrid cols={3}>
+          {/* (1) STATEMENTS */}
+          <AuroraTile
+            to="/statements"
+            icon={FileStack}
+            title="Statements"
+            desc="Income, costs and what’s left, the way the board sees them."
+            verdictLabel={periodLabel}
+          />
+          {/* (2) ANALYTICS — the year-by-year vitals */}
+          <AuroraTile
+            to="/analytics"
+            icon={BarChart3}
+            hue="var(--au-h2)"
+            title="Analytics"
+            desc="Margin, cash and reserve, year by year."
+            verdictLabel={vitalsAvailable ? `${vitalsAvailable} measure${vitalsAvailable === 1 ? '' : 's'}` : null}
+          />
+          {/* (3) CASH FORECAST — the FORWARD view.
+              Its own tile rather than a line inside Cash & Collections: that page
+              answers "what is outstanding today", this one answers "when do we run
+              low". Different questions, and folding the second into the first is
+              how it stops being found. Words only, no invented projection. */}
+          <AuroraTile
+            to="/cash-flow"
+            icon={TrendingUp}
+            hue="var(--au-h3)"
+            title="Cash Forecast"
+            desc="When cash may run low, and how much notice you get."
+          />
+          {/* (4) BUDGET */}
+          <AuroraTile to="/budget" icon={Wallet} title="Budget" desc="Plan vs. actual, line by line." />
+          {/* (5) REPORTS — the workspace + the board packet export */}
+          <AuroraTile
+            to="/reports"
+            icon={FileBarChart2}
+            hue="var(--au-h2)"
+            title="Reports"
+            desc="A board-ready packet for this year, and every report."
+            foot={selectedPeriodId ? <BoardPacketExportButton periodId={selectedPeriodId} /> : null}
+          />
+          {/* (6) READINESS — serious findings / items to report */}
+          <AuroraTile
+            to="/readiness"
+            icon={ShieldCheck}
+            tone={complianceSummary ? readinessTone : null}
+            title="Readiness"
+            desc={
+              !complianceSummary
+                ? 'Check the books are ready for review.'
+                : material > 0
+                  ? `${material} serious finding${material === 1 ? '' : 's'} and ${reportable} item${reportable === 1 ? '' : 's'} to report.`
+                  : reportable > 0
+                    ? `${reportable} item${reportable === 1 ? '' : 's'} to report.`
+                    : 'No problems found.'
+            }
+            verdict={complianceSummary ? readinessTone : null}
+            verdictLabel={
+              !complianceSummary ? null : material > 0 ? `${material} to fix` : reportable > 0 ? `${reportable} to review` : null
+            }
+          />
+        </AuroraTileGrid>
+      </AuroraSection>
 
-        {/* (5) REPORTS — board packet export + link */}
-        <FinanceColumn to="/reports" Icon={FileBarChart2} title="Reports" viewLabel="Open Reports">
-          <p className="py-2 text-small text-ink2">
-            Export a board-ready finance-committee packet for the selected period, or open the
-            Reports workspace.
-          </p>
-          {selectedPeriodId && (
-            <div className="pt-1">
-              <BoardPacketExportButton periodId={selectedPeriodId} />
-            </div>
-          )}
-        </FinanceColumn>
-
-        {/* (6) READINESS — material / reportable counts */}
-        <FinanceColumn to="/readiness" Icon={ShieldCheck} title="Readiness" viewLabel="View readiness">
-          <div className="fig">
-            <span className="fig-label">Material findings</span>
-            <span className="inline-flex items-center gap-2">
-              <i className={`mark tone-${readinessTone}`} aria-hidden="true" />
-              <span className="fig-value">{material}</span>
-            </span>
-          </div>
-          <div className="fig">
-            <span className="fig-label">Reportable items</span>
-            <span className="fig-value">{reportable}</span>
-          </div>
-          <p className="pt-2 text-small text-ink2">
-            {material > 0
-              ? 'Material findings to address before review.'
-              : reportable > 0
-                ? 'Reportable items to review.'
-                : 'On track — no exceptions found.'}
-          </p>
-        </FinanceColumn>
-      </motion.div>
+      <HowThisWorks>
+        <p>
+          Every figure comes from the numbers saved for {periodLabel ?? 'the selected year'}. “Left over” is money
+          in minus money out.
+        </p>
+        <p>
+          Good, Watch and At risk use KYRO’s standard range for each measure. A figure with no range shows no
+          label. Budget figures compare against your own budget, so they say ahead or behind instead.
+        </p>
+        <p>
+          Warnings are KYRO’s reading of the same numbers
+          {insightText && insightSource === 'llm' ? ', written by AI — check them before sharing' : ''}.
+        </p>
+      </HowThisWorks>
     </div>
     )
   }
 
   // The celebration is mounted OUTSIDE the branch that opens it: it portals to
   // document.body, and keeping it here means a user who clicks a destination and
-  // comes back, or who reopens it from "What lit up", gets the same one instance
+  // comes back, or who reopens it from "What changed", gets the same one instance
   // in both the v1 and v2 shells.
   const reveal = (
     <LightUpReveal
@@ -917,14 +1122,16 @@ export default function FinancePage() {
         moduleKey="finance"
         overview={overview}
         addData={
-          <AddDataTab
-            module="finance"
-            schoolId={schoolId}
-            periodId={selectedPeriodId}
-            canEdit={canEdit}
-            onLitUp={() => setRevealSchoolId(schoolId)}
-            dataReady={statementsHaveNumbers}
-          />
+          <FinanceAddData schoolName={activeSchool?.name ?? null}>
+            <AddDataTab
+              module="finance"
+              schoolId={schoolId}
+              periodId={selectedPeriodId}
+              canEdit={canEdit}
+              onLitUp={() => setRevealSchoolId(schoolId)}
+              dataReady={statementsHaveNumbers}
+            />
+          </FinanceAddData>
         }
         records={<FinanceRecords />}
         reports={<FinanceReports periodId={selectedPeriodId} />}

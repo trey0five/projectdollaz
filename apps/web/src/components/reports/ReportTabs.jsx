@@ -65,8 +65,10 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
       <LineageHost bundle={bundle} imports={imports} schoolId={schoolId} periodId={periodId}>
       {/* Ink tabs on the ground (Premium UI P4): the statement axis, a 2px rule
-          under the active statement. Scrolls inside its own wrapper on a phone. */}
-      <div className="no-print scrollbar-none overflow-x-auto">
+          under the active statement. Under a Finance sub-page (`.fsub`) the
+          `fsub-nav` hook turns the strip into the coloured switch that wraps
+          two-up on a phone; elsewhere the classes are inert. */}
+      <div className="fsub-nav fsub-nav-in no-print scrollbar-none overflow-x-auto">
         <div role="tablist" aria-label="Statements" className="tabs-ink min-w-max">
           {TABS.map((t) => (
             <button

@@ -18,6 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The Improvement hue — teal, distinct from all nine locked home-tile hues. */
+import { auroraVarsFromHue } from '../module/moduleAnatomy.js'
+
 export const IMPROVEMENT_HUE = '#14B8A6'
 
 // ── Accent vars (same names as moduleAccentVars, computed from IMPROVEMENT_HUE) ─
@@ -44,6 +46,9 @@ export function improvementAccentVars() {
     '--grad-cta-0': rgbHex(mixRgb(rgb, WHITE, 0.45)),
     '--grad-cta-1': rgbHex(rgb),
     '--grad-cta-2': rgbHex(mixRgb(rgb, BLACK, 0.18)),
+    // AURORA: the band palette for this hue, so every Aurora section, tile and
+    // card on /improvement is painted from IMPROVEMENT_HUE like a module page.
+    ...auroraVarsFromHue(IMPROVEMENT_HUE),
   }
 }
 

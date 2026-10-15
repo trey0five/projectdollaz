@@ -192,7 +192,7 @@ export default function EnrollmentGradeHeatmap({ gradeByYear, minCell = 5, reduc
         steps={scale.steps}
         ticks={scale.ticks.map((t) => fmtCount(t))}
         extras={<HeatStateKeys suppressedLabel="hidden, not zero" absentLabel="no reading that year" absentToken="·" />}
-        caption="Shade is size, not change: a grade that shrank shows as a paler cell, never a red one — read along the row for the movement."
+        caption="Shade is size, not change — read along a row for movement."
       />
 
       {years.length === 1 ? (

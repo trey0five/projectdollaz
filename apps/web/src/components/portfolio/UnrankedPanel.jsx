@@ -22,8 +22,8 @@
 // data" and "this school has not bought the module" are different problems with
 // different fixes, and merging them lets a licensing gap hide inside a data gap.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Lock } from 'lucide-react'
-import { Section, DataTable, Button } from '../ui/surface/index.js'
+import { Building2, CircleDashed, HelpCircle, Lock } from 'lucide-react'
+import { AuroraLightButton, AuroraSection, AuroraTile, AuroraTileGrid } from '../ui/aurora/index.js'
 import '../../styles/pending/b1-domain.css'
 import { humanizeToken } from './AttentionBandChip.jsx'
 
@@ -98,12 +98,13 @@ export function componentLabel(key) {
   return COMPONENT_LABELS[key] ?? humanizeToken(key) ?? String(key ?? '')
 }
 
-// ── The not-ranked schools as ONE table ──────────────────────────────────────
-// Schools × the measures that are missing somewhere, with an em dash where a
-// measure is missing. What is said the same way about every school (the
-// exclusion sentence, the reason a measure is blank, what IS measured) is said
-// ONCE above the table; only what differs is said per row. A missing measure is
-// still named in words with its stated reason — the entire point of the panel.
+// ── The not-ranked schools as Aurora TILES ───────────────────────────────────
+// First the MEASURES missing somewhere, one tile each (the measure named in
+// words, with its stated reason when every school gives the same one), then one
+// small tile per school. What is said the same way about every school (the
+// exclusion sentence, a measure's reason, what IS measured) is said ONCE; only
+// what differs is said on a school's own tile. A missing measure is always
+// named in words with its stated reason — the entire point of the panel.
 
 const missingOf = (row) => (Array.isArray(row?.missingComponents) ? row.missingComponents : [])
 const knownOf = (row) => (Array.isArray(row?.knownComponents) ? row.knownComponents : [])
@@ -118,7 +119,7 @@ function shared(rows, fn) {
 const exclusionText = (row) =>
   EXCLUSION_REASON_LABELS[row?.reason] ?? 'This school cannot be ranked from what we hold.'
 
-function InsufficientTable({ rows }) {
+function InsufficientTiles({ rows }) {
   // The measures missing at ANY school, in the server's canonical order.
   const order = Object.keys(COMPONENT_LABELS)
   const present = new Set(rows.flatMap((r) => missingOf(r).map((m) => m?.component)).filter(Boolean))
@@ -130,86 +131,94 @@ function InsufficientTable({ rows }) {
   }
   // A measure whose reason is the same at every school it is missing from → said once.
   const sharedReason = {}
+  const missingAt = {}
   for (const key of components) {
     const reasons = rows.map((r) => reasonFor(r, key)).filter((x) => x != null)
+    missingAt[key] = reasons.length
     if (reasons.length > 0 && reasons.every((x) => x === reasons[0])) sharedReason[key] = reasons[0]
   }
   const sharedExclusion = shared(rows, exclusionText)
   const sharedKnown = shared(rows, (r) => knownOf(r).map(componentLabel).join(' · '))
 
-  const columns = [
-    {
-      key: 'name',
-      header: 'School',
-      render: (row) => (
-        <div className="min-w-[12rem] py-1.5">
-          <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
-          {sharedExclusion === undefined ? <span className="dt-sub mt-0.5">{exclusionText(row)}</span> : null}
-          {sharedKnown === undefined && knownOf(row).length > 0 ? (
-            <span className="dt-sub">Measured here: {knownOf(row).map(componentLabel).join(' · ')}</span>
-          ) : null}
-          {missingOf(row).length === 0 ? (
-            <span role="alert" className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-              <i className="mark tone-risk" aria-hidden="true" />
-              The server named no missing measure for this school — report this row.
-            </span>
-          ) : null}
-        </div>
-      ),
-    },
-    ...components.map((key) => ({
-      key: `m-${key}`,
-      header: componentLabel(key),
-      render: (row) => {
+  // Per school: only the gaps NOT already said once above — a measure missing
+  // at some schools but not all, or one whose reason differs by school.
+  const ownGaps = (row) =>
+    components
+      .map((key) => {
         const reason = reasonFor(row, key)
-        if (reason == null) return <span className="sr-only">Not missing</span>
-        return (
-          <span title={reason}>
-            <span aria-hidden="true">—</span>
-            <span className="sr-only">Missing: {reason}</span>
-            {sharedReason[key] === undefined ? <span className="dt-sub">{reason}</span> : null}
-          </span>
-        )
-      },
-    })),
-  ]
+        if (reason == null) return null
+        const everywhere = missingAt[key] === rows.length
+        if (everywhere && sharedReason[key] !== undefined) return null
+        return sharedReason[key] !== undefined ? componentLabel(key) : `${componentLabel(key)} — ${reason}`
+      })
+      .filter(Boolean)
 
-  const sharedReasons = components.filter((k) => sharedReason[k] !== undefined)
   return (
     <>
-      {sharedExclusion !== undefined ? (
-        <p className="mt-2 max-w-prose text-[13px] font-semibold leading-snug text-ink">{sharedExclusion}</p>
-      ) : null}
-      {sharedReasons.length > 0 ? (
-        <ul className="mt-3 space-y-1">
-          {sharedReasons.map((k) => (
-            <li key={k} className="flex flex-wrap gap-x-1.5 text-[12.5px] leading-snug">
-              <span className="font-semibold text-ink">{componentLabel(k)}</span>
-              <span className="text-ink2">— {sharedReason[k]}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {sharedKnown ? <p className="sec-note">Measured here: {sharedKnown}</p> : null}
-      <DataTable
-        caption="Schools that cannot be ranked, and the measures each is missing"
-        columns={columns}
-        rows={rows}
-        rowKey={(row, i) => row?.schoolId ?? row?.name ?? i}
-        className="mt-3"
-      />
+      {sharedExclusion !== undefined ? <p className="pf-lead">{sharedExclusion}</p> : null}
+      {/* The missing measures, named — one tile each. */}
+      <AuroraTileGrid cols={Math.min(4, Math.max(2, components.length))} className="pf-gaps" data-testid="unranked-gaps">
+        {components.map((key) => (
+          <AuroraTile
+            key={key}
+            icon={CircleDashed}
+            art={false}
+            tone="watch"
+            kicker={missingAt[key] === rows.length ? 'Missing everywhere' : `Missing at ${missingAt[key]} of ${rows.length}`}
+            title={componentLabel(key)}
+            desc={sharedReason[key] !== undefined ? sharedReason[key] : 'The reason differs by school — named on each.'}
+          />
+        ))}
+      </AuroraTileGrid>
+      {sharedKnown ? <p className="pf-lead mt-3">Measured here: {sharedKnown}</p> : null}
+      {/* One small tile per school — its name, and only what is its own. */}
+      <AuroraTileGrid cols={4} className="pf-unranked-schools mt-3" data-testid="unranked-schools">
+        {rows.map((row, i) => {
+          const gaps = ownGaps(row)
+          const own = [
+            sharedExclusion === undefined ? exclusionText(row) : null,
+            sharedKnown === undefined && knownOf(row).length > 0
+              ? `Measured here: ${knownOf(row).map(componentLabel).join(' · ')}`
+              : null,
+            gaps.length > 0 ? `Missing: ${gaps.join(' · ')}` : null,
+          ].filter(Boolean)
+          return (
+            <AuroraTile
+              key={row?.schoolId ?? row?.name ?? i}
+              icon={Building2}
+              art={false}
+              title={row?.name ?? 'Unnamed school'}
+              className="pf-u-school"
+            >
+              {own.map((line, j) => (
+                <p key={j} className="pf-facts">
+                  {line}
+                </p>
+              ))}
+              {missingOf(row).length === 0 ? (
+                <span role="alert" className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                  <i className="mark tone-risk" aria-hidden="true" />
+                  The server named no missing measure for this school — report this row.
+                </span>
+              ) : null}
+            </AuroraTile>
+          )
+        })}
+      </AuroraTileGrid>
     </>
   )
 }
 
 // ── One unlicensed school: the NAME, and nothing else ────────────────────────
-function NotLicensedRow({ row }) {
+function NotLicensedTile({ row }) {
   return (
-    <li className="b1-row">
-      <Lock size={14} aria-hidden className="shrink-0 text-ink2" />
-      <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
-      <span className="text-[12.5px] text-ink2">Accreditation is not licensed at this school.</span>
-    </li>
+    <AuroraTile
+      icon={Lock}
+      art={false}
+      title={row?.name ?? 'Unnamed school'}
+      desc="Accreditation is not licensed here."
+      className="pf-u-school"
+    />
   )
 }
 
@@ -221,60 +230,48 @@ export default function UnrankedPanel({ insufficientData = [], notLicensed = [] 
   return (
     <div>
       {insufficient.length > 0 && (
-        <Section
+        <AuroraSection
           aria-labelledby="portfolio-unranked"
-          label={
-            <span id="portfolio-unranked">
-              Not ranked · {insufficient.length} {insufficient.length === 1 ? 'school' : 'schools'}
-            </span>
-          }
+          icon={HelpCircle}
+          tone="watch"
+          title={<span id="portfolio-unranked">Not ranked yet</span>}
+          subtitle="Too little data — what's missing is named"
+          count={`${insufficient.length} ${insufficient.length === 1 ? 'school' : 'schools'}`}
         >
-          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
-            These schools are missing too much for a rank to mean anything. They are not at the
-            bottom of the list and they are not at the top of it — they are off it, with what is
-            missing named below — a dash marks each measure we do not have. Fill the gap and they
-            rank next refresh.
-          </p>
-          <InsufficientTable rows={insufficient} />
-        </Section>
+          {/* Not at the bottom of the list and not at the top — off it, with
+              what is missing named per measure (one tile each). Fill the gap
+              and the school ranks next refresh. */}
+          <InsufficientTiles rows={insufficient} />
+        </AuroraSection>
       )}
 
       {unlicensed.length > 0 && (
-        <Section
+        <AuroraSection
           aria-labelledby="portfolio-unlicensed"
-          label={
-            <span id="portfolio-unlicensed">
-              Not licensed · {unlicensed.length} {unlicensed.length === 1 ? 'school' : 'schools'}
-            </span>
-          }
+          icon={Lock}
+          title={<span id="portfolio-unlicensed">Not licensed</span>}
+          subtitle="Accreditation isn't on at these schools"
+          count={`${unlicensed.length} ${unlicensed.length === 1 ? 'school' : 'schools'}`}
         >
-          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
-            Accreditation is not licensed at these schools, so nothing about their readiness is
-            shown here — not even a band. Adding the module brings them into the portfolio.
-          </p>
-          <ul className="b1-list mt-3">
+          {/* Nothing about their readiness is shown here — not even a band. */}
+          <AuroraTileGrid cols={4} className="pf-unranked-schools">
             {unlicensed.map((row) => (
-              <NotLicensedRow key={row?.schoolId ?? row?.name} row={row} />
+              <NotLicensedTile key={row?.schoolId ?? row?.name} row={row} />
             ))}
-          </ul>
+          </AuroraTileGrid>
           {/* ── THE CONTROL HAS TO REACH THE SCHOOLS THIS PANEL JUST NAMED ─────
               /settings/billing is bound to the ACTIVE school — which, to be
-              reading this page at all, already licenses accreditation. Sending a
-              superintendent there to unlock St. Bede lands them on a page where
-              accreditation is already ticked and no control touches St. Bede: a
-              functional dead end wearing the words of a fix. Licensing is
-              per-school, and the per-school × per-module grid is the Modules tab
-              of the organization view, so that is what is named and linked. */}
-          <p className="mt-4 max-w-prose text-[13px] leading-relaxed text-ink2">
-            Accreditation is licensed <span className="font-semibold">per school</span>, so it has
-            to be added at each school named above. The billing page for the school you are
-            currently in cannot change them — the per-school module grid is the{' '}
+              reading this page at all, already licenses accreditation. Licensing
+              is per-school, and the per-school × per-module grid is the Modules
+              tab of the organization view, so that is what is named and linked. */}
+          <p className="pf-lead mt-3">
+            Licensed <span className="font-semibold">per school</span>, in the{' '}
             <span className="font-semibold">Modules</span> tab of the organization view.
           </p>
-          <Button to="/app" className="mt-3">
+          <AuroraLightButton to="/app" className="mt-3" icon={<Building2 size={15} aria-hidden="true" />}>
             Open the organization view
-          </Button>
-        </Section>
+          </AuroraLightButton>
+        </AuroraSection>
       )}
     </div>
   )

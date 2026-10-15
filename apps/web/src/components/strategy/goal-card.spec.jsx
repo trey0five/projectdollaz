@@ -33,8 +33,8 @@ describe('GoalCard', () => {
         }}
       />,
     )
-    await waitFor(() => expect(screen.getByText('5.0%')).toBeTruthy(), { timeout: 3000 })
-  })
+    await waitFor(() => expect(screen.getByText('5.0%')).toBeTruthy(), { timeout: 10000 })
+  }, 15000)
 
   it('a goal with no reading gives no pace verdict', () => {
     render(

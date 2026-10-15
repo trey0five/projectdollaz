@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import ActArrival, { BAND_QUALIFIER } from './ActArrival.jsx'
+import ActArrival, { BAND_QUALIFIER, BELOW_THRESHOLD_LABEL, projectedBandVerdict } from './ActArrival.jsx'
+import { readFileSync } from 'node:fs'
 import ActFindings from './ActFindings.jsx'
 import ActRequests, { standardHref } from './ActRequests.jsx'
 import EvidenceReadinessTable from '../EvidenceReadinessTable.jsx'
@@ -170,6 +171,26 @@ describe('SPEC-WEB-1 — acceptance 1: every basis renders its value and its dat
     const { container } = wrap(<FindingBasisChain basis={[]} />)
     expect(container.querySelector('[data-testid="basis-missing"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="basis-chain"]')).toBeNull()
+  })
+})
+
+describe('the projected score is judged ONE way on both pages', () => {
+  // /accreditation judges its "Projected score" card from readiness.belowThreshold
+  // (below every band → At risk, in a band → Good). The visit payload carries only
+  // the band string, so the Mock Visit reads the engine's floor sentinel instead.
+  // The mirror must be the package's own string, or the two pages disagree.
+  it('the floor sentinel mirror matches accreditation-readiness.ts', () => {
+    // Relative to the vitest cwd (apps/web), as in portfolio-honesty.spec.
+    const src = readFileSync('../../packages/compliance/src/accreditation-readiness.ts', 'utf8')
+    const m = src.match(/export const BELOW_THRESHOLD_LABEL = '([^']*)'/)
+    expect(m).toBeTruthy()
+    expect(BELOW_THRESHOLD_LABEL).toBe(m[1])
+  })
+  it('below → risk, a real band → good, no band → no pill', () => {
+    expect(projectedBandVerdict(BELOW_THRESHOLD_LABEL)).toBe('risk')
+    expect(projectedBandVerdict('Accredited')).toBe('good')
+    expect(projectedBandVerdict(null)).toBeNull()
+    expect(projectedBandVerdict('')).toBeNull()
   })
 })
 
@@ -609,6 +630,6 @@ describe('Act 6 — the draft says WHY it is empty, in the server’s words', ()
     if (!noLift) return // the fixture guarantees one; this guard keeps the spec honest
     const { container } = wrap(<ActPlan plan={planAct} canEdit />)
     expect(container.textContent).toContain(noLift.estimatedLiftReason)
-    expect(container.textContent).not.toContain('+0 index pts')
+    expect(container.textContent).not.toContain('+0 points')
   })
 })

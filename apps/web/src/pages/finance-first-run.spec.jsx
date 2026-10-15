@@ -218,6 +218,6 @@ describe('FinancePage — first run is latched, not yanked away by its own succe
     // keep. Folding the apparatus must not fold away the replay.
     const branch = emptyBranch()
     expect(branch).toMatch(/onClick=\{\(\) => setRevealSchoolId\(schoolId\)\}/)
-    expect(branch).toContain('What lit up')
+    expect(branch).toContain('What changed')
   })
 })

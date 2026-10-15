@@ -31,6 +31,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, ChevronDown, EyeOff, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { subjectLabelOf } from '@finrep/analytics'
+import { AuroraButton, AuroraSwitch } from '../ui/aurora/index.js'
 
 const EASE = [0.2, 0.8, 0.2, 1]
 
@@ -245,6 +246,155 @@ export function FilterChip({ label, value, options, onChange, allLabel }) {
         ) : null}
       </AnimatePresence>
     </div>
+  )
+}
+
+// ── Aurora: the frame and the lens ride the Academics band ───────────────────
+
+/**
+ * AssessmentBandTools — the same controls as the bar below, laid out for the
+ * band's tools row (2026-10-15 Aurora): test and year as the band's segmented
+ * switch, grade and subject as compact glass selects, Clear only when something
+ * is narrowed. The SAME view→filter map applies — a control that does nothing
+ * on this view is still not shown. The band eyebrow already names the test and
+ * year, so the old "what you are looking at" line is not repeated.
+ */
+export function AssessmentBandTools({ ctx, view, onSelect, loading }) {
+  if (!ctx) return null
+  const shown = FILTERS_FOR_VIEW[view] ?? []
+  const grade = ctx.grade ?? 'all'
+  const subject = ctx.subject ?? ''
+  const years = [...(ctx.years ?? [])].sort((a, b) => a - b)
+  const tests = ctx.availableTestTypes ?? []
+  const subjects = ctx.subjects ?? []
+  const totalIsDefault = view === 'cohorts'
+  const totalLabel = (ctx.availableSeries ?? []).find((s) => s.key === 'total')?.label ?? 'Composite'
+  const narrowed = (shown.includes('grade') && grade !== 'all') || (shown.includes('subject') && subject)
+  const newTest = (t) => onSelect({ testType: t, schoolYear: null, gradeLevel: null, cohortGrade: null, subject: null })
+
+  return (
+    <>
+      {tests.length > 1 ? (
+        tests.length <= 3 ? (
+          <AuroraSwitch
+            label="Test"
+            value={ctx.testType}
+            options={tests.map((t) => ({ value: t, label: testLabel(t) }))}
+            onChange={newTest}
+          />
+        ) : (
+          <label>
+            <span className="sr-only">Test</span>
+            <select aria-label="Test" className="sel" value={ctx.testType ?? ''} onChange={(e) => newTest(e.target.value)}>
+              {tests.map((t) => (
+                <option key={t} value={t}>
+                  {testLabel(t)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )
+      ) : null}
+
+      {years.length > 1 ? (
+        years.length <= 4 ? (
+          <AuroraSwitch
+            label="School year"
+            value={ctx.year}
+            options={years.map((y) => ({ value: y, label: String(y) }))}
+            onChange={(y) => onSelect({ schoolYear: Number(y) })}
+          />
+        ) : (
+          <label>
+            <span className="sr-only">School year</span>
+            <select
+              aria-label="School year"
+              className="sel"
+              value={ctx.year ?? ''}
+              onChange={(e) => onSelect({ schoolYear: Number(e.target.value) })}
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+        )
+      ) : null}
+
+      {shown.includes('grade') && (ctx.grades ?? []).length > 0 ? (
+        <label>
+          <span className="sr-only">Grade</span>
+          <select
+            aria-label="Grade"
+            className="sel"
+            value={grade}
+            onChange={(e) => onSelect({ gradeLevel: e.target.value === 'all' ? null : e.target.value })}
+          >
+            <option value="all">All grades</option>
+            {(ctx.grades ?? []).map((g) => (
+              <option key={g} value={g}>
+                Grade {g}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {shown.includes('subject') && subjects.length > 1 ? (
+        <label>
+          <span className="sr-only">{totalIsDefault ? 'Measure' : 'Subject'}</span>
+          <select
+            aria-label={totalIsDefault ? 'Measure' : 'Subject'}
+            className="sel"
+            value={subject}
+            onChange={(e) => onSelect({ subject: e.target.value || null })}
+          >
+            <option value="">{totalIsDefault ? totalLabel : 'All subjects'}</option>
+            {subjects.map((s) => (
+              <option key={s} value={s}>
+                {subjectLabelOf(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {narrowed ? (
+        <AuroraButton onClick={() => onSelect({ gradeLevel: null, subject: null, cohortGrade: null })} icon={<RotateCcw size={14} aria-hidden="true" />}>
+          Clear
+        </AuroraButton>
+      ) : null}
+      {loading ? <span className="text-small text-ink2">Updating…</span> : null}
+    </>
+  )
+}
+
+/**
+ * The peer-names switch on its own — presentation, not filtering, so it sits
+ * at the right of the view pills rather than in the band's data frame.
+ */
+export function PeerNamesToggle({ anonymous, onAnonymous }) {
+  return (
+    <label
+      className={`inline-flex cursor-pointer items-center gap-2 px-1 py-1.5 text-small font-semibold ${anonymous ? 'text-ink' : 'text-ink2'}`}
+      title="Replace every peer school's name with its position, server-side"
+    >
+      <input type="checkbox" className="sr-only" checked={Boolean(anonymous)} onChange={(e) => onAnonymous(e.target.checked)} />
+      <span
+        aria-hidden="true"
+        className="relative h-[18px] w-[32px] rounded-full transition-colors"
+        style={{ background: anonymous ? '#101C3D' : 'rgba(16,28,61,0.18)' }}
+      >
+        <motion.span
+          className="absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white"
+          animate={{ left: anonymous ? 16 : 2 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+        />
+      </span>
+      <EyeOff size={13} /> Hide peer names
+    </label>
   )
 }
 

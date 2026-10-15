@@ -24,6 +24,7 @@ import {
   EXPENSE_LINE_LABELS,
 } from '@finrep/analytics'
 import { describeBudgetSource } from './budgetSource.js'
+import { budgetPlanTotals } from './budgetTotals.js'
 import { Section, StatStrip, Stat, DataTable, Pill, Button } from '../ui/surface/index.js'
 
 // Whole-dollar, thousands separators, accounting parentheses for a loss; em
@@ -32,14 +33,6 @@ function dollar(n) {
   if (n == null || Number.isNaN(n)) return '—'
   const s = `$${Math.abs(Number(n)).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
   return Number(n) < 0 ? `(${s})` : s
-}
-
-function sumValues(map) {
-  if (!map) return 0
-  return Object.values(map).reduce((s, v) => {
-    const n = Number(v)
-    return s + (Number.isFinite(n) ? n : 0)
-  }, 0)
 }
 
 // ── Source badge (module scope) ──────────────────────────────────────────────
@@ -87,12 +80,10 @@ export default function BudgetSummary({ budget, canEdit, onEdit, onViewAdvanced 
   const source = describeBudgetSource(budget)
   const kpis = lines.driverModel?.kpis ?? null
 
-  // KPI numbers: prefer the driver KPIs; else sum the category rollups; else the
-  // stored top-line totals. sumValues returns 0 (not null) for an empty map, so
-  // use || to let a real stored total win when there's no by-category detail.
-  const totalRevenue = kpis?.totalRevenue ?? (sumValues(lines.revenue) || budget?.totalRevenue || 0)
-  const totalExpense = kpis?.totalExpense ?? (sumValues(lines.expense) || budget?.totalExpenses || 0)
-  const netIncome = kpis?.netIncome ?? totalRevenue - totalExpense
+  // KPI numbers: the ONE plan-totals derivation (budgetTotals.js) — the Budget
+  // page's band and the Budget-vs-actual bridge read the same function, so the
+  // summary and the band can never disagree.
+  const { totalRevenue, totalExpense, netIncome } = budgetPlanTotals(budget)
   const enrollmentTotal = kpis?.enrollmentTotal ?? null
   const costPerPupil = kpis?.costPerPupil ?? null
 

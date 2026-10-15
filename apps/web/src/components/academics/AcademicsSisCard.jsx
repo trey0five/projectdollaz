@@ -14,8 +14,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Clock, Plug, Upload } from 'lucide-react'
 import { enrollmentApi } from '../../lib/api.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
-const HUE = '#0D9488'
+const HUE = moduleHue('academics')
 
 /** Providers whose gradebook API we can read once the adapter lands. */
 const GRADEBOOK_CAPABLE = new Set(['oneroster_api', 'blackbaud_sky'])

@@ -35,9 +35,11 @@
 import { useMemo } from 'react'
 import { ShieldQuestion, ArrowRight } from 'lucide-react'
 import { domainIcon } from './domainMeta.js'
+import ShortReason from './ShortReason.jsx'
 import { riskBandMeta } from './RiskChip.jsx'
 import { DemoChip } from './ReadinessTrendStrip.jsx'
 import { DataTable, Section } from '../ui/surface/index.js'
+import { HowThisWorks } from '../ui/aurora/index.js'
 
 /** The glyph, read off props (the house workaround for the render-resolved-component lint). */
 function DomainGlyph(props) {
@@ -96,9 +98,9 @@ export default function DomainBandStrip({
           measuredOf(band) ? (
             <span className="text-ink">{riskBandMeta(band.band).label}</span>
           ) : (
-            // NOT MEASURED. No band word, no colour, no number — the server's reason
-            // and nothing else. This is the whole point of the null case.
-            <span className="block max-w-[32ch] whitespace-normal text-[12px] leading-snug text-ink2">{band.reason}</span>
+            // NOT MEASURED. No band word, no colour, no number — two words in the
+            // cell and the server's reason, verbatim, one tap away.
+            <ShortReason short="Not measured" full={band.reason} />
           ),
       },
       {
@@ -131,7 +133,7 @@ export default function DomainBandStrip({
           // means nothing.
           const openable = !!onOpen && measured && (band.facts?.critical > 0 || band.facts?.warn > 0)
           return openable ? (
-            <button type="button" onClick={() => onOpen(band)} className="dt-link dt-actions">
+            <button type="button" onClick={() => onOpen(band)} className="dt-link whitespace-nowrap">
               What to do <ArrowRight size={12} aria-hidden />
             </button>
           ) : null
@@ -169,7 +171,6 @@ export default function DomainBandStrip({
           {demoData ? <DemoChip /> : null}
         </span>
       }
-      aside="Ordinal, counted over distinct facts — never a score, never a percentage."
     >
       <DataTable
         columns={columns}
@@ -183,11 +184,16 @@ export default function DomainBandStrip({
         // shattering the reason sentences into one-word lines.
         style={{ minWidth: 640 }}
       />
-      <p className="sec-note">
-        These bands answer &ldquo;what are the operating numbers warning about here?&rdquo;. The
-        rubric table below answers &ldquo;what do your accreditor&apos;s standards say?&rdquo;. They
-        are different questions and are never blended into one figure.
-      </p>
+      {/* The method, said once and off the table: what a band is, and why it
+          is never blended with the rubric table below. */}
+      <HowThisWorks inline className="mt-3" title="What these bands mean">
+        <p>Each band is ordinal, counted over distinct facts — never a score, never a percentage.</p>
+        <p>
+          These bands answer &ldquo;what are the operating numbers warning about here?&rdquo;. The
+          rubric table below answers &ldquo;what do your accreditor&apos;s standards say?&rdquo;. They
+          are different questions and are never blended into one figure.
+        </p>
+      </HowThisWorks>
     </Section>
   )
 }

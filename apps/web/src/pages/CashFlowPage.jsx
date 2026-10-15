@@ -32,15 +32,30 @@ import {
   LineChart,
   Pencil,
   Plus,
+  Scale,
   Sparkles,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
   Zap,
 } from 'lucide-react'
 import { workbookRows } from '@finrep/analytics'
-import { formatMetricValue } from '../lib/metricMeta.js'
+import { money as auroraMoney } from '../components/finance/financeAurora.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useCashFlowProjection } from '../hooks/useCashFlowProjection.js'
-import BackLink from '../components/ui/BackLink.jsx'
-import { PageHeader, StatStrip, Stat, Section, Panel, Toolbar, Pill, Button } from '../components/ui/surface/index.js'
+import { Panel, Pill, Button } from '../components/ui/surface/index.js'
+import {
+  AuroraButton,
+  AuroraCard,
+  AuroraEmpty,
+  AuroraLightButton,
+  AuroraSection,
+  AuroraTile,
+  AuroraTileGrid,
+  HowThisWorks,
+  VerdictEm,
+} from '../components/ui/aurora/index.js'
+import { FinanceSubPage, FinanceSubBand, FinanceMore } from '../components/statements/financeSub.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import CashRail from '../components/cashflow/CashRail.jsx'
 import CashWorkbook from '../components/cashflow/CashWorkbook.jsx'
@@ -50,11 +65,12 @@ import CommitmentModal from '../components/cashflow/CommitmentModal.jsx'
 import CurrencyField from '../components/cashflow/CurrencyField.jsx'
 import Sparkline from '../components/analytics/charts/Sparkline.jsx'
 import { useCountUp } from '../components/analytics/charts/useCountUp.js'
-import { moduleAccentVars } from '../components/module/moduleAnatomy.js'
 import { flashElement } from '../components/analytics/v2/flash.js'
 import { whyLine, potentialActions } from '../components/cashflow/whyLine.js'
 
-const money = (v) => formatMetricValue(v == null ? null : v, 'currency')
+// Whole dollars with the sign BEFORE the "$" and a true minus ("−$71,000") —
+// the one Aurora money spelling, so the band, the sentences and the charts agree.
+const money = (v) => auroraMoney(v) ?? '—'
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -74,7 +90,10 @@ const TIER_META = {
 // A hero figure that RE-COUNTS on every rebuild (useCountUp keyed by the value
 // string — prev → next, never through $0) and renders dates verbatim.
 function LiveValue({ value, countUp = true }) {
-  const display = useCountUp(value ?? '—', { duration: 600, enabled: countUp })
+  // A negative figure ("−$71,000") renders as-is: counting it would tween the
+  // digits under a fixed "−$" and show amounts that were never true.
+  const negative = String(value ?? '').startsWith('−')
+  const display = useCountUp(value ?? '—', { duration: 600, enabled: countUp && !negative })
   return <>{display}</>
 }
 
@@ -344,11 +363,11 @@ export default function CashFlowPage() {
 
   const p = cf.projection?.projection ?? null
   const tier = TIER_META[cf.projection?.dataTier ?? 'limited']
-  const why = useMemo(() => whyLine(p, money), [p])
+  const why = useMemo(() => whyLine(p, money, prettyDay), [p])
   const omissionTone = (cf.projection?.omissions ?? []).some((o) => /tuition|budget|receipt|revenue/i.test(`${o.key} ${o.message}`))
     ? 'risk'
     : 'watch'
-  const actions = useMemo(() => potentialActions(p, money), [p])
+  const actions = useMemo(() => potentialActions(p, money, prettyDay), [p])
   const workbook = useMemo(() => (p ? workbookRows(p) : null), [p])
   const sources = cf.projection?.sources ?? null
   const activeSources = useMemo(
@@ -436,10 +455,10 @@ export default function CashFlowPage() {
     }
   }
 
-  // ── Chrome — BackLink + PageHeader (eyebrow FINANCE · CASH FORECAST, the
-  //    confidence / reserve / QuickBooks pills as the meta line) ─────────────
-  const headerMeta = p ? (
-    <span className="inline-flex flex-wrap items-center gap-2">
+  // ── The band's status chips (QuickBooks / confidence / reserve) — the tools
+  //    row under the buttons. ───────────────────────────────────────────────
+  const statusChips = p ? (
+    <>
       {qboLive ? (
         <Pill variant="status" tone="good">
           Live from QuickBooks
@@ -460,238 +479,281 @@ export default function CashFlowPage() {
           ? 'Not set'
           : money(cf.projection.assumptions.reserveThreshold)}
       </Pill>
-    </span>
-  ) : (
-    'When cash runs low, by how much, and why.'
-  )
-  const header = (
-    <div className="mb-2">
-      <BackLink fallback="/finance" fallbackLabel="Back to Finance" className="mb-2" />
-      <PageHeader
-        eyebrow={['Finance', activeSchool?.name, 'Cash forecast'].filter(Boolean).join(' · ')}
-        title="Cash forecast"
-        hue="37 99 235"
-        actions={
-          p ? (
-            <Button variant="secondary" onClick={() => openAdd()} icon={<Plus size={14} />}>
-              Add expected item
-            </Button>
-          ) : null
-        }
-      >
-        <div className="pg-meta">{headerMeta}</div>
-      </PageHeader>
-    </div>
-  )
+    </>
+  ) : null
 
   if (cf.notLicensed) {
     return (
-      <div
-        style={moduleAccentVars('finance')}
-        className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8"
-      >
-        {header}
-        <div className="mt-4 border-t border-hair pt-4">
-          <p className="text-body text-ink2">
-            The cash forecast is part of the Finance and Planning modules. Add either to see when
-            your cash is projected to run low.
-          </p>
+      <FinanceSubPage crumb="Cash Forecast">
+        <FinanceSubBand id="cf-hero" title="Cash Forecast" verdict="The cash forecast isn’t on your plan yet." />
+        <div className="mt-8">
+          <AuroraEmpty
+            icon={TrendingUp}
+            text="The cash forecast is part of the Finance and Planning modules."
+            sub="Add either to see when your cash is projected to run low."
+            action={
+              <AuroraLightButton variant="ghost" to="/settings/billing#modules">
+                See plans
+              </AuroraLightButton>
+            }
+          />
         </div>
-      </div>
+      </FinanceSubPage>
     )
   }
 
-  // ── The headline — figures as a StatStrip when there is a forecast, the SETUP
-  //    Panel when not. On the ground: the dark band is gone (plan §2.1). ──────
-  const horizonBar = (
-    <Toolbar
-      aria-label="Forecast horizon"
-      aside={
-        p ? (
-          <span className="text-small text-ink2 tabular-nums">as of {p.asOfDate}</span>
+  // ── The horizon switch (lives on the band's tools row) ──────────────────────
+  const horizonSeg = (
+    <div className="seg" role="group" aria-label="Horizon">
+      {HORIZONS.map((h) => (
+        <button key={h.key} type="button" aria-pressed={horizon === h.key} onClick={() => pickHorizon(h.key)} className="seg-btn">
+          {h.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  // ── ONE plain sentence, straight off the engine's figures ──────────────────
+  let verdict
+  if (p) {
+    verdict = p.firstShortfallDate ? (
+      <>
+        Cash falls short on <VerdictEm tone="risk">{prettyDay(p.firstShortfallDate)}</VerdictEm> — a{' '}
+        <VerdictEm tone="risk">{money(p.shortfallAmount)} gap</VerdictEm>, with {p.daysOfNotice} days&rsquo; notice.
+      </>
+    ) : (
+      <>
+        Cash covers you through <VerdictEm tone="good">{prettyDay(p.horizonEnd)}</VerdictEm>. The low point is{' '}
+        <VerdictEm>{money(p.lowestBalance)}</VerdictEm>
+        {p.lowestDate ? ` on ${prettyDay(p.lowestDate)}` : ''}.
+      </>
+    )
+  } else if (cf.loading) {
+    verdict = 'Loading your forecast…'
+  } else if (cf.opening?.openingCash != null && !cf.error) {
+    verdict = 'Rebuilding your last forecast…'
+  } else {
+    verdict = <>Enter the cash you can spend today to see when it may run low.</>
+  }
+
+  // ── The four headline figures as glass cards (they re-count on every
+  //    rebuild). The pills are the ENGINE's signs (a shortfall or none), not
+  //    an invented target. ───────────────────────────────────────────────────
+  const kpis = p
+    ? [
+        {
+          key: 'open',
+          icon: Wallet,
+          label: 'Cash you can spend',
+          value: <LiveValue value={money(p.openingCash)} />,
+          caption: `As of ${prettyDay(p.asOfDate)}`,
+          verdict: p.firstShortfallDate ? 'watch' : 'good',
+        },
+        {
+          key: 'low',
+          icon: TrendingDown,
+          label: 'Lowest point',
+          value: <LiveValue value={money(p.lowestBalance)} />,
+          caption: p.lowestDate ? `On ${prettyDay(p.lowestDate)}` : 'No movement in this horizon',
+          verdict: p.firstShortfallDate ? 'risk' : 'good',
+        },
+        {
+          key: 'through',
+          icon: CalendarClock,
+          label: 'Covered through',
+          value: (
+            <LiveValue
+              countUp={false}
+              value={p.firstShortfallDate ? prettyDay(dayBefore(p.firstShortfallDate)) : prettyDay(p.horizonEnd)}
+            />
+          ),
+          textValue: true,
+          caption: p.firstShortfallDate
+            ? `${p.daysOfNotice} days' notice`
+            : p.monthsCashAtLowPoint != null
+              ? `${p.monthsCashAtLowPoint.toFixed(1)} months' cash at the low`
+              : `Ends at ${money(p.endingBalance)}`,
+          verdict: p.firstShortfallDate ? 'watch' : 'good',
+        },
+        p.firstShortfallDate
+          ? {
+              key: 'gap',
+              icon: AlertTriangle,
+              label: 'Projected gap',
+              value: <LiveValue value={money(p.shortfallAmount)} />,
+              caption: `First breach ${prettyDay(p.firstShortfallDate)}`,
+              verdict: 'risk',
+            }
+          : {
+              key: 'end',
+              icon: Scale,
+              label: 'Ending balance',
+              value: <LiveValue value={money(p.endingBalance)} />,
+              caption: 'Above the reserve throughout',
+              verdict: 'good',
+            },
+      ]
+    : null
+
+  // First run (no forecast has ever been built): the band's one job is the
+  // opening figure — focus the setup's amount field below the band.
+  const firstRun = !p && !(cf.loading || (cf.opening?.openingCash != null && !cf.error))
+  const focusOpening = () => {
+    const el = document.querySelector('input[aria-label="Available operating cash"]')
+    if (!el) return
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+    el.focus({ preventScroll: true })
+  }
+
+  // Penny walkthrough anchor 'cashFlow.headline' (see
+  // apps/web/src/components/penny/guide/targetRegistry.js) is the BAND: the
+  // id is the contract; the class list is not.
+  const band = (
+    <FinanceSubBand
+      id="cf-hero"
+      className="fsub-tight"
+      aria-label="When does cash run low?"
+      eyebrow={p ? `As of ${prettyDay(p.asOfDate)}` : null}
+      title="Cash Forecast"
+      verdict={verdict}
+      actions={
+        firstRun ? (
+          <AuroraButton variant="primary" onClick={focusOpening} icon={<Wallet size={19} aria-hidden="true" />}>
+            Enter cash on hand
+          </AuroraButton>
+        ) : p ? (
+          <>
+            <AuroraButton variant="primary" onClick={() => openAdd()} icon={<Plus size={19} aria-hidden="true" />}>
+              Add expected item
+            </AuroraButton>
+            <AuroraButton
+              onClick={() => setOpeningEditorOpen((v) => !v)}
+              aria-expanded={openingEditorOpen}
+              aria-label="Edit the opening balance"
+              icon={<Pencil size={19} aria-hidden="true" />}
+            >
+              Edit cash on hand
+            </AuroraButton>
+          </>
         ) : null
       }
-    >
-      <span className="toolbar-label">Horizon</span>
-      <div className="seg" role="group" aria-label="Horizon">
-        {HORIZONS.map((h) => (
-          <button key={h.key} type="button" aria-pressed={horizon === h.key} onClick={() => pickHorizon(h.key)} className="seg-btn">
-            {h.label}
-          </button>
-        ))}
-      </div>
-    </Toolbar>
-  )
-  const hero = (
-    <motion.section
-      // Penny walkthrough anchor 'cashFlow.headline' (see
-      // apps/web/src/components/penny/guide/targetRegistry.js). The id is the
-      // contract; the class list is not.
-      id="cf-hero"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      aria-label="When does cash run low?"
-    >
-      {p ? (
-        <>
-          {horizonBar}
-          <StatStrip cols={4} className="stats-compact">
-            <Stat
-              label="Available operating cash"
-              value={<LiveValue value={money(p.openingCash)} />}
-              status={p.firstShortfallDate ? 'watch' : 'good'}
-              note={`as of ${p.asOfDate}`}
-            >
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Edit the opening balance"
-                  aria-expanded={openingEditorOpen}
-                  onClick={() => setOpeningEditorOpen((v) => !v)}
-                  className="btn btn-quiet btn-sm"
-                >
-                  <Pencil size={12} /> Edit
-                </button>
-                {qboOffer ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpeningDraft(String(qboOffer.amount))
-                      // A refinement of the CURRENT forecast, not a build — preview only.
-                      run({ openingCash: qboOffer.amount, openingSource: 'quickbooks', persist: false })
-                    }}
-                    className="btn btn-quiet btn-sm"
-                  >
-                    <Zap size={11} /> Use QuickBooks balance · {money(qboOffer.amount)}
-                  </button>
-                ) : null}
-              </div>
-              <div className="mt-2 h-8">
-                <Sparkline vals={p.buckets.map((b) => b.closingBalance)} color="#2563EB" h={32} fill stretch />
-              </div>
-            </Stat>
-            <Stat
-              label="Lowest projected"
-              value={<LiveValue value={money(p.lowestBalance)} />}
-              status={p.firstShortfallDate ? 'risk' : 'good'}
-              note={p.lowestDate ? `on ${p.lowestDate}` : 'no movement in this horizon'}
-            />
-            <Stat
-              label="Covered through"
-              value={
-                <LiveValue
-                  countUp={false}
-                  value={p.firstShortfallDate ? prettyDay(dayBefore(p.firstShortfallDate)) : prettyDay(p.horizonEnd)}
-                />
-              }
-              status={p.firstShortfallDate ? 'watch' : 'good'}
-              note={
-                p.firstShortfallDate
-                  ? `${p.daysOfNotice} days' notice`
-                  : p.monthsCashAtLowPoint != null
-                    ? `ends at ${money(p.endingBalance)} · ${p.monthsCashAtLowPoint.toFixed(1)} months' cash at the low`
-                    : `ends at ${money(p.endingBalance)}`
-              }
-            />
-            {p.firstShortfallDate ? (
-              <Stat label="Projected gap" value={<LiveValue value={money(p.shortfallAmount)} />} status="risk" note={`first breach ${p.firstShortfallDate}`} />
-            ) : (
-              <Stat label="Ending balance" value={<LiveValue value={money(p.endingBalance)} />} status="good" note="stays above the reserve throughout" />
-            )}
-          </StatStrip>
-
-          {/* The inline opening editor — the Stat's pencil expands it HERE,
-              no page jump. Same run() path as Build (a real, persisted run). */}
-          <AnimatePresence initial={false}>
-            {openingEditorOpen ? (
-              <OpeningEditor
-                openingValue={openingInput}
-                onOpeningChange={setOpeningDraft}
-                asOf={asOf}
-                onAsOfChange={setAsOfDraft}
-                busy={cf.projecting}
-                onRebuild={() => {
-                  run()
-                  setOpeningEditorOpen(false)
-                }}
-                onCancel={() => setOpeningEditorOpen(false)}
-                qboOffer={qboOffer}
-                onUseQbo={() => {
-                  setOpeningDraft(String(qboOffer.amount))
-                  run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
-                  setOpeningEditorOpen(false)
-                }}
-                fmt={money}
-                error={cf.error}
-              />
-            ) : null}
-          </AnimatePresence>
-        </>
-      ) : cf.loading || (cf.opening?.openingCash != null && !cf.error) ? (
-        /* LOADING / REHYDRATING: a previous build exists (or we don't know
-           yet) — show the shimmer, never the setup screen. The setup below is
-           ONLY for a school that has genuinely never built a forecast. */
-        <div className="mt-2">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`shimmer-bar h-[88px] rounded ${reduce ? '' : 'animate-pulse'}`} />
-            ))}
-          </div>
-          <p className="mt-3 text-small font-semibold text-ink2">
-            {cf.loading ? 'Loading…' : 'Rebuilding your last forecast…'}
-          </p>
-        </div>
-      ) : (
-        /* FIRST-RUN: the headline IS the setup. One field, one date, one click —
-           inside the one raised surface, because it is a form. */
-        <Panel className="mt-2 max-w-2xl">
-          <h2 className="font-serif text-title text-ink">When does cash run low?</h2>
-          <p className="mt-1 text-body text-ink2">
-            Enter what operations can actually spend — or accept the QuickBooks balance — and
-            build the forecast. Commitments, budget phasing, enrollment and your books do the
-            rest.
-          </p>
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="toolbar-label">Available operating cash</span>
-              <CurrencyField
-                value={openingInput}
-                onChange={setOpeningDraft}
-                variant="light"
-                size="lg"
-                className="w-56"
-                aria-label="Available operating cash"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="toolbar-label">As of</span>
-              <DatePicker
-                value={asOf}
-                onChange={setAsOfDraft}
-                className="w-44 rounded-md border border-hair/30 bg-white px-3 py-2 text-[14px] text-ink"
-              />
-            </label>
-            <Button variant="primary" onClick={() => run()} disabled={cf.projecting || !Number.isFinite(Number(openingInput))}>
-              {cf.projecting ? 'Building…' : 'Build forecast'}
-            </Button>
+      tools={
+        p ? (
+          <>
+            {horizonSeg}
             {qboOffer ? (
-              <Button
-                variant="secondary"
+              <button
+                type="button"
                 onClick={() => {
                   setOpeningDraft(String(qboOffer.amount))
-                  run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+                  // A refinement of the CURRENT forecast, not a build — preview only.
+                  run({ openingCash: qboOffer.amount, openingSource: 'quickbooks', persist: false })
                 }}
-                icon={<Zap size={13} />}
+                className="btn btn-quiet btn-sm"
               >
-                Use QuickBooks balance · {money(qboOffer.amount)}
-              </Button>
+                <Zap size={11} /> Use QuickBooks balance · {money(qboOffer.amount)}
+              </button>
             ) : null}
-          </div>
-          {cf.error ? <p className="mt-2 text-[13px] tone-risk">{cf.error}</p> : null}
-        </Panel>
-      )}
-    </motion.section>
+            {statusChips}
+          </>
+        ) : null
+      }
+      kpis={kpis}
+    />
+  )
+
+  // The inline opening editor — the band's "Edit" expands it right under the
+  // band, no page jump. Same run() path as Build (a real, persisted run).
+  const openingEditorUnderBand = p ? (
+    <AnimatePresence initial={false}>
+      {openingEditorOpen ? (
+        <OpeningEditor
+          openingValue={openingInput}
+          onOpeningChange={setOpeningDraft}
+          asOf={asOf}
+          onAsOfChange={setAsOfDraft}
+          busy={cf.projecting}
+          onRebuild={() => {
+            run()
+            setOpeningEditorOpen(false)
+          }}
+          onCancel={() => setOpeningEditorOpen(false)}
+          qboOffer={qboOffer}
+          onUseQbo={() => {
+            setOpeningDraft(String(qboOffer.amount))
+            run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+            setOpeningEditorOpen(false)
+          }}
+          fmt={money}
+          error={cf.error}
+        />
+      ) : null}
+    </AnimatePresence>
+  ) : null
+
+  // ── No forecast on screen: the shimmer while one loads / rehydrates, or the
+  //    FIRST-RUN setup (one field, one date, one click) for a school that has
+  //    genuinely never built one. ───────────────────────────────────────────
+  const setupOrLoading = p ? null : cf.loading || (cf.opening?.openingCash != null && !cf.error) ? (
+    /* LOADING / REHYDRATING: a previous build exists (or we don't know
+       yet) — show the shimmer, never the setup screen. */
+    <div className="mt-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`shimmer-bar h-[88px] rounded ${reduce ? '' : 'animate-pulse'}`} />
+        ))}
+      </div>
+      <p className="mt-3 text-small font-semibold text-ink2">
+        {cf.loading ? 'Loading…' : 'Rebuilding your last forecast…'}
+      </p>
+    </div>
+  ) : (
+    <AuroraSection first icon={Wallet} title="Build your forecast" subtitle="One amount, one date, one click">
+      <Panel className="max-w-2xl">
+        <h2 className="font-serif text-title text-ink">When does cash run low?</h2>
+        <p className="mt-1 text-body text-ink2">
+          Enter what operations can actually spend — or accept the QuickBooks balance. Commitments, budget phasing,
+          enrollment and your books do the rest.
+        </p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="toolbar-label">Available operating cash</span>
+            <CurrencyField
+              value={openingInput}
+              onChange={setOpeningDraft}
+              variant="light"
+              size="lg"
+              className="w-56"
+              aria-label="Available operating cash"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="toolbar-label">As of</span>
+            <DatePicker
+              value={asOf}
+              onChange={setAsOfDraft}
+              className="w-44 rounded-md border border-hair/30 bg-white px-3 py-2 text-[14px] text-ink"
+            />
+          </label>
+          <Button variant="primary" onClick={() => run()} disabled={cf.projecting || !Number.isFinite(Number(openingInput))}>
+            {cf.projecting ? 'Building…' : 'Build forecast'}
+          </Button>
+          {qboOffer ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setOpeningDraft(String(qboOffer.amount))
+                run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+              }}
+              icon={<Zap size={13} />}
+            >
+              Use QuickBooks balance · {money(qboOffer.amount)}
+            </Button>
+          ) : null}
+        </div>
+        {cf.error ? <p className="mt-2 text-[13px] tone-risk">{cf.error}</p> : null}
+      </Panel>
+    </AuroraSection>
   )
 
   // ── The Forecast-inputs summary (was the second entry strip) — READ-ONLY ───
@@ -796,63 +858,67 @@ export default function CashFlowPage() {
   )
 
   return (
-    <div
-      style={moduleAccentVars('finance')}
-      className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8"
-    >
-      {header}
-      <CashTabs tab={tab} onTab={setTab} />
+    <FinanceSubPage crumb="Cash Forecast">
+      {band}
+      {openingEditorUnderBand}
+
+      {/* The page's two views as one switch under the band. */}
+      <div className="fsub-nav">
+        <CashTabs tab={tab} onTab={setTab} />
+      </div>
 
       {tab === 'overview' ? (
-        <div
-          id="cf-panel-overview"
-          role="tabpanel"
-          aria-labelledby="cf-tab-overview"
-          tabIndex={0}
-          className="mt-4 space-y-6"
-        >
-          {hero}
+        <div id="cf-panel-overview" role="tabpanel" aria-labelledby="cf-tab-overview" tabIndex={0} className="outline-none">
+          {setupOrLoading}
 
           {p ? (
             <>
               {/* ── What is not in this forecast ─────────────────────────────── */}
               {cf.projection.omissions?.length > 0 ? (
-                <Panel
-                  as="section"
-                  tone="attention"
-                  // The mark follows the WORST omission: a missing receipt
+                <AuroraSection
+                  first
+                  icon={AlertTriangle}
+                  // The strip follows the WORST omission: a missing receipt
                   // (tuition, a budget) makes the low point an artefact — risk;
                   // anything else is a watch. The server sends no severity.
-                  className={omissionTone === 'risk' ? undefined : 'panel-watch'}
-                  title={
-                    <span className="inline-flex items-center gap-2">
-                      <AlertTriangle size={15} className={`tone-${omissionTone}`} aria-hidden="true" /> What is not in this forecast
-                    </span>
-                  }
+                  tone={omissionTone}
+                  title="What is not in this forecast"
+                  subtitle="Add these for a truer picture"
+                  count={`${cf.projection.omissions.length} missing`}
                 >
-                  <ul className="space-y-1.5">
-                    {cf.projection.omissions.map((o) => (
-                      <li key={o.key} className="text-small leading-relaxed text-ink">
-                        {o.message}
-                      </li>
-                    ))}
-                  </ul>
-                </Panel>
+                  <AuroraCard tone={omissionTone}>
+                    <ul className="space-y-1.5">
+                      {cf.projection.omissions.map((o) => (
+                        <li key={o.key} className="text-small leading-relaxed text-ink">
+                          {o.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </AuroraCard>
+                </AuroraSection>
               ) : null}
 
               {/* ── Why ──────────────────────────────────────────────────────── */}
               {why ? (
-                <Section label="Why" as="section">
-                  <p className="text-body text-ink">{why}</p>
-                </Section>
+                <AuroraSection first={!(cf.projection.omissions?.length > 0)} icon={Info} title="Why" subtitle="What drives the low point">
+                  <AuroraCard>
+                    <p className="text-body text-ink">{why}</p>
+                  </AuroraCard>
+                </AuroraSection>
               ) : null}
 
-              {/* ── The outlook: two views (horizons live in the hero band) ──── */}
-              <Section
-                label="The outlook"
-                as="section"
-                aside={
-                  <div className="seg" role="group" aria-label="Outlook view">
+              {/* ── The outlook: two views (horizons live on the band) ─────── */}
+              <AuroraSection
+                first={!(cf.projection.omissions?.length > 0) && !why}
+                icon={LineChart}
+                title="The outlook"
+                subtitle="Your cash, period by period"
+              >
+                <AuroraCard
+                  className="relative"
+                  title={view === 'charts' ? 'Cash over time' : 'The workbook'}
+                  subtitle={view === 'charts' ? 'Balance against your reserve, and money in vs. out' : 'Every period, line by line'}
+                  aside={<div className="seg" role="group" aria-label="Outlook view">
                     {[
                       { key: 'charts', label: 'Charts', Icon: LineChart },
                       { key: 'workbook', label: 'Workbook', Icon: LayoutGrid },
@@ -861,10 +927,8 @@ export default function CashFlowPage() {
                         <Icon size={13} /> {label}
                       </button>
                     ))}
-                  </div>
-                }
-              >
-                <div className="relative">
+                  </div>}
+                >
                   <AnimatePresence mode="wait">
                     {view === 'charts' ? (
                       <motion.div
@@ -909,11 +973,11 @@ export default function CashFlowPage() {
                   {/* Rebuild shimmer — HONEST loading: the figures underneath are
                       the old projection, so they blur rather than pretend. */}
                   {cf.projecting ? (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-ground/70">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-ground/70">
                       <Pill className={reduce ? '' : 'animate-pulse'}>Rebuilding…</Pill>
                     </div>
                   ) : null}
-                </div>
+                </AuroraCard>
 
                 {/* Provenance — which parts of this forecast came from where. Only
                     sources that actually contributed are shown. */}
@@ -935,61 +999,66 @@ export default function CashFlowPage() {
                     your history or budget, or an assumption you entered.
                   </p>
                 ) : null}
-              </Section>
+              </AuroraSection>
 
-              {/* ── Potential actions ─────────────────────────────────────────── */}
+              {/* ── Potential actions — suggestions, never steps taken ────────── */}
               {actions.length > 0 ? (
-                <Section label="Potential actions" as="section" aside="suggestions, not steps taken for you — every one is a decision">
-                  <ul className="m-0 list-none p-0">
-                    {actions.map((a) => (
-                      <li key={a.key} className="border-b border-hair py-3">
-                        <Link to={a.to} className="inline-flex items-center gap-1.5 text-body font-semibold text-ink hover:underline">
-                          {a.label} <ArrowRight size={13} />
-                        </Link>
-                        <p className="mt-1 text-small leading-relaxed text-ink2">{a.detail}</p>
-                      </li>
+                <AuroraSection icon={Sparkles} title="What you could do" subtitle="Suggestions — every one is your decision" count={`${actions.length} ideas`}>
+                  <AuroraTileGrid cols={Math.min(3, Math.max(2, actions.length))}>
+                    {actions.map((a, i) => (
+                      <AuroraTile
+                        key={a.key}
+                        to={a.to}
+                        icon={ArrowRight}
+                        title={a.label}
+                        desc={a.detail}
+                        hue={i % 3 === 1 ? 'var(--au-h2)' : i % 3 === 2 ? 'var(--au-h3)' : undefined}
+                        art={false}
+                      />
                     ))}
-                  </ul>
-                </Section>
+                  </AuroraTileGrid>
+                </AuroraSection>
               ) : null}
 
               {/* ── Compact inputs summary — adding never requires the tab ──── */}
-              <Section label="Forecast inputs" as="section">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-small text-ink2">
-                      {flows != null
-                        ? `${adjustableFlows.length} QuickBooks-fed line${
-                            adjustableFlows.length === 1 ? '' : 's'
-                          }${excludedCount > 0 ? ` · ${excludedCount} switched off` : ''} · ${
-                            cf.commitments.length
-                          } expected item${cf.commitments.length === 1 ? '' : 's'} of your own`
-                        : `${cf.commitments.length} expected item${
-                            cf.commitments.length === 1 ? '' : 's'
-                          } of your own · line-level QuickBooks detail arrives with the next rebuild`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="primary" onClick={() => setTab('inputs')}>
-                      Open forecast inputs
-                    </Button>
-                    <Button variant="secondary" onClick={() => openAdd()} icon={<Plus size={13} />}>
-                      Add expected item
-                    </Button>
-                  </div>
-                </div>
-              </Section>
+              <AuroraSection
+                icon={LayoutGrid}
+                title="Forecast inputs"
+                subtitle="What feeds the forecast"
+                count={
+                  flows != null
+                    ? `${adjustableFlows.length} from QuickBooks · ${cf.commitments.length} of yours`
+                    : `${cf.commitments.length} of yours`
+                }
+              >
+                <AuroraTileGrid cols={2}>
+                  <AuroraTile
+                    icon={LayoutGrid}
+                    title="Open forecast inputs"
+                    desc={
+                      flows != null
+                        ? `${adjustableFlows.length} QuickBooks-fed line${adjustableFlows.length === 1 ? '' : 's'}${
+                            excludedCount > 0 ? ` · ${excludedCount} switched off` : ''
+                          }`
+                        : 'Line-level QuickBooks detail arrives with the next rebuild.'
+                    }
+                    onClick={() => setTab('inputs')}
+                  />
+                  <AuroraTile
+                    hue="var(--au-h2)"
+                    icon={Plus}
+                    title="Add expected item"
+                    desc={`${cf.commitments.length} expected item${cf.commitments.length === 1 ? '' : 's'} of your own so far.`}
+                    onClick={() => openAdd()}
+                  />
+                </AuroraTileGrid>
+              </AuroraSection>
             </>
           ) : null}
         </div>
       ) : (
-        <div
-          id="cf-panel-inputs"
-          role="tabpanel"
-          aria-labelledby="cf-tab-inputs"
-          tabIndex={0}
-          className="mt-5 space-y-5"
-        >
+        <div id="cf-panel-inputs" role="tabpanel" aria-labelledby="cf-tab-inputs" tabIndex={0} className="space-y-5 outline-none">
+          <AuroraSection first icon={Wallet} title="Cash on hand" subtitle="The starting point for every forecast" />
           {setupStrip}
 
           {/* Sticky mini-projection — edits visibly redraw WITHOUT leaving the tab. */}
@@ -1017,6 +1086,7 @@ export default function CashFlowPage() {
             </div>
           ) : null}
 
+          <AuroraSection icon={LayoutGrid} title="What feeds it" subtitle="Switch lines on or off, add your own" />
           <CashInputsRail
             flows={flows}
             hasProjection={p != null}
@@ -1035,13 +1105,24 @@ export default function CashFlowPage() {
       {/* Data-tier + confidence disclaimer — visible on BOTH tabs; the honesty
           system travels with the forecast, not with the Overview panel. */}
       {p ? (
-        <p className="mt-5 flex items-start gap-2 text-[12.5px] leading-relaxed text-ink2">
+        <p className="mt-6 flex items-start gap-2 text-[12.5px] leading-relaxed text-ink2">
           <AlertTriangle size={14} className="mt-px shrink-0" aria-hidden="true" />
           <span>
             {cf.projection.dataTierReason} {cf.projection.disclaimer}
           </span>
         </p>
       ) : null}
+
+      <FinanceMore current="cash-flow" />
+
+      <HowThisWorks>
+        <p>The forecast starts from the cash operations can actually spend, then adds what comes in and goes out.</p>
+        <p>Your commitments, budget phasing, the tuition schedule and your QuickBooks history feed it.</p>
+        <p>
+          Building or rebuilding the forecast (including a new cash-on-hand figure) saves a run to the archive;
+          switching the horizon or turning lines on and off only previews.
+        </p>
+      </HowThisWorks>
 
       <CommitmentModal
         open={modal != null}
@@ -1052,6 +1133,6 @@ export default function CashFlowPage() {
         initial={modal?.mode === 'edit' ? modal.commitment : (modal?.seed ?? null)}
         editing={modal?.mode === 'edit'}
       />
-    </div>
+    </FinanceSubPage>
   )
 }
