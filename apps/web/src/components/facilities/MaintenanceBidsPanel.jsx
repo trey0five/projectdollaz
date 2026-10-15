@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MaintenanceBidsPanel — the slide-over (governance PersonDetailPanel precedent,
-// orange-hued) for one maintenance item's vendor bids + the Leadership decision.
+// a `.b1-drawer`: white, hairlines, status as 2px marks) for one maintenance
+// item's vendor bids + the Leadership decision.
 // Bids are LAZY: fetched here on open, never with the register list.
 //
 // Roles (server-enforced; the UI mirrors it):
@@ -19,7 +20,7 @@
 // grouped by sourceRef (no per-bid N+1).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
   X,
   Gavel,
@@ -31,11 +32,10 @@ import {
   Trash2,
   Undo2,
   Check,
-  Clock,
 } from 'lucide-react'
 import { facilitiesApi, documentsApi, apiErrorMessage } from '../../lib/api.js'
-
-const FAC_HUE = '#EA580C'
+import { Section, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 
 function fmtMoney(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
@@ -50,9 +50,9 @@ function fmtDay(iso) {
 }
 
 const STATUS_BADGE = {
-  pending: { label: 'Pending', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]', icon: Clock },
-  accepted: { label: 'Accepted', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700', icon: Trophy },
-  rejected: { label: 'Rejected', cls: 'border-rule/60 bg-section text-muted', icon: null },
+  pending: { label: 'Pending', tone: 'watch' },
+  accepted: { label: 'Accepted', tone: 'good' },
+  rejected: { label: 'Rejected', tone: 'neutral' },
 }
 
 // ── Per-bid document chip strip (paperclip upload + list/download) ────────────
@@ -96,18 +96,18 @@ function BidDocuments({ schoolId, bid, docs, canEdit, onUploaded, onError }) {
   if (!canEdit && docs.length === 0) return null
 
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
       {docs.map((doc) => (
         <button
           key={doc.id}
           type="button"
           onClick={() => download(doc)}
           title={`Download ${doc.title}`}
-          className="inline-flex max-w-[180px] items-center gap-1 rounded-md border border-rule/60 bg-section px-1.5 py-0.5 text-[11px] font-semibold text-muted transition hover:border-[#EA580C]/50 hover:text-navy"
+          className="dt-link max-w-[200px] text-[11.5px]"
         >
-          <FileText size={11} className="shrink-0" />
+          <FileText size={11} className="shrink-0" aria-hidden="true" />
           <span className="truncate">{doc.title}</span>
-          <Download size={10} className="shrink-0" />
+          <Download size={10} className="shrink-0" aria-hidden="true" />
         </button>
       ))}
       {canEdit ? (
@@ -124,9 +124,9 @@ function BidDocuments({ schoolId, bid, docs, canEdit, onUploaded, onError }) {
             disabled={busy}
             onClick={() => fileRef.current?.click()}
             title="Attach a quote / proposal document"
-            className="inline-flex items-center gap-1 rounded-md border border-dashed border-rule/70 px-1.5 py-0.5 text-[11px] font-semibold text-muted transition hover:border-[#EA580C]/60 hover:text-[#EA580C] disabled:opacity-50"
+            className="dt-link text-[11.5px] disabled:opacity-50"
           >
-            <Paperclip size={11} />
+            <Paperclip size={11} aria-hidden="true" />
             {busy ? 'Uploading…' : 'Attach'}
           </button>
         </>
@@ -177,15 +177,14 @@ function AddBidForm({ vendors, disabled, onAdd }) {
   }
 
   return (
-    <div className="rounded-xl border border-dashed border-rule/70 bg-cream/50 p-3">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">Add a bid</p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+    <Section label="Add a bid">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <select
           value={vendorId}
           onChange={(e) => setVendorId(e.target.value)}
           disabled={disabled}
           aria-label="Vendor"
-          className="rounded-lg border border-rule/70 bg-white px-2 py-1.5 text-[12.5px] font-semibold text-navy"
+          className="sel w-full"
         >
           <option value="">— vendor from register —</option>
           {activeVendors.map((v) => (
@@ -201,7 +200,7 @@ function AddBidForm({ vendors, disabled, onAdd }) {
           maxLength={160}
           placeholder="…or type a vendor name"
           aria-label="Vendor name (free text)"
-          className="rounded-lg border border-rule/70 bg-white px-2 py-1.5 text-[12.5px] text-navy placeholder:text-muted/70 disabled:opacity-50"
+          className="b1-fld disabled:opacity-50"
         />
         <input
           type="number"
@@ -212,7 +211,7 @@ function AddBidForm({ vendors, disabled, onAdd }) {
           disabled={disabled}
           placeholder="Amount ($)"
           aria-label="Bid amount"
-          className="rounded-lg border border-rule/70 bg-white px-2 py-1.5 text-[12.5px] text-navy placeholder:text-muted/70"
+          className="b1-fld tabular-nums"
         />
         <input
           value={notes}
@@ -221,21 +220,14 @@ function AddBidForm({ vendors, disabled, onAdd }) {
           maxLength={2000}
           placeholder="Notes (optional)"
           aria-label="Bid notes"
-          className="rounded-lg border border-rule/70 bg-white px-2 py-1.5 text-[12.5px] text-navy placeholder:text-muted/70"
+          className="b1-fld"
         />
       </div>
-      {err ? <p className="mt-1.5 text-[12px] font-medium text-danger">{err}</p> : null}
-      <button
-        type="button"
-        onClick={submit}
-        disabled={disabled || busy}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-glow transition hover:brightness-110 disabled:opacity-50"
-        style={{ backgroundColor: FAC_HUE }}
-      >
-        <Plus size={13} />
+      {err ? <p className="mt-1.5 text-[12px] font-medium text-risk">{err}</p> : null}
+      <Button variant="primary" size="sm" onClick={submit} disabled={disabled || busy} icon={<Plus size={13} />} className="mt-2">
         {busy ? 'Adding…' : 'Add bid'}
-      </button>
-    </div>
+      </Button>
+    </Section>
   )
 }
 
@@ -398,148 +390,97 @@ export default function MaintenanceBidsPanel({
 
   return (
     <div className="fixed inset-0 z-[55]">
-      {/* Backdrop */}
       <motion.div
-        className="absolute inset-0 bg-navy-deep/40 backdrop-blur-[2px]"
-        initial={{ opacity: 0 }}
+        className="b1-drawer-scrim"
+        initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onClose}
         aria-hidden="true"
       />
-      {/* Slide-over pane */}
       <motion.aside
         role="dialog"
         aria-modal="true"
         aria-label={`Bids for ${item?.title ?? 'maintenance item'}`}
-        initial={reduce ? { opacity: 0 } : { x: '100%' }}
-        animate={reduce ? { opacity: 1 } : { x: 0 }}
+        initial={reduce ? false : { x: '100%' }}
+        animate={{ x: 0 }}
         transition={{ type: 'spring', stiffness: 340, damping: 34 }}
-        className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col overflow-hidden border-l border-rule/60 bg-white shadow-2xl"
+        className="b1-drawer"
       >
-        {/* Header — orange accent band */}
-        <div
-          className="relative shrink-0 px-5 pb-4 pt-5"
-          style={{ background: `linear-gradient(135deg, ${FAC_HUE}14, transparent 65%)` }}
-        >
-          <div className="flex items-start gap-3">
-            <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-glow"
-              style={{ backgroundColor: FAC_HUE }}
-            >
-              <Gavel size={22} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Vendor bids
-              </p>
-              <h2 className="truncate font-serif text-[21px] font-semibold leading-tight text-navy">
-                {item?.title}
-              </h2>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {pendingCount > 0 ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11.5px] font-semibold text-[#7a5e00]">
-                    <Clock size={11} />
-                    {pendingCount} pending
-                  </span>
-                ) : null}
-                {decided ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300/70 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-700">
-                    <Trophy size={11} />
-                    Winner picked
-                  </span>
-                ) : null}
-                {resolved ? (
-                  <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11.5px] font-semibold text-muted">
-                    Resolved
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="shrink-0 rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-gold/60 hover:text-navy"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          {/* Decision line — who/when/why the winner was picked */}
-          {decided ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-300/60 bg-emerald-50/70 px-3 py-2">
-              <p className="text-[12.5px] text-emerald-800">
-                <span className="font-semibold">Approved by Leadership</span>
-                {item?.decidedAt ? ` · ${fmtDay(item.decidedAt)}` : ''}
-                {item?.decisionNote ? (
-                  <span className="italic"> — “{item.decisionNote}”</span>
-                ) : null}
-              </p>
-              {isOwner && !resolved ? (
-                <button
-                  type="button"
-                  onClick={reopen}
-                  disabled={busy}
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-400/60 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700 transition hover:border-emerald-500 disabled:opacity-50"
-                >
-                  <Undo2 size={12} />
-                  Reopen decision
-                </button>
+        <div className="b1-drawer-head">
+          <div className="min-w-0 flex-1">
+            <p className="pg-eyebrow">Facilities · Vendor bids</p>
+            <h2 className="font-serif text-[24px] font-medium leading-tight text-ink [overflow-wrap:anywhere]">{item?.title}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {pendingCount > 0 ? (
+                <Pill variant="status" tone="watch">
+                  {pendingCount} pending
+                </Pill>
+              ) : null}
+              {decided ? (
+                <Pill variant="status" tone="good">
+                  Winner picked
+                </Pill>
+              ) : null}
+              {resolved ? (
+                <Pill variant="status" tone="neutral">
+                  Resolved
+                </Pill>
               ) : null}
             </div>
-          ) : null}
+            {/* Decision line — who/when/why the winner was picked */}
+            {decided ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="inline-flex items-start gap-2 text-[12.5px] text-ink">
+                  <i className="mark tone-good mt-[3px]" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">Approved by Leadership</span>
+                    {item?.decidedAt ? ` · ${fmtDay(item.decidedAt)}` : ''}
+                    {item?.decisionNote ? <span className="text-ink2"> · “{item.decisionNote}”</span> : null}
+                  </span>
+                </p>
+                {isOwner && !resolved ? (
+                  <Button size="sm" onClick={reopen} disabled={busy} icon={<Undo2 size={12} />}>
+                    Reopen decision
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="b1-icon-act">
+            <X size={16} />
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-4 pt-4">
-          {actionErr ? <p className="text-[12.5px] font-medium text-danger">{actionErr}</p> : null}
+        <div className="b1-drawer-body">
+          <Section label="Bids" aside={bids.length ? <span className="tabular-nums">{bids.length}</span> : null}>
+            {actionErr ? <p className="mb-2 text-[12.5px] font-medium text-risk">{actionErr}</p> : null}
 
-          {loading ? (
-            <p className="text-[13px] text-muted">Loading bids…</p>
-          ) : bids.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-3 py-6 text-center text-[13px] italic text-muted">
-              No bids yet — collect quotes from your vendors, then Leadership picks the winner.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              <AnimatePresence initial={false}>
+            {loading ? (
+              <p className="text-[13px] text-ink2">Loading bids…</p>
+            ) : bids.length === 0 ? (
+              <div className="b1-empty">
+                <p>No bids yet. Collect quotes from your vendors, then Leadership picks the winner.</p>
+              </div>
+            ) : (
+              <ul className="b1-list">
                 {bids.map((bid) => {
                   const badge = STATUS_BADGE[bid.status] ?? STATUS_BADGE.pending
-                  const BadgeIcon = badge.icon
                   const winner = bid.status === 'accepted'
                   const muted = bid.status === 'rejected'
                   return (
-                    <motion.li
-                      key={bid.id}
-                      layout={!reduce}
-                      initial={reduce ? false : { opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={reduce ? undefined : { opacity: 0 }}
-                      className={`rounded-xl border p-3 ${
-                        winner
-                          ? 'border-emerald-300/80 bg-emerald-50/60'
-                          : muted
-                            ? 'border-rule/50 bg-cream/40 opacity-60'
-                            : 'border-rule/50 bg-cream/50'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
+                    <li key={bid.id} className={`py-3 ${muted ? 'opacity-60' : ''}`}>
+                      <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="truncate text-[14px] font-semibold text-navy">
+                            <span className="text-[14px] font-semibold text-ink [overflow-wrap:anywhere]">
                               {bid.vendorName ?? 'Unnamed vendor'}
                             </span>
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}
-                            >
-                              {BadgeIcon ? <BadgeIcon size={10} /> : null}
+                            <Pill variant="status" tone={badge.tone}>
+                              {winner ? <Trophy size={10} aria-hidden="true" /> : null}
                               {badge.label}
-                            </span>
+                            </Pill>
                           </div>
-                          {bid.notes ? (
-                            <p className="mt-0.5 text-[12.5px] leading-snug text-muted">
-                              {bid.notes}
-                            </p>
-                          ) : null}
+                          {bid.notes ? <p className="mt-0.5 text-[12.5px] leading-snug text-ink2">{bid.notes}</p> : null}
                           <BidDocuments
                             schoolId={schoolId}
                             bid={bid}
@@ -550,16 +491,14 @@ export default function MaintenanceBidsPanel({
                           />
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-serif text-[18px] font-semibold tabular-nums text-navy">
-                            {fmtMoney(bid.amount)}
-                          </p>
-                          <p className="text-[11px] text-muted">{fmtDay(bid.createdAt)}</p>
+                          <p className="font-serif text-[20px] font-medium tabular-nums text-ink">{fmtMoney(bid.amount)}</p>
+                          <p className="text-[11px] text-ink2">{fmtDay(bid.createdAt)}</p>
                         </div>
                       </div>
 
                       {/* Pending-bid actions: owner accepts, accountant awaits */}
                       {bid.status === 'pending' && !resolved ? (
-                        <div className="mt-2.5 border-t border-rule/40 pt-2.5">
+                        <div className="mt-2.5">
                           {isOwner ? (
                             acceptingId === bid.id ? (
                               <div className="space-y-2">
@@ -567,53 +506,45 @@ export default function MaintenanceBidsPanel({
                                   value={note}
                                   onChange={(e) => setNote(e.target.value)}
                                   maxLength={2000}
-                                  placeholder="Decision note (optional) — why this vendor?"
+                                  placeholder="Decision note (optional): why this vendor?"
                                   aria-label="Decision note"
                                   autoFocus
-                                  className="w-full rounded-lg border border-rule/70 bg-white px-2.5 py-1.5 text-[12.5px] text-navy placeholder:text-muted/70"
+                                  className="b1-fld"
                                 />
                                 <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => accept(bid)}
-                                    disabled={busy}
-                                    className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
-                                  >
-                                    <Check size={13} />
+                                  <Button variant="primary" size="sm" onClick={() => accept(bid)} disabled={busy} icon={<Check size={13} />}>
                                     {busy ? 'Accepting…' : 'Confirm winner'}
-                                  </button>
-                                  <button
-                                    type="button"
+                                  </Button>
+                                  <Button
+                                    variant="quiet"
+                                    size="sm"
                                     onClick={() => {
                                       setAcceptingId(null)
                                       setNote('')
                                     }}
-                                    className="rounded-full border border-rule/70 px-3 py-1.5 text-[12px] font-semibold text-muted transition hover:text-navy"
                                   >
                                     Cancel
-                                  </button>
+                                  </Button>
                                 </div>
                               </div>
                             ) : (
                               <div className="flex items-center justify-between gap-2">
-                                <button
-                                  type="button"
+                                <Button
+                                  size="sm"
                                   onClick={() => {
                                     setAcceptingId(bid.id)
                                     setNote('')
                                   }}
-                                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white shadow-glow transition hover:brightness-110"
-                                  style={{ backgroundColor: FAC_HUE }}
+                                  icon={<Trophy size={13} />}
                                 >
-                                  <Trophy size={13} />
                                   Accept this bid
-                                </button>
+                                </Button>
                                 <button
                                   type="button"
                                   onClick={() => deleteBid(bid)}
                                   aria-label="Delete this bid"
                                   title="Delete this pending bid"
-                                  className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-danger/50 hover:text-danger"
+                                  className="b1-icon-act b1-icon-act-danger"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -622,10 +553,10 @@ export default function MaintenanceBidsPanel({
                           ) : (
                             <div className="flex items-center justify-between gap-2">
                               <span
-                                className="inline-flex items-center gap-1 rounded-md border border-rule/60 bg-section px-2 py-1 text-[11.5px] font-semibold text-muted"
+                                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink2"
                                 title="Only Leadership (owner) can accept a winning bid"
                               >
-                                <Gavel size={11} />
+                                <Gavel size={12} aria-hidden="true" />
                                 Awaiting Leadership approval
                               </span>
                               {canEdit ? (
@@ -634,7 +565,7 @@ export default function MaintenanceBidsPanel({
                                   onClick={() => deleteBid(bid)}
                                   aria-label="Delete this bid"
                                   title="Delete this pending bid"
-                                  className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-danger/50 hover:text-danger"
+                                  className="b1-icon-act b1-icon-act-danger"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -643,22 +574,20 @@ export default function MaintenanceBidsPanel({
                           )}
                         </div>
                       ) : null}
-                    </motion.li>
+                    </li>
                   )
                 })}
-              </AnimatePresence>
-            </ul>
-          )}
+              </ul>
+            )}
+          </Section>
 
           {/* Add a bid — owner + accountant, never on a resolved item */}
-          {canEdit && !resolved ? (
-            <AddBidForm vendors={vendors} disabled={busy} onAdd={addBid} />
-          ) : null}
+          {canEdit && !resolved ? <AddBidForm vendors={vendors} disabled={busy} onAdd={addBid} /> : null}
         </div>
 
         {/* Footer — the roles legend (frozen copy) */}
-        <div className="shrink-0 border-t border-rule/60 bg-cream/60 px-5 py-3">
-          <p className="text-center text-[12px] font-medium text-muted">
+        <div className="b1-drawer-foot !justify-center">
+          <p className="text-center text-[12px] font-medium text-ink2">
             Viewers read · Accountants manage items &amp; bids · Leadership approves winners
           </p>
         </div>

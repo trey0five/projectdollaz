@@ -25,11 +25,9 @@ import { AlertTriangle } from 'lucide-react'
 /** The visible defect marker. Never a blank cell, never null. */
 export function DriverDefectMarker() {
   return (
-    <span
-      role="alert"
-      className="inline-flex items-center gap-1.5 rounded-md border border-danger/50 bg-danger/10 px-2 py-1 text-[11.5px] font-semibold text-danger"
-    >
-      <AlertTriangle size={12} aria-hidden />
+    <span role="alert" className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-ink">
+      <i className="mark tone-risk" aria-hidden="true" />
+      <AlertTriangle size={12} aria-hidden className="text-risk" />
       No driver stated — this ranking cannot be explained
     </span>
   )
@@ -59,12 +57,12 @@ export default function DriversList({ drivers = [], max = 3, dense = false }) {
             <div className="flex items-center gap-2">
               <span
                 aria-hidden
-                className="-ml-4 h-[3px] shrink-0 rounded-full bg-gold/70"
+                className="-ml-4 h-[2px] shrink-0 bg-ink/50"
                 style={{ width: `${width}px` }}
               />
-              <span className="text-[12.5px] font-semibold leading-snug text-navy">{d.label}</span>
+              <span className="text-[12.5px] font-semibold leading-snug text-ink">{d.label}</span>
             </div>
-            {d.detail && <p className="text-[12px] leading-snug text-muted">{d.detail}</p>}
+            {d.detail && <p className="text-[12px] leading-snug text-ink2">{d.detail}</p>}
           </li>
         )
       })}

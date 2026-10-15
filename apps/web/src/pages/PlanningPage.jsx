@@ -2,7 +2,7 @@
 // Planning & Forecasting route (Phase 6) — the planning module's DOMAIN COMMAND
 // CENTER at /planning, on EXISTING endpoints only (zero new API): the planning
 // metrics (forecast_vs_budget_net · forecast_operating_margin · plan_readiness)
-// as .kpi-3d KPI cards plus display-only Forecast/Budget net $ stats from the
+// as Stats in the command center's StatStrip plus display-only Forecast/Budget net $ stats from the
 // budget/forecast GET envelopes; a plan summary + display-only multi-year
 // outlook (hard-badged "Projection — not saved data"); the FY-END FORECAST
 // WORKSPACE mounted front-and-center (the SAME component the Data hub embeds —
@@ -30,6 +30,8 @@ import { useBilling } from '../context/BillingContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAnalytics, useBudget, useBudgetContext, useForecast, useOperational } from '../hooks/useAnalytics.js'
 import { formatMetric } from '../components/analytics/v2/helpers.js'
+import { PageHeader, Section, DataTable, Pill } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 const money = (n) => {
   if (n == null || !Number.isFinite(n)) return '—'
@@ -47,33 +49,20 @@ const gridTotal = (grid) =>
   GRADE_ROW.reduce((a, g) => a + (Number.isFinite(Number(grid?.[g])) ? Number(grid[g]) : 0), 0)
 const gridCount = (grid) => GRADE_ROW.filter((g) => grid?.[g] != null && grid[g] !== '').length
 
-// ── Light-theme gate panel (StrategyPage pattern) ────────────────────────────
+// ── Gate: a plain page header on the ground (StrategyPage pattern) ──────────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <LineChart size={26} />
-        </span>
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Planning &amp; Forecasting isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the Planning &amp; Forecasting module to put the FY-end forecast workspace front and
-              center — forecast-vs-budget variance, a grade-by-grade enrollment plan, and plan
-              readiness in your morning briefing.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">Resume your plan to see your forecast.</p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Planning & Forecasting"
+        title={notLicensed ? 'Planning & Forecasting isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the Planning & Forecasting module to put the FY-end forecast workspace front and center: forecast-vs-budget variance, a grade-by-grade enrollment plan, and plan readiness in your morning briefing.'
+            : 'Resume your plan to see your forecast.'
+        }
+      />
     </div>
   )
 }
@@ -254,99 +243,93 @@ function PlanningWorkspace() {
     })
   }, [fKpis, forecast])
 
-  // ── Register slot: plan summary + outlook + the driver-path link card ──────
+  // ── Register slot: plan summary + outlook + the driver-path link, ruled ────
   const registerTable = (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
       {/* Enrollment-plan summary */}
-      <div className="rounded-xl border border-rule/50 bg-cream/40 p-4">
-        <div className="mb-1 flex items-center gap-2">
-          <Sprout size={15} className="text-muted" />
-          <h3 className="font-serif text-[15px] font-semibold text-navy">Enrollment plan</h3>
-        </div>
+      <div>
+        <h3 className="mb-2 inline-flex items-center gap-2 text-[15px] font-semibold text-ink">
+          <Sprout size={15} className="tone-hue" aria-hidden="true" />
+          Enrollment plan
+        </h3>
         {hasDriverPlan ? (
-          <p className="text-[13.5px] leading-relaxed text-muted">
-            Your driver budget&rsquo;s enrollment grid is the <b className="text-navy">active plan</b> —{' '}
-            <b className="text-navy">{driverPlanTotal.toLocaleString()}</b> students planned.
+          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
+            Your driver budget&rsquo;s enrollment grid is the <b className="text-ink">active plan</b>:{' '}
+            <b className="tabular-nums text-ink">{driverPlanTotal.toLocaleString()}</b> students planned.
             {hasFreePlan
               ? ` The grade grid here (${freePlanTotal.toLocaleString()} students) is the fallback.`
               : ' The grade grid on the Add tab is the fallback.'}
           </p>
         ) : hasFreePlan ? (
-          <p className="text-[13.5px] leading-relaxed text-muted">
-            <b className="text-navy">{freePlanTotal.toLocaleString()}</b> students planned across{' '}
-            {gridCount(freeGrid)} grades — powering actual-vs-plan.
+          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
+            <b className="tabular-nums text-ink">{freePlanTotal.toLocaleString()}</b> students planned across{' '}
+            {gridCount(freeGrid)} grades, powering actual-vs-plan.
           </p>
         ) : (
-          <p className="text-[13.5px] leading-relaxed text-muted">
-            No plan yet — set a grade-by-grade target and the actual-vs-plan metric lights up.
+          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
+            No plan yet. Set a grade-by-grade target and the actual-vs-plan metric lights up.
           </p>
         )}
         {canEdit && (
-          <Link
-            to="?tab=add"
-            className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-navy-soft hover:text-navy"
-          >
+          <Link to="?tab=add" className="sec-more">
             {hasFreePlan ? 'Edit the grade grid' : 'Set the plan'} <ArrowRight size={13} />
           </Link>
         )}
       </div>
 
       {/* Multi-year outlook — projection, never presented as saved data */}
-      <div className="rounded-xl border border-rule/50 p-4">
+      <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-serif text-[15px] font-semibold text-navy">Multi-year outlook</h3>
-          <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-700">
-            Projection — not saved data
-          </span>
+          <h3 className="text-[15px] font-semibold text-ink">Multi-year outlook</h3>
+          <Pill variant="status" tone="watch">
+            Projection, not saved data
+          </Pill>
         </div>
         {outlook ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-[13px]">
-              <thead>
-                <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                  <th className="py-1.5 pr-3">Year</th>
-                  <th className="py-1.5 pr-3 text-right">Revenue</th>
-                  <th className="py-1.5 pr-3 text-right">Expense</th>
-                  <th className="py-1.5 text-right">Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outlook.map((r) => (
-                  <tr key={r.n} className="border-t border-rule/50">
-                    <td className="py-1.5 pr-3 text-ink">FY +{r.n}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-ink">{money(r.revenue)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-ink">{money(r.expense)}</td>
-                    <td className={`py-1.5 text-right font-semibold tabular-nums ${r.net < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+          <>
+            <DataTable
+              caption="Multi-year outlook (projection)"
+              rowKey="n"
+              rows={outlook}
+              columns={[
+                { key: 'n', header: 'Year', render: (r) => `FY +${r.n}` },
+                { key: 'revenue', header: 'Revenue', num: true, render: (r) => money(r.revenue) },
+                { key: 'expense', header: 'Expense', num: true, render: (r) => money(r.expense) },
+                {
+                  key: 'net',
+                  header: 'Net',
+                  num: true,
+                  render: (r) => (
+                    <span className="inline-flex items-center justify-end gap-1.5 font-semibold">
+                      <i className={`mark ${r.net < 0 ? 'tone-risk' : 'tone-good'}`} aria-hidden="true" />
                       {money(r.net)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-2 text-[12px] italic text-muted">
-              The saved forecast rolled forward at its own inflation assumption — a directional
-              sketch, not a plan.
+                    </span>
+                  ),
+                },
+              ]}
+            />
+            <p className="sec-note">
+              The saved forecast rolled forward at its own inflation assumption: a directional sketch, not a plan.
             </p>
-          </div>
+          </>
         ) : (
-          <p className="text-[13.5px] italic text-muted">
-            Save an FY-end forecast below and the outlook sketches the next three years.
-          </p>
+          <div className="b1-empty">
+            <p>Save an FY-end forecast below and the outlook sketches the next three years.</p>
+          </div>
         )}
       </div>
 
       {/* Driver-path link-through */}
+      {/* The empty outlook block already draws the rule above this link. */}
       <Link
         to="/budget"
-        className="group flex items-center justify-between gap-3 rounded-xl border border-rule/50 p-4 transition-colors hover:border-gold/60"
+        className={`fig fig-link group !border-hair ${outlook ? '!border-t' : '!border-t-0'}`}
       >
-        <div>
-          <h3 className="font-serif text-[15px] font-semibold text-navy">Build the budget with drivers</h3>
-          <p className="text-[13px] text-muted">
-            Enrollment × tuition × staffing assumptions — the Budget wizard&rsquo;s driver path.
-          </p>
-        </div>
-        <ArrowRight size={16} className="shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
+        <span className="fig-label flex-col !items-start !gap-0.5">
+          <span className="font-semibold text-ink">Build the budget with drivers</span>
+          <span>Enrollment × tuition × staffing assumptions: the Budget wizard&rsquo;s driver path.</span>
+        </span>
+        <ArrowRight size={16} className="shrink-0 text-ink2 transition-transform group-hover:translate-x-0.5" />
       </Link>
     </div>
   )
@@ -355,8 +338,12 @@ function PlanningWorkspace() {
   if (!hasModule('planning')) return <GatePanel notLicensed={entitled} />
   if (metricsLoading && !metrics.length && forecastLoading) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+        <PageHeader
+          eyebrow={`Planning & Forecasting · ${activeSchool?.name ?? 'School'}`}
+          title="Planning & Forecasting"
+          meta="Loading your forecast…"
+        />
       </div>
     )
   }
@@ -366,7 +353,7 @@ function PlanningWorkspace() {
       <DomainCommandCenter
         showAddData={canEdit}
         moduleKey="planning"
-        eyebrow="Domain · Planning & Forecasting · where the year is heading"
+        eyebrow={`Planning & Forecasting · ${activeSchool?.name ?? 'School'}`}
         title="Planning & Forecasting"
         Icon={LineChart}
         attentionCount={attentionItems.length}
@@ -378,30 +365,29 @@ function PlanningWorkspace() {
       />
       {/* The FY-end forecast workspace — the SAME component the Data hub embeds
           (second mount, zero fork; key-remounted per school:period). */}
-      <section id="forecast-workspace" className="mx-auto max-w-page px-4 pb-10 sm:px-10">
-        <div className="mb-3">
-          <h2 className="font-serif text-xl font-semibold text-navy">FY-end forecast workspace</h2>
-          <p className="text-[13.5px] text-muted">
-            Revise your assumptions and incoming students, then save — the server recomputes and the
-            variance lands in your KPIs and briefing.
-          </p>
-        </div>
-        {periodId ? (
-          <ForecastWorkspace
-            key={`planning-forecast-${schoolId}:${periodId}`}
-            schoolId={schoolId}
-            periodId={periodId}
-            canEdit={canEdit}
-            budget={budget}
-            budgetContext={budgetContext}
-            onSaved={onForecastSaved}
-          />
-        ) : (
-          <p className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center text-[14px] italic text-muted">
-            Add a period first — the forecast projects a specific fiscal year.
-          </p>
-        )}
-      </section>
+      <div className="mx-auto max-w-page px-4 pb-10 sm:px-10">
+        <Section
+          id="forecast-workspace"
+          label="FY-end forecast workspace"
+          aside={<span>Revise, then save: the variance lands in your KPIs and briefing</span>}
+        >
+          {periodId ? (
+            <ForecastWorkspace
+              key={`planning-forecast-${schoolId}:${periodId}`}
+              schoolId={schoolId}
+              periodId={periodId}
+              canEdit={canEdit}
+              budget={budget}
+              budgetContext={budgetContext}
+              onSaved={onForecastSaved}
+            />
+          ) : (
+            <div className="b1-empty">
+              <p>Add a period first. The forecast projects a specific fiscal year.</p>
+            </div>
+          )}
+        </Section>
+      </div>
     </>
   )
 

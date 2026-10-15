@@ -6,18 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Gift as GiftIcon, HandCoins, Pencil, Trash2, TrendingDown } from 'lucide-react'
 import { GIFT_STATUS, GIFT_KIND_LABEL, fmtMoneyFull, shortDate } from './campaignMeta.js'
-
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
+import { DataTable, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 
 function IconAction(props) {
   const { onClick, label, title, danger } = props
@@ -28,9 +18,7 @@ function IconAction(props) {
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
+      className={`b1-icon-act${danger ? ' b1-icon-act-danger' : ''}`}
     >
       <ActionIcon size={15} />
     </button>
@@ -40,101 +28,104 @@ function IconAction(props) {
 export default function GiftsLedger({ gifts, loading, canEdit, onEdit, onWriteOff, onDelete }) {
   if (loading || gifts === null)
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center">
-        <p className="text-[14px] text-muted">Loading gifts &amp; pledges…</p>
+      <div className="b1-empty">
+        <p>Loading gifts &amp; pledges…</p>
       </div>
     )
   if (gifts.length === 0)
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center">
-        <p className="font-serif text-[16px] italic text-muted">No gifts or pledges recorded yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Record the first entry to start rolling up what this campaign has raised.
-        </p>
+      <div className="b1-empty">
+        <p className="b1-empty-title">No gifts or pledges recorded yet</p>
+        <p>Record the first entry to start rolling up what this campaign has raised.</p>
       </div>
     )
 
-  return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>
-            <Th>Kind</Th>
-            <Th right>Amount</Th>
-            <Th>Status</Th>
-            <Th>Label</Th>
-            <Th>Source</Th>
-            <Th>Date</Th>
-            {canEdit ? <Th right>Actions</Th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {gifts.map((g) => {
-            const KindIcon = g.kind === 'pledge' ? HandCoins : GiftIcon
-            const status = GIFT_STATUS[g.status] ?? GIFT_STATUS.pledged
-            const writtenOff = g.status === 'written_off'
-            const pledgeUnfulfilled = g.kind === 'pledge' && !writtenOff && g.receivedAmount < g.amount
-            return (
-              <tr key={g.id} className="group border-t border-rule/50">
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
-                    <KindIcon size={13} className="text-gold" />
-                    {GIFT_KIND_LABEL[g.kind] ?? g.kind}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  <span className={`font-semibold text-navy ${writtenOff ? 'line-through opacity-50' : ''}`}>
-                    {fmtMoneyFull(g.amount)}
-                  </span>
-                  {g.kind === 'pledge' ? (
-                    <div className="mt-0.5 text-[11.5px] text-muted">
-                      {fmtMoneyFull(g.receivedAmount)} received of {fmtMoneyFull(g.amount)}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${status.cls}`}
-                  >
-                    {status.label}
-                  </span>
-                </td>
-                <td className="max-w-[220px] truncate px-4 py-3 text-navy">{g.label ?? '—'}</td>
-                <td className="px-4 py-3 text-muted">{g.source ?? '—'}</td>
-                <td className="px-4 py-3 text-muted">
-                  {g.occurredOn ? (shortDate(g.occurredOn) ?? g.occurredOn) : '—'}
-                </td>
-                {canEdit ? (
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {pledgeUnfulfilled ? (
-                        <button
-                          type="button"
-                          onClick={() => onEdit(g)}
-                          className="rounded-lg border border-gold/50 bg-gold/10 px-2 py-1 text-[12px] font-semibold text-[#7a5e00] transition hover:bg-gold/20"
-                        >
-                          Record payment
-                        </button>
-                      ) : (
-                        <IconAction Icon={Pencil} onClick={() => onEdit(g)} label="Edit entry" />
-                      )}
-                      {!writtenOff ? (
-                        <IconAction
-                          Icon={TrendingDown}
-                          onClick={() => onWriteOff(g)}
-                          label="Write off"
-                          title="Write off"
-                        />
-                      ) : null}
-                      <IconAction Icon={Trash2} danger onClick={() => onDelete(g)} label="Delete entry" />
-                    </div>
-                  </td>
-                ) : null}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
+  const columns = [
+    {
+      key: 'kind',
+      header: 'Kind',
+      sortable: true,
+      render: (g) => {
+        const KindIcon = g.kind === 'pledge' ? HandCoins : GiftIcon
+        return (
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <KindIcon size={13} className="tone-hue" aria-hidden="true" />
+            {GIFT_KIND_LABEL[g.kind] ?? g.kind}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      num: true,
+      sortable: true,
+      render: (g) => (
+        <>
+          <span className={`font-semibold ${g.status === 'written_off' ? 'line-through opacity-50' : ''}`}>
+            {fmtMoneyFull(g.amount)}
+          </span>
+          {g.kind === 'pledge' ? (
+            <span className="dt-sub whitespace-nowrap">
+              {fmtMoneyFull(g.receivedAmount)} received of {fmtMoneyFull(g.amount)}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (g) => {
+        const status = GIFT_STATUS[g.status] ?? GIFT_STATUS.pledged
+        return (
+          <Pill variant="status" tone={status.tone}>
+            {status.label}
+          </Pill>
+        )
+      },
+    },
+    { key: 'label', header: 'Label', render: (g) => <span className="block max-w-[220px] truncate">{g.label ?? '—'}</span> },
+    { key: 'source', header: 'Source', render: (g) => <span className="text-ink2">{g.source ?? '—'}</span> },
+    {
+      key: 'occurredOn',
+      header: 'Date',
+      sortable: true,
+      render: (g) => (
+        <span className="whitespace-nowrap text-ink2">{g.occurredOn ? (shortDate(g.occurredOn) ?? g.occurredOn) : '—'}</span>
+      ),
+    },
+  ]
+  if (canEdit)
+    columns.push({
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (g) => {
+        const writtenOff = g.status === 'written_off'
+        const pledgeUnfulfilled = g.kind === 'pledge' && !writtenOff && g.receivedAmount < g.amount
+        return (
+          <div className="inline-flex items-center justify-end gap-1">
+            {pledgeUnfulfilled ? (
+              <Button size="sm" onClick={() => onEdit(g)}>
+                Record payment
+              </Button>
+            ) : (
+              <span className="dt-actions">
+                <IconAction Icon={Pencil} onClick={() => onEdit(g)} label="Edit entry" />
+              </span>
+            )}
+            <span className="dt-actions inline-flex gap-1">
+              {!writtenOff ? (
+                <IconAction Icon={TrendingDown} onClick={() => onWriteOff(g)} label="Write off" title="Write off" />
+              ) : null}
+              <IconAction Icon={Trash2} danger onClick={() => onDelete(g)} label="Delete entry" />
+            </span>
+          </div>
+        )
+      },
+    })
+
+  return <DataTable caption="Gifts and pledges" columns={columns} rows={gifts} />
 }

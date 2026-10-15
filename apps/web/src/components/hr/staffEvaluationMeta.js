@@ -27,17 +27,17 @@ export function statusLabel(s) {
   return STATUS_LABELS[s] ?? s
 }
 
-/** Light-theme badge classes per evaluation status (matches the facilities palette). */
+/** Status → a status Pill tone (2px mark + ink text; the facilities vocabulary). */
 export const STATUS_BADGE = {
-  scheduled: { label: 'Scheduled', cls: 'border-rule/60 bg-section text-muted' },
-  in_progress: { label: 'In progress', cls: 'border-sky-300/70 bg-sky-50 text-sky-700' },
-  completed: { label: 'Completed', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  waived: { label: 'Waived', cls: 'border-rule/60 bg-section text-muted' },
+  scheduled: { label: 'Scheduled', tone: 'neutral' },
+  in_progress: { label: 'In progress', tone: 'hue' },
+  completed: { label: 'Completed', tone: 'good' },
+  waived: { label: 'Waived', tone: 'neutral' },
 }
 
 export const OVERDUE_BADGE = {
   label: 'Past due',
-  cls: 'border-danger/30 bg-danger/10 text-danger',
+  tone: 'risk',
 }
 
 /**

@@ -17,99 +17,84 @@
 // no-percentage label is chosen from `progressSource`, not from the null.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { AlertTriangle, ChevronRight, UserRound } from 'lucide-react'
-import {
-  IMPROVEMENT_HUE,
-  ORIGIN_LABELS,
-  RISK_SIGNAL_META,
-  STATUS_LABELS,
-  hueAlpha,
-  pctLabel,
-  shortDate,
-} from './improvementMeta.js'
+import { ChevronRight, UserRound } from 'lucide-react'
+import { Pill } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
+import { ORIGIN_LABELS, RISK_SIGNAL_META, STATUS_LABELS, pctLabel, shortDate } from './improvementMeta.js'
 
-const SIGNAL_CLASS = {
-  bad: 'border-danger/35 bg-danger/10 text-danger',
-  warn: 'border-amber-400/40 bg-amber-50 text-amber-700',
-  good: 'border-rule/60 bg-cream/60 text-muted',
-}
+// Server risk-signal tone → the Pill / mark tone.
+const SIGNAL_TONE = { bad: 'risk', warn: 'watch', good: 'neutral' }
 
 export default function InitiativeList({ initiatives = [], onOpen, reduce = false }) {
   if (initiatives.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="font-serif text-[16px] italic text-muted">No initiatives yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Take one of the recommendations above, or add your own — either way it gets an owner, a
-          date and a way to measure itself.
+      <div className="b1-empty">
+        <p className="b1-empty-title">No initiatives yet</p>
+        <p>
+          Take one of the recommendations above, or add your own. Either way it gets an owner, a date and a way to
+          measure itself.
         </p>
       </div>
     )
   }
 
   return (
-    <ul className="divide-y divide-rule/40 rounded-xl border border-rule/50">
+    <ul className="b1-list">
       {initiatives.map((it, i) => {
         const signal = RISK_SIGNAL_META[it.riskSignal] ?? RISK_SIGNAL_META.none
+        const flagged = it.riskSignal && it.riskSignal !== 'none'
+        const tone = SIGNAL_TONE[signal.tone] ?? 'neutral'
         const pct = pctLabel(it.progressPct)
         const due = shortDate(it.dueDate)
         return (
           <motion.li
             key={it.id}
-            initial={reduce ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: reduce ? 0 : Math.min(i * 0.03, 0.18), duration: 0.24 }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: reduce ? 0 : Math.min(i * 0.015, 0.3), duration: 0.24 }}
             data-testid="initiative-row"
           >
             <button
               type="button"
               onClick={() => onOpen?.(it)}
-              className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-left transition hover:bg-cream/60"
+              className="b1-row b1-row-link relative w-full !pl-3 text-left lg:!flex-nowrap"
             >
-              <span
-                aria-hidden
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: it.progressSource ? IMPROVEMENT_HUE : hueAlpha(0.3) }}
-              />
+              {/* the 2px status mark: the server's risk signal, or nothing */}
+              {flagged ? (
+                <i className={`absolute bottom-2 left-0 top-2 w-[2px] tone-${tone}`} style={{ background: 'currentColor' }} aria-hidden />
+              ) : null}
               <span className="min-w-0 flex-1 basis-[240px]">
-                <span className="block truncate text-[13.5px] font-semibold text-navy">{it.title}</span>
-                <span className="block truncate text-[11.5px] text-muted">
+                <span className="block font-semibold text-ink [overflow-wrap:anywhere]">{it.title}</span>
+                <span className="block text-[11.5px] text-ink2">
                   {ORIGIN_LABELS[it.originType] ?? it.originType}
                   {it.goalTitle ? ` · ${it.goalTitle}` : ''}
                 </span>
               </span>
 
-              <span className="shrink-0 rounded-md border border-rule/60 bg-white px-1.5 py-0.5 text-[11.5px] font-semibold text-muted">
-                {STATUS_LABELS[it.status] ?? it.status}
-              </span>
+              <span className="shrink-0 text-[12px] text-ink2">{STATUS_LABELS[it.status] ?? it.status}</span>
 
-              <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-navy">
+              <span className="shrink-0 whitespace-nowrap text-right text-[13px] font-semibold tabular-nums text-ink">
                 {pct ?? (
-                  <span className="font-normal text-muted" data-testid="no-pct-label">
+                  <span className="font-normal text-ink2" data-testid="no-pct-label">
                     {it.progressSource == null ? 'Status only' : 'Not measured yet'}
                   </span>
                 )}
               </span>
 
-              <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted">
+              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] text-ink2">
                 <UserRound size={12} aria-hidden />
                 {it.owner?.name ?? 'Unassigned'}
               </span>
 
-              <span className="shrink-0 text-[12px] text-muted">{due ? `due ${due}` : 'no due date'}</span>
+              <span className="shrink-0 whitespace-nowrap text-[12px] tabular-nums text-ink2">{due ? `due ${due}` : 'no due date'}</span>
 
-              {it.riskSignal && it.riskSignal !== 'none' ? (
-                <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] font-semibold ${
-                    SIGNAL_CLASS[signal.tone] ?? SIGNAL_CLASS.good
-                  }`}
-                >
-                  <AlertTriangle size={11} aria-hidden />
+              {flagged ? (
+                <Pill variant="status" tone={tone}>
                   {signal.label}
-                </span>
+                </Pill>
               ) : null}
 
-              <ChevronRight size={14} className="shrink-0 text-muted" aria-hidden />
+              <ChevronRight size={14} className="shrink-0 text-ink2" aria-hidden />
             </button>
           </motion.li>
         )

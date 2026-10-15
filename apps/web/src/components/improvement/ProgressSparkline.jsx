@@ -33,7 +33,7 @@ export default function ProgressSparkline({ trend = [], hue = '#14B8A6' }) {
 
   if (points.length < 2) {
     return (
-      <p className="text-[12.5px] text-muted" data-testid="sparkline-empty">
+      <p className="text-[12.5px] text-ink2" data-testid="sparkline-empty">
         {points.length === 0
           ? 'No progress readings recorded yet.'
           : 'One reading recorded — a line needs two.'}
@@ -70,7 +70,7 @@ export default function ProgressSparkline({ trend = [], hue = '#14B8A6' }) {
           <circle key={`${points[i].date}-${i}`} cx={x} cy={ys[i]} r={2.5} fill={hue} />
         ))}
       </svg>
-      <p className="mt-1 text-[11.5px] text-muted">
+      <p className="mt-1 text-[11.5px] tabular-nums text-ink2">
         {points.length} readings · {shortDate(first.date) ?? first.date} → {shortDate(last.date) ?? last.date}
       </p>
     </div>

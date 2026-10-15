@@ -9,7 +9,8 @@
 // CORE (always included, NOT a licensed module) — every entitled school sees it.
 // Files upload SERVER-SIDE (multipart → the API PutObjects to S3); download opens a
 // presigned GET url in a new tab (top-level nav to S3, no CORS). The upload / edit-
-// meta modals are kept as dark navy/gold overlays over the light page.
+// meta dialogs share EntityFormModal (the ONE record dialog); the register is a
+// DataTable on the ground (Premium UI P4).
 //
 // TWO gate states are preserved as LIGHT page-level panels:
 //   • notEntitled  — the subscription is paused (API 402).
@@ -18,14 +19,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from 'framer-motion'
 import {
   Library,
   Upload,
   Pencil,
   Trash2,
   Download,
-  X,
   Link2,
   Check,
   Tag,
@@ -35,15 +35,18 @@ import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useDocuments } from '../hooks/useDocuments.js'
+import EntityFormModal, { Field, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
+import { PageHeader, DataTable, Pill } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 // Friendly labels for the linked-record source types (a doc "linked to a record"
 // carries a sourceType other than 'manual' — a governance policy, board report, …).
 const SOURCE_BADGE = {
-  policy: { label: 'Governance', cls: 'border-sky-300/70 bg-sky-50 text-sky-700' },
-  board_report: { label: 'Board report', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  standard: { label: 'Accreditation', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  campaign: { label: 'Advancement', cls: 'border-pink-300/70 bg-pink-50 text-pink-700' },
-  maintenance: { label: 'Facilities', cls: 'border-amber-300/70 bg-amber-50 text-amber-700' },
+  policy: { label: 'Governance' },
+  board_report: { label: 'Board report' },
+  standard: { label: 'Accreditation' },
+  campaign: { label: 'Advancement' },
+  maintenance: { label: 'Facilities' },
 }
 
 // mime → a short human label for the Type column.
@@ -92,19 +95,7 @@ function addedInLast30Days(doc) {
   return Date.now() - t <= 30 * 24 * 60 * 60 * 1000
 }
 
-// ── Light-theme register table primitives (shared idiom with Governance) ─────
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
+// ── Register atoms: quiet icon actions, a ruled state row ────────────────────
 function IconAction(props) {
   const { onClick, label, title, danger } = props
   const ActionIcon = props.Icon
@@ -114,90 +105,55 @@ function IconAction(props) {
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
+      className={`b1-icon-act${danger ? ' b1-icon-act-danger' : ''}`}
     >
       <ActionIcon size={15} />
     </button>
   )
 }
 
-function TableShell({ children, cols }) {
+/** Loading / error / empty — a ruled block on the ground, never a dashed card. */
+function StateRow({ title, children, error }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>{cols}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  )
-}
-
-function StateRow({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
+    <div className="b1-empty" role={error ? 'alert' : undefined}>
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p className={error ? 'b1-empty-err' : undefined}>{children}</p> : null}
     </div>
   )
 }
 
 function SourceBadge({ sourceType }) {
   const def = SOURCE_BADGE[sourceType]
-  if (!def) {
-    return (
-      <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
-        Manual upload
-      </span>
-    )
-  }
+  if (!def) return <span className="text-ink2">Manual upload</span>
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
-    >
-      <Link2 className="h-3 w-3" />
+    <span className="inline-flex items-center gap-1 font-semibold">
+      <Link2 className="h-3 w-3 text-ink2" aria-hidden="true" />
       {def.label}
     </span>
   )
 }
 
-// ── Light-theme entitlement / configuration gate ─────────────────────────────
+// ── Entitlement / configuration gate: a plain page header on the ground ──────
 // Knowledge has NO module gate (CORE), but TWO page-level states: the subscription
 // is paused (notEntitled) OR storage isn't set up on the server (notConfigured).
 function GatePanel({ notEntitled }) {
   return (
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <Library size={26} />
-        </span>
-        {notEntitled ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Reactivate your plan to access your document library.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Document storage isn&apos;t set up yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Your library needs cloud storage configured on the server before you can upload or
-              download files. Ask your administrator to finish the storage setup.
-            </p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Knowledge"
+        title={notEntitled ? 'Your subscription is paused' : 'Document storage isn\u2019t set up yet'}
+        meta={
+          notEntitled
+            ? 'Reactivate your plan to access your document library.'
+            : 'Your library needs cloud storage configured on the server before you can upload or download files. Ask your administrator to finish the storage setup.'
+        }
+      />
     </div>
   )
 }
 
 // ═══════════════════════════ UPLOAD MODAL ═══════════════════════════════════
-// Kept as a dark navy/gold overlay over the light page (unchanged flow).
+// The shared EntityFormModal (unchanged flow: file → title → description → tags).
 
 function UploadModal({ onClose, onSubmit }) {
   const reduce = useReducedMotion()
@@ -244,93 +200,56 @@ function UploadModal({ onClose, onSubmit }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/70 p-4 backdrop-blur-sm">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            Upload a document
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">File</label>
-            <input
-              type="file"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null
-                setFile(f)
-                if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ''))
-              }}
-              className="block w-full text-sm text-white/80 file:mr-3 file:rounded-lg file:border-0 file:bg-gold file:px-3 file:py-1.5 file:font-semibold file:text-navy"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-              placeholder="e.g. Employee handbook 2026"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Description (optional)</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={2000}
-              rows={2}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Tags (comma-separated)</label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-              placeholder="hr, policy, 2026"
-            />
-          </div>
-          {err ? <p className="text-sm text-red-300">{err}</p> : null}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-navy hover:bg-gold-light disabled:opacity-60"
-            >
-              <Upload className="h-4 w-4" />
-              {busy ? 'Uploading…' : 'Upload'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+    <EntityFormModal
+      open
+      icon={Upload}
+      title="Upload a document"
+      subtitle="Filed to your knowledge library"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={busy}
+      error={err}
+      submitLabel="Upload"
+      reduce={reduce}
+    >
+      <Field label="File" span={2} index={0} reduce={reduce}>
+        <input
+          type="file"
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null
+            setFile(f)
+            if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ''))
+          }}
+          className={`${fieldInput} file:mr-3 file:rounded file:border-0 file:bg-ink/[.06] file:px-2.5 file:py-1 file:text-[12px] file:font-semibold file:text-ink`}
+        />
+      </Field>
+      <Field label="Title" span={2} index={1} reduce={reduce}>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={200}
+          className={fieldInput}
+          placeholder="e.g. Employee handbook 2026"
+        />
+      </Field>
+      <Field label="Description (optional)" span={2} index={2} reduce={reduce}>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={2000}
+          rows={2}
+          className={fieldTextarea}
+        />
+      </Field>
+      <Field label="Tags (comma-separated)" span={2} index={3} reduce={reduce}>
+        <input value={tags} onChange={(e) => setTags(e.target.value)} className={fieldInput} placeholder="hr, policy, 2026" />
+      </Field>
+    </EntityFormModal>
   )
 }
 
 // ═══════════════════════════ EDIT-META MODAL ════════════════════════════════
-// Kept as a dark navy/gold overlay. Edits title / description / tags via updateMeta.
+// The shared EntityFormModal. Edits title / description / tags via updateMeta.
 
 function EditMetaModal({ doc, onClose, onSave }) {
   const reduce = useReducedMotion()
@@ -367,178 +286,98 @@ function EditMetaModal({ doc, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/70 p-4 backdrop-blur-sm">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            Edit tags &amp; details
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          <p className="truncate text-[13px] text-white/50">{doc.fileName}</p>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Description (optional)</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={2000}
-              rows={2}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white/70">Tags (comma-separated)</label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-navy/60 px-3 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none"
-              placeholder="hr, policy, 2026"
-            />
-          </div>
-          {err ? <p className="text-sm text-red-300">{err}</p> : null}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-navy hover:bg-gold-light disabled:opacity-60"
-            >
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+    <EntityFormModal
+      open
+      icon={Tag}
+      title="Edit tags & details"
+      subtitle={doc.fileName}
+      onClose={onClose}
+      onSubmit={submit}
+      saving={busy}
+      error={err}
+      submitLabel="Save"
+      reduce={reduce}
+    >
+      <Field label="Title" span={2} index={0} reduce={reduce}>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Description (optional)" span={2} index={1} reduce={reduce}>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={2000}
+          rows={2}
+          className={fieldTextarea}
+        />
+      </Field>
+      <Field label="Tags (comma-separated)" span={2} index={2} reduce={reduce}>
+        <input value={tags} onChange={(e) => setTags(e.target.value)} className={fieldInput} placeholder="hr, policy, 2026" />
+      </Field>
+    </EntityFormModal>
   )
 }
 
-// ═══════════════════════════ LIGHT DOCUMENTS TABLE ══════════════════════════
+// ═══════════════════════════ DOCUMENTS TABLE ════════════════════════════════
 
-function DocumentsTable({ items, loading, error, canEdit, reduce, onDownload, onEdit, onDelete }) {
-  if (loading)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-muted">Loading documents…</p>
-      </StateRow>
-    )
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
-  if (items.length === 0)
-    return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">
-          No documents yet — upload your first file.
-        </p>
-      </StateRow>
-    )
+function DocumentsTable({ items, loading, error, canEdit, onDownload, onEdit, onDelete }) {
+  if (loading) return <StateRow>Loading documents…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
+  if (items.length === 0) return <StateRow title="No documents yet">Upload your first file.</StateRow>
 
-  return (
-    <TableShell
-      cols={
-        <>
-          <Th>Document</Th>
-          <Th>Type</Th>
-          <Th>Source</Th>
-          <Th right>Size</Th>
-          <Th>Added</Th>
-          <Th right>Actions</Th>
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {items.map((doc) => (
-          <motion.tr
-            key={doc.id}
-            layout={!reduce}
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            className="group border-t border-rule/50"
-          >
-            <td className="px-4 py-3">
-              <div className="font-semibold text-navy">{doc.title}</div>
-              <div className="mt-0.5 truncate text-[12.5px] text-muted">{doc.fileName}</div>
-              {doc.tags?.length ? (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {doc.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-md border border-rule/60 bg-section px-1.5 py-0.5 text-[11px] font-semibold text-muted"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </td>
-            <td className="px-4 py-3 text-muted">{mimeLabel(doc.mimeType)}</td>
-            <td className="px-4 py-3">
-              <SourceBadge sourceType={doc.sourceType} />
-            </td>
-            <td className="px-4 py-3 text-right text-muted">{fmtSize(doc.sizeBytes)}</td>
-            <td className="px-4 py-3 text-muted">{fmtDate(doc.createdAt)}</td>
-            <td className="px-4 py-3">
-              <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                <IconAction
-                  Icon={Download}
-                  onClick={() => onDownload(doc)}
-                  label={`Download ${doc.title}`}
-                  title="Download"
-                />
-                {canEdit ? (
-                  <>
-                    <IconAction
-                      Icon={Pencil}
-                      onClick={() => onEdit(doc)}
-                      label={`Edit ${doc.title}`}
-                      title="Edit tags & details"
-                    />
-                    <IconAction
-                      Icon={Trash2}
-                      danger
-                      onClick={() => onDelete(doc)}
-                      label={`Delete ${doc.title}`}
-                    />
-                  </>
-                ) : null}
-              </div>
-            </td>
-          </motion.tr>
-        ))}
-      </AnimatePresence>
-    </TableShell>
-  )
+  const columns = [
+    {
+      key: 'title',
+      header: 'Document',
+      sortable: true,
+      render: (doc) => (
+        <div className="min-w-[12rem] py-1.5">
+          <span className="font-semibold">{doc.title}</span>
+          <span className="dt-sub truncate">{doc.fileName}</span>
+          {doc.tags?.length ? (
+            <span className="mt-1 flex flex-wrap gap-1">
+              {doc.tags.map((t) => (
+                <Pill key={t}>{t}</Pill>
+              ))}
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    { key: 'mimeType', header: 'Type', render: (doc) => <span className="text-ink2">{mimeLabel(doc.mimeType)}</span> },
+    { key: 'sourceType', header: 'Source', render: (doc) => <SourceBadge sourceType={doc.sourceType} /> },
+    {
+      key: 'sizeBytes',
+      header: 'Size',
+      num: true,
+      sortable: true,
+      render: (doc) => <span className="whitespace-nowrap text-ink2">{fmtSize(doc.sizeBytes)}</span>,
+    },
+    {
+      key: 'createdAt',
+      header: 'Added',
+      sortable: true,
+      render: (doc) => <span className="whitespace-nowrap text-ink2">{fmtDate(doc.createdAt)}</span>,
+    },
+    {
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (doc) => (
+        <div className="dt-actions inline-flex justify-end gap-1">
+          <IconAction Icon={Download} onClick={() => onDownload(doc)} label={`Download ${doc.title}`} title="Download" />
+          {canEdit ? (
+            <>
+              <IconAction Icon={Pencil} onClick={() => onEdit(doc)} label={`Edit ${doc.title}`} title="Edit tags & details" />
+              <IconAction Icon={Trash2} danger onClick={() => onDelete(doc)} label={`Delete ${doc.title}`} />
+            </>
+          ) : null}
+        </div>
+      ),
+    },
+  ]
+
+  return <DataTable caption="Documents" columns={columns} rows={items} markOf={(doc) => (isUntagged(doc) ? 'watch' : null)} />
 }
 
 const TABS = [{ key: 'documents', label: 'Documents' }]
@@ -549,7 +388,6 @@ function KnowledgeWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
-  const reduce = useReducedMotion()
 
   const {
     items,
@@ -683,7 +521,6 @@ function KnowledgeWorkspace() {
       loading={loading}
       error={error}
       canEdit={canEdit}
-      reduce={reduce}
       onDownload={onDownload}
       onEdit={setEditingDoc}
       onDelete={onDelete}
@@ -695,16 +532,17 @@ function KnowledgeWorkspace() {
   return (
     <>
       {actionErr ? (
-        <div className="mx-auto mb-2 max-w-page px-4 sm:px-10">
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
+          <p role="alert" className="inline-flex items-center gap-2 text-[13px] font-semibold text-ink">
+            <i className="mark tone-risk" aria-hidden="true" />
             {actionErr}
-          </div>
+          </p>
         </div>
       ) : null}
 
       <DomainCommandCenter
         showBack
-        eyebrow="Core · Knowledge engine · system of record"
+        eyebrow={`Knowledge · ${activeSchool?.name ?? 'School'}`}
         title="Knowledge"
         Icon={Library}
         attentionCount={attentionItems.length}

@@ -15,7 +15,9 @@
 // Every number here is the server's own count or delta. Nothing is summed,
 // averaged or re-derived on the client.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Gauge } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
+import { Section, StatStrip, Stat } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import { humanizeToken } from './AttentionBandChip.jsx'
 
 /** A signed delta in PERCENTAGE POINTS → '+4.0 pts'. null → null, never '0'. */
@@ -28,42 +30,35 @@ export function deltaText(delta) {
 
 function DeltaIcon({ delta }) {
   if (delta == null || !Number.isFinite(delta)) return null
-  if (delta > 0) return <ArrowUpRight size={14} aria-hidden className="text-emerald-600" />
-  if (delta < 0) return <ArrowDownRight size={14} aria-hidden className="text-danger" />
-  return <ArrowRight size={14} aria-hidden className="text-muted" />
+  if (delta > 0) return <ArrowUpRight size={14} aria-hidden className="text-good" />
+  if (delta < 0) return <ArrowDownRight size={14} aria-hidden className="text-risk" />
+  return <ArrowRight size={14} aria-hidden className="text-ink2" />
 }
 
 function Tally({ label, value }) {
-  return (
-    <div className="rounded-xl border border-rule/70 bg-section px-3.5 py-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-0.5 text-[18px] font-semibold tabular-nums text-navy">
-        {Number.isFinite(value) ? value : '—'}
-      </p>
-    </div>
-  )
+  return <Stat label={label} value={Number.isFinite(value) ? value : '—'} />
 }
 
 function SchoolRow({ row }) {
   const observed = row?.basis === 'observed'
   const delta = observed ? deltaText(row?.deltaPctPoints) : null
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-rule/50 px-4 py-3 last:border-b-0">
+    <li className="b1-row justify-between">
       <span className="min-w-0">
-        <span className="font-semibold text-navy">{row?.name ?? 'Unnamed school'}</span>
-        <span className="ml-2 text-[12px] text-muted">
+        <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
+        <span className="ml-2 text-[12px] text-ink2">
           {Number.isFinite(row?.initiatives) ? `${row.initiatives} initiatives` : 'initiatives —'}
           {Number.isFinite(row?.observations) ? ` · ${row.observations} observations` : ''}
         </span>
       </span>
       {delta ? (
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums text-navy">
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums text-ink">
           <DeltaIcon delta={row?.deltaPctPoints} />
           {delta}
         </span>
       ) : (
         // The literal reason. Never a zero, never an em-dash standing in for one.
-        <span className="text-[12.5px] text-muted">
+        <span className="text-[12.5px] text-ink2">
           Not measurable yet — {humanizeToken(row?.reason)?.toLowerCase() ?? 'reason not stated'}
         </span>
       )}
@@ -74,17 +69,16 @@ function SchoolRow({ row }) {
 export default function VelocityPanel({ data = null, loading = false, error = '' }) {
   if (loading) {
     return (
-      <section className="card-soft px-5 py-6 sm:px-6">
-        <p className="text-[13.5px] text-muted">Reading improvement velocity…</p>
-      </section>
+      <Section label="Improvement velocity">
+        <p className="text-[13.5px] text-ink2">Reading improvement velocity…</p>
+      </Section>
     )
   }
   if (error) {
     return (
-      <section className="card-soft px-5 py-6 sm:px-6">
-        <h2 className="font-serif text-[17px] font-semibold text-navy">Improvement velocity</h2>
-        <p className="mt-1 text-[13.5px] text-muted">{error}</p>
-      </section>
+      <Section label="Improvement velocity">
+        <p className="text-[13.5px] text-ink2">{error}</p>
+      </Section>
     )
   }
   if (!data) return null
@@ -94,45 +88,35 @@ export default function VelocityPanel({ data = null, loading = false, error = ''
   const notes = Array.isArray(data.notes) ? data.notes : []
 
   return (
-    <section aria-labelledby="portfolio-velocity" className="card-soft overflow-hidden">
-      <div className="flex items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-section text-muted">
-          <Gauge size={18} aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <h2 id="portfolio-velocity" className="font-serif text-[17px] font-semibold text-navy">
-            Improvement velocity
-          </h2>
-          <p className="mt-0.5 text-[13px] text-muted">
-            Movement observed over the last {Number.isFinite(data.windowDays) ? data.windowDays : '—'}{' '}
-            days{data.asOf ? `, as of ${data.asOf}` : ''}. Only initiatives with two readings far
-            enough apart to show movement are counted.
-          </p>
-        </div>
-      </div>
+    <Section aria-labelledby="portfolio-velocity" label={<span id="portfolio-velocity">Improvement velocity</span>}>
+      <p className="max-w-prose text-[13px] text-ink2">
+        Movement observed over the last {Number.isFinite(data.windowDays) ? data.windowDays : '—'}{' '}
+        days{data.asOf ? `, as of ${data.asOf}` : ''}. Only initiatives with two readings far
+        enough apart to show movement are counted.
+      </p>
 
-      <div className="grid grid-cols-2 gap-2.5 px-5 sm:grid-cols-4 sm:px-6">
+      <StatStrip cols={4} className="stats-compact mt-4">
         <Tally label="Improved" value={org.improved} />
         <Tally label="Level" value={org.flat} />
         <Tally label="Declined" value={org.declined} />
         <Tally label="Unresponded findings" value={org.unresponded} />
-      </div>
+      </StatStrip>
 
       {org.basis === 'insufficient' && (
-        <p className="px-5 pt-3 text-[12.5px] text-muted sm:px-6">
+        <p className="mt-3 text-[12.5px] text-ink2">
           Organization-wide movement is not measurable yet —{' '}
           {humanizeToken(org.reason)?.toLowerCase() ?? 'reason not stated'}.
         </p>
       )}
 
-      <p className="px-5 pt-3 text-[12px] text-muted sm:px-6">
+      <p className="mt-3 text-[12px] text-ink2">
         {Number.isFinite(org.initiativesWithObservations) && Number.isFinite(org.initiatives)
           ? `${org.initiativesWithObservations} of ${org.initiatives} initiatives carry observations in this window.`
           : null}
       </p>
 
       {schools.length > 0 && (
-        <ul className="mt-3 border-t border-rule/60">
+        <ul className="b1-list mt-3">
           {schools.map((row) => (
             <SchoolRow key={row?.schoolId ?? row?.name} row={row} />
           ))}
@@ -140,14 +124,14 @@ export default function VelocityPanel({ data = null, loading = false, error = ''
       )}
 
       {notes.length > 0 && (
-        <ul className="space-y-1 px-5 py-4 sm:px-6">
+        <ul className="mt-3 space-y-1">
           {notes.map((n, i) => (
-            <li key={i} className="text-[12.5px] leading-snug text-muted">
+            <li key={i} className="text-[12.5px] leading-snug text-ink2">
               {n}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   )
 }

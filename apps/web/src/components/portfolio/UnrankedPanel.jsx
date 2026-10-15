@@ -22,8 +22,9 @@
 // data" and "this school has not bought the module" are different problems with
 // different fixes, and merging them lets a licensing gap hide inside a data gap.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Link } from 'react-router-dom'
-import { HelpCircle, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
+import { Section, DataTable, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import { humanizeToken } from './AttentionBandChip.jsx'
 
 /**
@@ -97,54 +98,117 @@ export function componentLabel(key) {
   return COMPONENT_LABELS[key] ?? humanizeToken(key) ?? String(key ?? '')
 }
 
-// ── One not-ranked school ────────────────────────────────────────────────────
-function InsufficientRow({ row }) {
-  const missing = Array.isArray(row?.missingComponents) ? row.missingComponents : []
-  const known = Array.isArray(row?.knownComponents) ? row.knownComponents : []
+// ── The not-ranked schools as ONE table ──────────────────────────────────────
+// Schools × the measures that are missing somewhere, with an em dash where a
+// measure is missing. What is said the same way about every school (the
+// exclusion sentence, the reason a measure is blank, what IS measured) is said
+// ONCE above the table; only what differs is said per row. A missing measure is
+// still named in words with its stated reason — the entire point of the panel.
+
+const missingOf = (row) => (Array.isArray(row?.missingComponents) ? row.missingComponents : [])
+const knownOf = (row) => (Array.isArray(row?.knownComponents) ? row.knownComponents : [])
+
+/** The value every row agrees on, or undefined when any two rows differ. */
+function shared(rows, fn) {
+  if (rows.length === 0) return undefined
+  const first = fn(rows[0])
+  return rows.every((r) => fn(r) === first) ? first : undefined
+}
+
+const exclusionText = (row) =>
+  EXCLUSION_REASON_LABELS[row?.reason] ?? 'This school cannot be ranked from what we hold.'
+
+function InsufficientTable({ rows }) {
+  // The measures missing at ANY school, in the server's canonical order.
+  const order = Object.keys(COMPONENT_LABELS)
+  const present = new Set(rows.flatMap((r) => missingOf(r).map((m) => m?.component)).filter(Boolean))
+  const components = [...order.filter((k) => present.has(k)), ...[...present].filter((k) => !order.includes(k))]
+
+  const reasonFor = (row, key) => {
+    const m = missingOf(row).find((x) => x?.component === key)
+    return m ? missingReasonText(m?.reason) ?? 'reason not stated' : null
+  }
+  // A measure whose reason is the same at every school it is missing from → said once.
+  const sharedReason = {}
+  for (const key of components) {
+    const reasons = rows.map((r) => reasonFor(r, key)).filter((x) => x != null)
+    if (reasons.length > 0 && reasons.every((x) => x === reasons[0])) sharedReason[key] = reasons[0]
+  }
+  const sharedExclusion = shared(rows, exclusionText)
+  const sharedKnown = shared(rows, (r) => knownOf(r).map(componentLabel).join(' · '))
+
+  const columns = [
+    {
+      key: 'name',
+      header: 'School',
+      render: (row) => (
+        <div className="min-w-[12rem] py-1.5">
+          <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
+          {sharedExclusion === undefined ? <span className="dt-sub mt-0.5">{exclusionText(row)}</span> : null}
+          {sharedKnown === undefined && knownOf(row).length > 0 ? (
+            <span className="dt-sub">Measured here: {knownOf(row).map(componentLabel).join(' · ')}</span>
+          ) : null}
+          {missingOf(row).length === 0 ? (
+            <span role="alert" className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+              <i className="mark tone-risk" aria-hidden="true" />
+              The server named no missing measure for this school — report this row.
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    ...components.map((key) => ({
+      key: `m-${key}`,
+      header: componentLabel(key),
+      render: (row) => {
+        const reason = reasonFor(row, key)
+        if (reason == null) return <span className="sr-only">Not missing</span>
+        return (
+          <span title={reason}>
+            <span aria-hidden="true">—</span>
+            <span className="sr-only">Missing: {reason}</span>
+            {sharedReason[key] === undefined ? <span className="dt-sub">{reason}</span> : null}
+          </span>
+        )
+      },
+    })),
+  ]
+
+  const sharedReasons = components.filter((k) => sharedReason[k] !== undefined)
   return (
-    <li className="rounded-xl border border-rule/70 bg-section px-4 py-3.5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="font-semibold text-navy">{row?.name ?? 'Unnamed school'}</span>
-        <span className="inline-flex items-center rounded-md border border-rule/70 bg-white px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
-          Not ranked
-        </span>
-      </div>
-
-      <p className="mt-1 text-[13px] leading-snug text-muted">
-        {EXCLUSION_REASON_LABELS[row?.reason] ?? 'This school cannot be ranked from what we hold.'}
-      </p>
-
-      {/* The missing measures, BY NAME — the entire point of the panel. */}
-      <ul className="mt-2 space-y-1">
-        {missing.map((m, i) => (
-          <li key={`${m?.component ?? 'missing'}-${i}`} className="flex flex-wrap gap-x-1.5 text-[12.5px]">
-            <span className="font-semibold text-navy">{componentLabel(m?.component)}</span>
-            <span className="text-muted">— {missingReasonText(m?.reason) ?? 'reason not stated'}</span>
-          </li>
-        ))}
-        {missing.length === 0 && (
-          <li role="alert" className="text-[12.5px] font-semibold text-danger">
-            The server named no missing measure for this school — report this row.
-          </li>
-        )}
-      </ul>
-
-      {known.length > 0 && (
-        <p className="mt-2 text-[12px] text-muted">
-          Measured here: {known.map(componentLabel).join(' · ')}
-        </p>
-      )}
-    </li>
+    <>
+      {sharedExclusion !== undefined ? (
+        <p className="mt-2 max-w-prose text-[13px] font-semibold leading-snug text-ink">{sharedExclusion}</p>
+      ) : null}
+      {sharedReasons.length > 0 ? (
+        <ul className="mt-3 space-y-1">
+          {sharedReasons.map((k) => (
+            <li key={k} className="flex flex-wrap gap-x-1.5 text-[12.5px] leading-snug">
+              <span className="font-semibold text-ink">{componentLabel(k)}</span>
+              <span className="text-ink2">— {sharedReason[k]}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {sharedKnown ? <p className="sec-note">Measured here: {sharedKnown}</p> : null}
+      <DataTable
+        caption="Schools that cannot be ranked, and the measures each is missing"
+        columns={columns}
+        rows={rows}
+        rowKey={(row, i) => row?.schoolId ?? row?.name ?? i}
+        className="mt-3"
+      />
+    </>
   )
 }
 
 // ── One unlicensed school: the NAME, and nothing else ────────────────────────
 function NotLicensedRow({ row }) {
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-rule/70 bg-section px-4 py-3">
-      <Lock size={14} aria-hidden className="shrink-0 text-muted" />
-      <span className="font-semibold text-navy">{row?.name ?? 'Unnamed school'}</span>
-      <span className="text-[12.5px] text-muted">Accreditation is not licensed at this school.</span>
+    <li className="b1-row">
+      <Lock size={14} aria-hidden className="shrink-0 text-ink2" />
+      <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
+      <span className="text-[12.5px] text-ink2">Accreditation is not licensed at this school.</span>
     </li>
   )
 }
@@ -155,53 +219,40 @@ export default function UnrankedPanel({ insufficientData = [], notLicensed = [] 
   if (insufficient.length === 0 && unlicensed.length === 0) return null
 
   return (
-    <div className="space-y-5">
+    <div>
       {insufficient.length > 0 && (
-        <section aria-labelledby="portfolio-unranked" className="card-soft px-5 py-5 sm:px-6">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-section text-muted">
-              <HelpCircle size={18} aria-hidden />
+        <Section
+          aria-labelledby="portfolio-unranked"
+          label={
+            <span id="portfolio-unranked">
+              Not ranked · {insufficient.length} {insufficient.length === 1 ? 'school' : 'schools'}
             </span>
-            <div className="min-w-0">
-              <h2 id="portfolio-unranked" className="font-serif text-[17px] font-semibold text-navy">
-                Not ranked — {insufficient.length}{' '}
-                {insufficient.length === 1 ? 'school' : 'schools'}
-              </h2>
-              <p className="mt-0.5 text-[13.5px] leading-relaxed text-muted">
-                These schools are missing too much for a rank to mean anything. They are not at the
-                bottom of the list and they are not at the top of it — they are off it, with what is
-                missing named below. Fill the gap and they rank next refresh.
-              </p>
-            </div>
-          </div>
-          <ul className="mt-4 space-y-2.5">
-            {insufficient.map((row) => (
-              <InsufficientRow key={row?.schoolId ?? row?.name} row={row} />
-            ))}
-          </ul>
-        </section>
+          }
+        >
+          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
+            These schools are missing too much for a rank to mean anything. They are not at the
+            bottom of the list and they are not at the top of it — they are off it, with what is
+            missing named below — a dash marks each measure we do not have. Fill the gap and they
+            rank next refresh.
+          </p>
+          <InsufficientTable rows={insufficient} />
+        </Section>
       )}
 
       {unlicensed.length > 0 && (
-        <section aria-labelledby="portfolio-unlicensed" className="card-soft px-5 py-5 sm:px-6">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-section text-muted">
-              <Lock size={18} aria-hidden />
+        <Section
+          aria-labelledby="portfolio-unlicensed"
+          label={
+            <span id="portfolio-unlicensed">
+              Not licensed · {unlicensed.length} {unlicensed.length === 1 ? 'school' : 'schools'}
             </span>
-            <div className="min-w-0">
-              <h2
-                id="portfolio-unlicensed"
-                className="font-serif text-[17px] font-semibold text-navy"
-              >
-                Not licensed — {unlicensed.length} {unlicensed.length === 1 ? 'school' : 'schools'}
-              </h2>
-              <p className="mt-0.5 text-[13.5px] leading-relaxed text-muted">
-                Accreditation is not licensed at these schools, so nothing about their readiness is
-                shown here — not even a band. Adding the module brings them into the portfolio.
-              </p>
-            </div>
-          </div>
-          <ul className="mt-4 space-y-2">
+          }
+        >
+          <p className="max-w-prose text-[13.5px] leading-relaxed text-ink2">
+            Accreditation is not licensed at these schools, so nothing about their readiness is
+            shown here — not even a band. Adding the module brings them into the portfolio.
+          </p>
+          <ul className="b1-list mt-3">
             {unlicensed.map((row) => (
               <NotLicensedRow key={row?.schoolId ?? row?.name} row={row} />
             ))}
@@ -214,19 +265,16 @@ export default function UnrankedPanel({ insufficientData = [], notLicensed = [] 
               functional dead end wearing the words of a fix. Licensing is
               per-school, and the per-school × per-module grid is the Modules tab
               of the organization view, so that is what is named and linked. */}
-          <p className="mt-4 text-[13px] leading-relaxed text-muted">
+          <p className="mt-4 max-w-prose text-[13px] leading-relaxed text-ink2">
             Accreditation is licensed <span className="font-semibold">per school</span>, so it has
             to be added at each school named above. The billing page for the school you are
             currently in cannot change them — the per-school module grid is the{' '}
             <span className="font-semibold">Modules</span> tab of the organization view.
           </p>
-          <Link
-            to="/app"
-            className="mt-3 inline-flex min-h-[40px] items-center rounded-lg border-2 border-hair px-3.5 text-[13.5px] font-semibold text-navy transition hover:border-gold"
-          >
+          <Button to="/app" className="mt-3">
             Open the organization view
-          </Link>
-        </section>
+          </Button>
+        </Section>
       )}
     </div>
   )

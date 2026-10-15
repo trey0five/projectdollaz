@@ -18,124 +18,160 @@
 // THE HEADLINE IS THE SERVER'S FROZEN SENTENCE, printed verbatim. The threshold
 // is emitted as a NUMBER (`thresholdScore`) because the API deliberately does not
 // carry a rubric label table — the rubric words belong to each framework. So the
-// score is shown as the shipped RubricPicker pips (read-only), which is the one
-// place rubric scores are already rendered, and no second label vocabulary is
+// score is shown as a plain number out of 4, and no second label vocabulary is
 // invented here.
 //
 // The per-school breakdown is ABSENT under the viewer lens (the API omits the
 // key entirely, spec §4.7) — so this component must never assume it exists, and
 // the adopt affordance is only offered when it does.
+//
+// LEDGER SHAPE (Premium UI P4): the priorities are ONE DataTable — the counts
+// stack in tabular columns instead of a five-figure strip repeated per standard —
+// and the per-standard detail opens below the table for the row asked about. The
+// median self-score is shown as the server's number out of 4 (no rubric words
+// are invented here; the rubric vocabulary still belongs to each framework).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { Layers, Target } from 'lucide-react'
-import RubricPicker from '../accreditation/RubricPicker.jsx'
+import { Target, Users } from 'lucide-react'
+import { Section, DataTable, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import BulkAdoptFlow from './BulkAdoptFlow.jsx'
+import { humanizeToken } from './AttentionBandChip.jsx'
 
-function Metric({ label, value }) {
+// A server count → the cell. A missing count is an em dash, never a zero.
+const count = (v) => (Number.isFinite(v) ? v : '—')
+
+const priorityKey = (p) => p?.catalogStandardId ?? p?.code
+
+/**
+ * The priorities as ONE ledger table (standard × the five counts × share), in the
+ * server's order — no sortable column, because the order is frozen server-side.
+ * The per-standard detail (which schools, run one intervention) opens BELOW the
+ * table for the one row asked about, instead of every row carrying its own
+ * disclosure and button.
+ */
+function PriorityTable({ priorities, openKey, onOpen }) {
+  const columns = [
+    {
+      key: 'standard',
+      header: 'Standard',
+      render: (p) => (
+        <div className="min-w-[16rem] max-w-[34rem] py-1.5">
+          {/* The server's frozen headline template, verbatim. */}
+          <span className="font-semibold leading-snug text-ink">{p?.headline ?? p?.code ?? 'Standard'}</span>
+          <span className="dt-sub mt-0.5">
+            {p?.code ? <span className="font-semibold">{p.code}</span> : null}
+            {p?.title ? ` · ${p.title}` : ''}
+            {p?.domainKey ? ` · ${humanizeToken(p.domainKey)}` : ''}
+          </span>
+        </div>
+      ),
+    },
+    { key: 'below', header: 'Below', num: true, render: (p) => <span className="font-semibold">{count(p?.schoolsBelowThreshold)}</span> },
+    { key: 'inScope', header: 'In scope', num: true, render: (p) => count(p?.schoolsInScope) },
+    { key: 'scored', header: 'Scored', num: true, render: (p) => count(p?.schoolsScored) },
+    { key: 'gap', header: 'No evidence', num: true, render: (p) => count(p?.schoolsWithEvidenceGap) },
+    {
+      key: 'median',
+      header: 'Median self-score',
+      num: true,
+      render: (p) =>
+        // NOT a zero. Nothing scored and "scored 1" are different facts.
+        p?.medianRubricScore == null ? (
+          <span className="text-ink2">Not scored</span>
+        ) : (
+          <span className="whitespace-nowrap">
+            {p.medianRubricScore}
+            <span className="text-ink2"> / 4</span>
+          </span>
+        ),
+    },
+    {
+      key: 'share',
+      header: 'Share of schools',
+      num: true,
+      render: (p) => (Number.isFinite(p?.sharePct) ? `${p.sharePct}%` : '—'),
+    },
+  ]
+  // Only when the breakdown exists (the viewer lens omits the key entirely).
+  if (priorities.some((p) => Array.isArray(p?.schools)))
+    columns.push({
+      key: 'open',
+      header: <span className="sr-only">Detail</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (p) =>
+        Array.isArray(p?.schools) ? (
+          <button
+            type="button"
+            className="dt-link dt-actions whitespace-nowrap"
+            aria-expanded={openKey === priorityKey(p)}
+            aria-controls="portfolio-priority-detail"
+            onClick={() => onOpen(openKey === priorityKey(p) ? null : priorityKey(p))}
+          >
+            <Users size={13} aria-hidden="true" />
+            {openKey === priorityKey(p) ? 'Close' : `Schools (${p.schools.length})`}
+          </button>
+        ) : null,
+    })
   return (
-    <span className="inline-flex flex-col">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-        {label}
-      </span>
-      <span className="text-[14px] font-semibold tabular-nums text-navy">
-        {Number.isFinite(value) ? value : '—'}
-      </span>
-    </span>
+    <DataTable
+      caption="Standards weak across the organization"
+      columns={columns}
+      rows={priorities}
+      rowKey={(p, i) => priorityKey(p) ?? i}
+      rowClassName={(p) => (openKey === priorityKey(p) ? 'dt-subtotal' : '')}
+      className="mt-3 [&_.dt]:min-w-[46rem]"
+    />
   )
 }
 
-function PriorityRow({ priority, thresholdScore, canWrite, onPropose, onConfirm }) {
-  const [open, setOpen] = useState(false)
-  const schools = Array.isArray(priority?.schools) ? priority.schools : null
-  const share = Number.isFinite(priority?.sharePct) ? `${priority.sharePct}%` : null
-
+/** The one opened standard: which schools, and the one-intervention action. */
+function PriorityDetail({ priority, thresholdScore, canWrite, onPropose, onConfirm, onClose }) {
+  const [adopting, setAdopting] = useState(false)
+  const schools = Array.isArray(priority?.schools) ? priority.schools : []
   return (
-    <li className="border-b border-rule/50 px-5 py-4 last:border-b-0 sm:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          {/* The server's frozen headline template, verbatim. */}
-          <p className="font-serif text-[15.5px] font-semibold leading-snug text-navy">
-            {priority?.headline ?? priority?.code ?? 'Standard'}
-          </p>
-          <p className="mt-0.5 text-[12.5px] leading-snug text-muted">
-            {priority?.code ? <span className="font-semibold">{priority.code}</span> : null}
-            {priority?.title ? ` · ${priority.title}` : ''}
-            {priority?.domainKey ? ` · ${priority.domainKey}` : ''}
-          </p>
-        </div>
-        {share && (
-          <span className="shrink-0 rounded-md border border-gold/40 bg-gold/10 px-2 py-1 text-[12px] font-semibold text-navy">
-            {share} of schools in scope
-          </span>
-        )}
+    <div id="portfolio-priority-detail" className="mt-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hair pb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+          {priority?.code ?? 'Standard'} · which schools ({schools.length})
+        </p>
+        <button type="button" className="dt-link text-[12px]" onClick={onClose}>
+          Close
+        </button>
       </div>
-
-      <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-3">
-        <Metric label="Below threshold" value={priority?.schoolsBelowThreshold} />
-        <Metric label="In scope" value={priority?.schoolsInScope} />
-        <Metric label="Scored" value={priority?.schoolsScored} />
-        <Metric label="No evidence" value={priority?.schoolsWithEvidenceGap} />
-        <span className="inline-flex flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Median self-score
-          </span>
-          {priority?.medianRubricScore == null ? (
-            // NOT a zero. Nothing scored and "scored 1" are different facts.
-            <span className="text-[13px] text-muted">Not scored</span>
-          ) : (
-            <RubricPicker value={Math.round(priority.medianRubricScore)} disabled />
-          )}
-        </span>
-      </div>
-
-      {schools && schools.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-[12.5px] font-semibold text-navy">
-            Which schools ({schools.length})
-          </summary>
-          <ul className="mt-2 space-y-1">
-            {schools.map((s, i) => (
-              <li
-                key={s?.schoolId ?? i}
-                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-lg border border-rule/60 bg-section px-3 py-1.5 text-[12.5px]"
-              >
-                <span className="font-semibold text-navy">{s?.name ?? s?.schoolId}</span>
-                <span className="text-muted">
-                  {s?.rubricScore == null
-                    ? 'Not scored'
-                    : `Self-score ${s.rubricScore} (threshold ${thresholdScore})`}
-                  {Number.isFinite(s?.evidenceCount) ? ` · ${s.evidenceCount} artifacts` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
+      {schools.length > 0 ? (
+        <ul className="b1-list !border-t-0">
+          {schools.map((s, i) => (
+            <li key={s?.schoolId ?? i} className="b1-row justify-between !text-[12.5px]">
+              <span className="font-semibold text-ink">{s?.name ?? s?.schoolId}</span>
+              <span className="tabular-nums text-ink2">
+                {s?.rubricScore == null
+                  ? 'Not scored'
+                  : `Self-score ${s.rubricScore} (threshold ${thresholdScore})`}
+                {Number.isFinite(s?.evidenceCount) ? ` · ${s.evidenceCount} artifacts` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="sec-note">The server listed no schools for this standard.</p>
       )}
-
-      {schools && canWrite && (
-        <>
-          {!open && (
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="mt-3 inline-flex min-h-[38px] items-center gap-2 rounded-lg border-2 border-hair px-3.5 text-[13px] font-semibold text-navy transition hover:border-gold"
-            >
-              <Target size={14} aria-hidden className="text-gold" />
-              Run one intervention across these schools
-            </button>
-          )}
-          {open && (
-            <BulkAdoptFlow
-              priority={priority}
-              canWrite={canWrite}
-              onClose={() => setOpen(false)}
-              onPropose={(body) => onPropose?.(priority, body)}
-              onConfirm={(body) => onConfirm?.(priority, body)}
-            />
-          )}
-        </>
-      )}
-    </li>
+      {canWrite &&
+        (adopting ? (
+          <BulkAdoptFlow
+            priority={priority}
+            canWrite={canWrite}
+            onClose={() => setAdopting(false)}
+            onPropose={(body) => onPropose?.(priority, body)}
+            onConfirm={(body) => onConfirm?.(priority, body)}
+          />
+        ) : (
+          <Button onClick={() => setAdopting(true)} icon={<Target size={14} aria-hidden />} className="mt-3">
+            Run one intervention across these schools
+          </Button>
+        ))}
+    </div>
   )
 }
 
@@ -147,19 +183,19 @@ export default function InterventionPriorities({
   onPropose,
   onConfirm,
 }) {
+  const [openKey, setOpenKey] = useState(null)
   if (loading) {
     return (
-      <section className="card-soft px-5 py-6 sm:px-6">
-        <p className="text-[13.5px] text-muted">Looking for standards weak across the diocese…</p>
-      </section>
+      <Section label="Intervention priorities">
+        <p className="text-[13.5px] text-ink2">Looking for standards weak across the diocese…</p>
+      </Section>
     )
   }
   if (error) {
     return (
-      <section className="card-soft px-5 py-6 sm:px-6">
-        <h2 className="font-serif text-[17px] font-semibold text-navy">Intervention priorities</h2>
-        <p className="mt-1 text-[13.5px] text-muted">{error}</p>
-      </section>
+      <Section label="Intervention priorities">
+        <p className="text-[13.5px] text-ink2">{error}</p>
+      </Section>
     )
   }
   if (!data) return null
@@ -176,71 +212,65 @@ export default function InterventionPriorities({
   // and when the server sends no total this sentence is simply absent.
   const total = Number.isFinite(data.totalPriorities) ? data.totalPriorities : null
   const withheld = total !== null && total > priorities.length
+  const opened =
+    openKey != null ? priorities.find((p) => priorityKey(p) === openKey && Array.isArray(p?.schools)) ?? null : null
 
   return (
-    <section aria-labelledby="portfolio-priorities" className="card-soft overflow-hidden">
-      <div className="flex items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-section text-muted">
-          <Layers size={18} aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <h2 id="portfolio-priorities" className="font-serif text-[17px] font-semibold text-navy">
-            Intervention priorities
-          </h2>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
-            Standards weak at enough schools to be worth one diocesan workshop rather than nine
-            separate school projects. Grouped by the shared catalog standard — never by a code a
-            school can edit.
-            {threshold != null
-              ? ` "Below the threshold" means a self-score at or under ${threshold}.`
-              : ''}
-          </p>
-          {withheld && (
-            <p className="mt-1 text-[12.5px] font-semibold text-navy">
-              Showing the top {priorities.length} of {total}. {total - priorities.length} further
-              standard{total - priorities.length === 1 ? ' is' : 's are'} below the threshold
-              somewhere in this organization and {total - priorities.length === 1 ? 'is' : 'are'} not
-              listed here.
-            </p>
-          )}
-          {(Number.isFinite(data.schoolsConsidered) || Number.isFinite(data.schoolsWithFramework)) && (
-            <p className="mt-1 text-[12px] text-muted">
-              {Number.isFinite(data.schoolsWithFramework) ? data.schoolsWithFramework : '—'} of{' '}
-              {Number.isFinite(data.schoolsConsidered) ? data.schoolsConsidered : '—'} schools hold a
-              framework this can be measured against.
-            </p>
-          )}
-        </div>
-      </div>
+    <Section
+      aria-labelledby="portfolio-priorities"
+      label={<span id="portfolio-priorities">Intervention priorities</span>}
+    >
+      <p className="max-w-prose text-[13px] leading-relaxed text-ink2">
+        Standards weak at enough schools to be worth one diocesan workshop rather than nine separate
+        school projects. Grouped by the shared catalog standard — never by a code a school can edit.
+        {threshold != null ? ` "Below the threshold" means a self-score at or under ${threshold}.` : ''}
+      </p>
+      {withheld && (
+        <p className="mt-1 text-[12.5px] font-semibold text-ink">
+          Showing the top {priorities.length} of {total}. {total - priorities.length} further
+          standard{total - priorities.length === 1 ? ' is' : 's are'} below the threshold
+          somewhere in this organization and {total - priorities.length === 1 ? 'is' : 'are'} not
+          listed here.
+        </p>
+      )}
+      {(Number.isFinite(data.schoolsConsidered) || Number.isFinite(data.schoolsWithFramework)) && (
+        <p className="mt-1 text-[12px] text-ink2">
+          {Number.isFinite(data.schoolsWithFramework) ? data.schoolsWithFramework : '—'} of{' '}
+          {Number.isFinite(data.schoolsConsidered) ? data.schoolsConsidered : '—'} schools hold a
+          framework this can be measured against.
+        </p>
+      )}
 
       {priorities.length === 0 ? (
-        <p className="px-5 pb-5 text-[13.5px] text-muted sm:px-6">
-          No standard is weak at enough schools to name a shared intervention.
-        </p>
+        <div className="b1-empty mt-3">
+          <p>No standard is weak at enough schools to name a shared intervention.</p>
+        </div>
       ) : (
-        <ul className="border-t border-rule/60">
-          {priorities.map((p) => (
-            <PriorityRow
-              key={p?.catalogStandardId ?? p?.code}
-              priority={p}
+        <>
+          <PriorityTable priorities={priorities} openKey={openKey} onOpen={setOpenKey} />
+          {opened ? (
+            <PriorityDetail
+              key={openKey}
+              priority={opened}
               thresholdScore={threshold}
               canWrite={canWrite}
               onPropose={onPropose}
               onConfirm={onConfirm}
+              onClose={() => setOpenKey(null)}
             />
-          ))}
-        </ul>
+          ) : null}
+        </>
       )}
 
       {notes.length > 0 && (
-        <ul className="space-y-1 border-t border-rule/60 px-5 py-4 sm:px-6">
+        <ul className="mt-3 space-y-1">
           {notes.map((n, i) => (
-            <li key={i} className="text-[12.5px] leading-snug text-muted">
+            <li key={i} className="text-[12.5px] leading-snug text-ink2">
               {n}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   )
 }

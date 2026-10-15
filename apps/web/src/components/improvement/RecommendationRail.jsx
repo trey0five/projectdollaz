@@ -20,8 +20,10 @@
 // a plain sentence about who can act, never a dead button.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { ArrowRight, Lightbulb, Sparkles } from 'lucide-react'
-import { IMPROVEMENT_HUE, TEMPLATE_LABELS, OWNER_ROLE_LABELS, hueAlpha, recommendationId } from './improvementMeta.js'
+import { ArrowRight } from 'lucide-react'
+import { Section, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
+import { TEMPLATE_LABELS, OWNER_ROLE_LABELS, recommendationId } from './improvementMeta.js'
 
 const BASIS_LABEL = {
   nextStepLift: 'one rubric step',
@@ -31,39 +33,33 @@ const BASIS_LABEL = {
 function LiftChip({ lift }) {
   if (!lift || lift.points == null) return null
   return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold"
-      style={{ borderColor: hueAlpha(0.4), background: hueAlpha(0.1), color: '#0f766e' }}
+    <Pill
+      variant="status"
+      tone="good"
+      className="tabular-nums"
       title={`Attributed to ${BASIS_LABEL[lift.basis] ?? lift.basis}`}
     >
       +{lift.points} index pts
-    </span>
+    </Pill>
   )
 }
 
+/** One recommendation: a ruled row on the ground (no card, no shadow). */
 function RecommendationCard({ rec, index, canEdit, onWork, reduce }) {
   const kicker = TEMPLATE_LABELS[rec.templateId] ?? 'Recommended'
   const hasLift = !!rec.estimatedLift && rec.estimatedLift.points != null
   return (
     <motion.li
-      initial={reduce ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : Math.min(index * 0.04, 0.2), duration: 0.28 }}
-      className="flex flex-col gap-2 rounded-xl border border-rule/50 bg-white p-3.5 shadow-sm"
+      initial={reduce ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: reduce ? 0 : Math.min(index * 0.03, 0.2), duration: 0.28 }}
+      className="flex flex-col gap-1.5 py-3.5"
       data-testid="recommendation"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="rounded-md px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em]"
-          style={{ background: hueAlpha(0.12), color: '#0f766e' }}
-        >
-          {kicker}
-        </span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="pg-eyebrow !mb-0">{kicker}</span>
         {(rec.standardTags ?? []).slice(0, 3).map((t) => (
-          <span
-            key={t}
-            className="rounded-md border border-rule/60 bg-cream/60 px-1.5 py-0.5 text-[10.5px] font-semibold text-muted"
-          >
+          <span key={t} className="text-[11px] font-semibold text-ink2">
             {t}
           </span>
         ))}
@@ -71,37 +67,30 @@ function RecommendationCard({ rec, index, canEdit, onWork, reduce }) {
         {hasLift ? <LiftChip lift={rec.estimatedLift} /> : null}
       </div>
 
-      <p className="text-[14px] font-semibold leading-snug text-navy">{rec.title}</p>
-      <p className="text-[12.5px] leading-relaxed text-muted">{rec.rationale}</p>
+      <p className="text-[14px] font-semibold leading-snug text-ink">{rec.title}</p>
+      <p className="max-w-prose text-[12.5px] leading-relaxed text-ink2">{rec.rationale}</p>
 
       {/* No number is available — say why, in the engine's own words. */}
       {!hasLift && rec.estimatedLiftReason ? (
-        <p
-          className="rounded-lg border border-dashed border-rule/60 bg-cream/50 px-2.5 py-1.5 text-[12px] leading-relaxed text-muted"
-          data-testid="lift-reason"
-        >
+        <p className="border-l-2 border-hair pl-2.5 text-[12px] leading-relaxed text-ink2" data-testid="lift-reason">
           {rec.estimatedLiftReason}
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         {rec.suggestedOwnerRole ? (
-          <span className="text-[12px] text-muted">
+          <span className="text-[12px] text-ink2">
             Suggested owner ·{' '}
-            <span className="font-semibold text-navy">
+            <span className="font-semibold text-ink">
               {OWNER_ROLE_LABELS[rec.suggestedOwnerRole] ?? rec.suggestedOwnerRole}
             </span>
           </span>
         ) : null}
         <span className="flex-1" />
         {canEdit ? (
-          <button
-            type="button"
-            onClick={() => onWork?.(rec)}
-            className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[12.5px] font-semibold transition"
-          >
-            Work this gap <ArrowRight size={13} aria-hidden />
-          </button>
+          <Button size="sm" onClick={() => onWork?.(rec)} icon={<ArrowRight size={13} aria-hidden />}>
+            Work this gap
+          </Button>
         ) : null}
       </div>
     </motion.li>
@@ -137,14 +126,9 @@ function EmptyRail({ basis }) {
     detail = 'Every open gap, unmet assurance and non-informational warning is already being worked.'
   }
   return (
-    <div
-      className="mt-3 rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-8 text-center"
-      data-testid="rail-empty"
-    >
-      <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-navy">
-        <Sparkles size={14} aria-hidden /> {headline}
-      </p>
-      {detail ? <p className="mt-1 text-[12.5px] text-muted">{detail}</p> : null}
+    <div className="b1-empty" data-testid="rail-empty">
+      <p className="b1-empty-title">{headline}</p>
+      {detail ? <p>{detail}</p> : null}
     </div>
   )
 }
@@ -159,37 +143,22 @@ export default function RecommendationRail({
   reduce = false,
 }) {
   return (
-    <section
+    <Section
       aria-labelledby="improvement-recommendations"
-      className="rounded-2xl border-2 bg-white p-4 shadow-sm"
-      style={{ borderColor: hueAlpha(0.25) }}
+      className="!mt-0"
+      label={<span id="improvement-recommendations">What to work on next</span>}
+      aside={!canEdit ? <span>An owner or accountant can start this work.</span> : null}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-white"
-          style={{ background: IMPROVEMENT_HUE }}
-        >
-          <Lightbulb size={16} aria-hidden />
-        </span>
-        <h2 id="improvement-recommendations" className="font-serif text-[17px] font-semibold text-navy">
-          What to work on next
-        </h2>
-        <span className="flex-1" />
-        {!canEdit ? (
-          <span className="text-[12px] text-muted">An owner or accountant can start this work.</span>
-        ) : null}
-      </div>
-
       {loading && recommendations.length === 0 ? (
-        <p className="mt-3 text-[13px] text-muted">Reading your readiness gaps and open warnings…</p>
+        <p className="text-[13px] text-ink2">Reading your readiness gaps and open warnings…</p>
       ) : degraded ? (
-        <p className="mt-3 rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-6 text-center text-[13px] text-muted">
-          Recommendations are unavailable right now. Your initiatives below are unaffected.
-        </p>
+        <div className="b1-empty">
+          <p>Recommendations are unavailable right now. Your initiatives below are unaffected.</p>
+        </div>
       ) : recommendations.length === 0 ? (
         <EmptyRail basis={basis} />
       ) : (
-        <ul className="mt-3 grid gap-2.5 lg:grid-cols-2">
+        <ul className="grid gap-x-10 lg:grid-cols-2 [&>li]:border-b [&>li]:border-hair">
           {recommendations.map((rec, i) => (
             <RecommendationCard
               key={recommendationId(rec)}
@@ -202,6 +171,6 @@ export default function RecommendationRail({
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   )
 }

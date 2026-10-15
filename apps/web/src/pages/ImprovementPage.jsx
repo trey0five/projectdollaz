@@ -44,49 +44,26 @@ import {
 } from '../components/improvement/improvementMeta.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useImprovement } from '../hooks/useImprovement.js'
+import { PageHeader } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 const TABS = [{ key: 'initiatives', label: 'Initiatives' }]
 
-// ── Light-theme gate panels (same shape as /strategy's) ──────────────────────
-function CenteredPanel({ children }) {
-  return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span
-          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-glow"
-          style={{ background: IMPROVEMENT_HUE }}
-        >
-          <TrendingUp size={26} />
-        </span>
-        {children}
-      </div>
-    </div>
-  )
-}
-
+// ── Gate: a plain page header on the ground (same shape as /strategy's) ─────
 function GatePanel({ notLicensed }) {
   return (
-    <CenteredPanel>
-      {notLicensed ? (
-        <>
-          <h2 className="font-serif text-xl font-semibold text-navy">
-            Improvement rides on Accreditation or Strategic Planning
-          </h2>
-          <p className="max-w-md text-[15px] text-muted">
-            It isn&apos;t a separate module — adding either one turns your readiness gaps and early
-            warnings into owned, dated work whose progress is computed from your own numbers.
-          </p>
-        </>
-      ) : (
-        <>
-          <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-          <p className="max-w-md text-[15px] text-muted">
-            Resume your plan to manage your improvement initiatives.
-          </p>
-        </>
-      )}
-    </CenteredPanel>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={improvementAccentVars()}>
+      <BackLink />
+      <PageHeader
+        eyebrow="Improvement"
+        title={notLicensed ? 'Improvement rides on Accreditation or Strategic Planning' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'It isn\u2019t a separate module. Adding either one turns your readiness gaps and early warnings into owned, dated work whose progress is computed from your own numbers.'
+            : 'Resume your plan to manage your improvement initiatives.'
+        }
+      />
+    </div>
   )
 }
 
@@ -273,8 +250,12 @@ function ImprovementWorkspace() {
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
   if (loading) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8" style={improvementAccentVars()}>
+        <PageHeader
+          eyebrow={`Improvement · ${activeSchool?.name ?? 'School'}`}
+          title="Improvement"
+          meta="Loading your initiatives…"
+        />
       </div>
     )
   }
@@ -307,7 +288,8 @@ function ImprovementWorkspace() {
 
   const errorBanner = error ? (
     <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
-      <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
+      <p role="alert" className="inline-flex items-center gap-2 text-[13px] font-semibold text-ink">
+        <i className="mark tone-risk" aria-hidden="true" />
         {error}
       </p>
     </div>
@@ -318,7 +300,7 @@ function ImprovementWorkspace() {
       {errorBanner}
       <DomainCommandCenter
         showBack
-        eyebrow="Continuous improvement · owned, dated work"
+        eyebrow={`Improvement · ${activeSchool?.name ?? 'School'}`}
         title="Improvement"
         Icon={TrendingUp}
         attentionCount={attentionItems.length}
@@ -333,8 +315,8 @@ function ImprovementWorkspace() {
         attentionItems={attentionItems}
         headerAside={
           dataAsOf ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-rule/60 bg-white px-2.5 py-1 text-[12px] text-muted">
-              <CalendarClock size={12} aria-hidden /> as of {shortDate(dataAsOf) ?? dataAsOf}
+            <span className="inline-flex items-center gap-1.5 text-[12px] text-ink2">
+              <CalendarClock size={12} aria-hidden /> Data as of {shortDate(dataAsOf) ?? dataAsOf}
             </span>
           ) : null
         }

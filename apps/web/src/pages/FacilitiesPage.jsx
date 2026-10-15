@@ -14,14 +14,13 @@
 // SEPARATE from the capital schedule (deferred-maintenance ≠ planned capital).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from 'framer-motion'
 import {
   Wrench,
   Pencil,
   Trash2,
   Check,
   TrendingDown,
-  TrendingUp,
   AlertTriangle,
   Clock,
   MapPin,
@@ -58,6 +57,8 @@ import {
   complianceKindBadge,
 } from '../components/facilities/complianceKindMeta.js'
 import { shortDate } from '../lib/dates.js'
+import { PageHeader, DataTable, Toolbar, Pill } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 const STATUSES = ['open', 'scheduled', 'in_progress', 'resolved']
@@ -78,19 +79,18 @@ const RECURRENCE_LABEL = {
   annual: 'Annual',
 }
 
-// ── Light-theme priority badge (restyled from the old dark pills) ────────────
+// ── Priority + urgency → status Pill tones (2px mark + ink text) ────────────
 const PRIORITY_BADGE = {
-  low: { label: 'Low', cls: 'border-rule/60 bg-section text-muted' },
-  medium: { label: 'Medium', cls: 'border-sky-300/70 bg-sky-50 text-sky-700' },
-  high: { label: 'High', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  critical: { label: 'Critical', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  low: { label: 'Low', tone: 'neutral' },
+  medium: { label: 'Medium', tone: 'neutral' },
+  high: { label: 'High', tone: 'watch' },
+  critical: { label: 'Critical', tone: 'risk' },
 }
 
-// ── Light-theme urgency badge ────────────────────────────────────────────────
 const URGENCY_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  'due-soon': { label: 'Due soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  'on-track': { label: 'On track', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  overdue: { label: 'Overdue', tone: 'risk' },
+  'due-soon': { label: 'Due soon', tone: 'watch' },
+  'on-track': { label: 'On track', tone: 'good' },
   none: null,
 }
 
@@ -99,26 +99,23 @@ function fmtMoney(value) {
   return `$${Math.round(value).toLocaleString('en-US')}`
 }
 
-/** A small light-theme pill (shared idiom for priority + urgency signals). */
-function Pill({ def, suffix }) {
+/** A status Pill from a { label, tone } def (null-safe). */
+function StatusPill({ def, suffix }) {
   if (!def) return null
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
-    >
+    <Pill variant="status" tone={def.tone}>
       {def.label}
       {suffix ?? ''}
-    </span>
+    </Pill>
   )
 }
 
-// ── Attention-rail meta chips (compact; reuse the register badge palettes) ───
-function AttentionChip({ cls, icon: ChipIcon, children }) {
+// ── Attention-rail meta line: ink text, a 2px mark only where it is a status ─
+function AttentionChip({ tone, icon: ChipIcon, children }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}
-    >
-      {ChipIcon ? <ChipIcon size={11} /> : null}
+    <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-ink2">
+      {tone ? <i className={`mark tone-${tone}`} aria-hidden="true" /> : null}
+      {ChipIcon ? <ChipIcon size={11} aria-hidden="true" /> : null}
       {children}
     </span>
   )
@@ -134,28 +131,28 @@ function attentionWhy(it) {
 function attentionMeta(it) {
   const days = typeof it.daysUntilTarget === 'number' ? it.daysUntilTarget : null
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
       {it.urgency === 'overdue' ? (
-        <AttentionChip cls={URGENCY_BADGE.overdue.cls} icon={AlertTriangle}>
+        <AttentionChip tone="risk" icon={AlertTriangle}>
           {days != null ? `Overdue ${Math.abs(days)}d` : 'Overdue'}
         </AttentionChip>
       ) : it.urgency === 'due-soon' ? (
-        <AttentionChip cls={URGENCY_BADGE['due-soon'].cls} icon={Clock}>
+        <AttentionChip tone="watch" icon={Clock}>
           {days != null ? `Due in ${days}d` : 'Due soon'}
         </AttentionChip>
       ) : null}
       {PRIORITY_BADGE[it.priority] ? (
-        <AttentionChip cls={PRIORITY_BADGE[it.priority].cls}>
+        <AttentionChip tone={PRIORITY_BADGE[it.priority].tone === 'neutral' ? null : PRIORITY_BADGE[it.priority].tone}>
           {PRIORITY_BADGE[it.priority].label}
         </AttentionChip>
       ) : null}
       {it.location ? (
-        <AttentionChip cls="border-rule/60 bg-section text-muted" icon={MapPin}>
+        <AttentionChip icon={MapPin}>
           {it.location}
         </AttentionChip>
       ) : null}
       {typeof it.estimatedCost === 'number' ? (
-        <AttentionChip cls="border-rule/60 bg-section text-muted">
+        <AttentionChip>
           {fmtMoney(it.estimatedCost)}
         </AttentionChip>
       ) : null}
@@ -171,28 +168,28 @@ function attentionMetaBids(it) {
   const days = typeof it.daysUntilTarget === 'number' ? it.daysUntilTarget : null
   const hasRange = typeof it.pendingBidMin === 'number' && typeof it.pendingBidMax === 'number'
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <AttentionChip cls="border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412]" icon={Gavel}>
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <AttentionChip tone="watch" icon={Gavel}>
         {n} bid{n === 1 ? '' : 's'} pending
       </AttentionChip>
       {it.urgency === 'overdue' ? (
-        <AttentionChip cls={URGENCY_BADGE.overdue.cls} icon={AlertTriangle}>
+        <AttentionChip tone="risk" icon={AlertTriangle}>
           {days != null ? `Overdue ${Math.abs(days)}d` : 'Overdue'}
         </AttentionChip>
       ) : null}
       {PRIORITY_BADGE[it.priority] ? (
-        <AttentionChip cls={PRIORITY_BADGE[it.priority].cls}>
+        <AttentionChip tone={PRIORITY_BADGE[it.priority].tone === 'neutral' ? null : PRIORITY_BADGE[it.priority].tone}>
           {PRIORITY_BADGE[it.priority].label}
         </AttentionChip>
       ) : null}
       {hasRange ? (
-        <AttentionChip cls="border-rule/60 bg-section text-muted">
+        <AttentionChip>
           {it.pendingBidMin === it.pendingBidMax
             ? fmtMoney(it.pendingBidMin)
             : `${fmtMoney(it.pendingBidMin)}–${fmtMoney(it.pendingBidMax)}`}
         </AttentionChip>
       ) : typeof it.estimatedCost === 'number' ? (
-        <AttentionChip cls="border-rule/60 bg-section text-muted">
+        <AttentionChip>
           {fmtMoney(it.estimatedCost)}
         </AttentionChip>
       ) : null}
@@ -200,19 +197,7 @@ function attentionMetaBids(it) {
   )
 }
 
-// ── Light-theme register table primitives ────────────────────────────────────
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
+// ── Register atoms: quiet icon actions, a ruled state row ────────────────────
 function IconAction(props) {
   const { onClick, label, title, danger } = props
   const ActionIcon = props.Icon
@@ -222,64 +207,37 @@ function IconAction(props) {
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
+      className={`b1-icon-act${danger ? ' b1-icon-act-danger' : ''}`}
     >
       <ActionIcon size={15} />
     </button>
   )
 }
 
-function TableShell({ children, cols }) {
+/** Loading / error / empty — a ruled block on the ground, never a dashed card. */
+function StateRow({ title, children, error }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>{cols}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+    <div className="b1-empty" role={error ? 'alert' : undefined}>
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p className={error ? 'b1-empty-err' : undefined}>{children}</p> : null}
     </div>
   )
 }
 
-function StateRow({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
-    </div>
-  )
-}
-
-// ── Light-theme entitlement / license gate ───────────────────────────────────
+// ── Entitlement / license gate: a plain page header, no hero card ────────────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <Wrench size={26} />
-        </span>
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Facilities isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the Facilities module to track deferred maintenance and its capital backlog — and
-              land its slice of the briefing here.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Resume your plan to manage the maintenance register.
-            </p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Facilities"
+        title={notLicensed ? 'Facilities isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the Facilities module to track deferred maintenance and its capital backlog, and land its slice of the briefing here.'
+            : 'Resume your plan to manage the maintenance register.'
+        }
+      />
     </div>
   )
 }
@@ -491,7 +449,7 @@ export function MaintenanceFormModal({ open, initial, vendors = [], onClose, onS
             </option>
           ))}
         </Select>
-        <span className="mt-1 block text-[11.5px] text-white/60">{COMPLIANCE_KIND_NOTE}</span>
+        <span className="mt-1 block text-[11.5px] text-ink2">{COMPLIANCE_KIND_NOTE}</span>
       </Field>
       <Field label="Notes" span={2} index={11} reduce={reduce}>
         <textarea
@@ -513,7 +471,6 @@ function MaintenanceTable({
   loading,
   error,
   canEdit,
-  reduce,
   onEdit,
   onDelete,
   onOpenBids,
@@ -522,189 +479,147 @@ function MaintenanceTable({
   // would be false.
   emptyState = null,
 }) {
-  if (loading)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-muted">Loading maintenance items…</p>
-      </StateRow>
-    )
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+  if (loading) return <StateRow>Loading maintenance items…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (items.length === 0)
     return (
       emptyState ?? (
-        <StateRow>
-          <p className="font-serif text-[16px] italic text-muted">No maintenance items yet.</p>
-          <p className="mt-1 text-[13px] text-muted">
-            Add your first item to start tracking the deferred-maintenance backlog.
-          </p>
+        <StateRow title="No maintenance items yet">
+          Add your first item to start tracking the deferred-maintenance backlog.
         </StateRow>
       )
     )
 
-  return (
-    <TableShell
-      cols={
-        <>
-          <Th>Item</Th>
-          <Th>Location</Th>
-          <Th>Priority</Th>
-          <Th>Status</Th>
-          <Th right>Est / Actual</Th>
-          <Th>Target</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {items.map((it) => (
-          <motion.tr
-            key={it.id}
-            layout={!reduce}
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            className="group border-t border-rule/50"
-          >
-            <td className="px-4 py-3">
-              <div className="font-semibold text-navy">{it.title}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {it.category ? (
-                  <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
-                    {it.category}
-                  </span>
-                ) : null}
-                {/* AIC Phase F — the kind chip appears only when the SCHOOL said
-                    what kind of inspection this is. It is never derived from the
-                    category chip beside it, however suggestive that free text is. */}
-                {complianceKindBadge(it.complianceKind) ? (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
-                      complianceKindBadge(it.complianceKind).cls
-                    }`}
-                    title="Recorded as a compliance inspection"
-                  >
-                    <ShieldCheck size={11} />
-                    {complianceKindBadge(it.complianceKind).label}
-                  </span>
-                ) : null}
-                {it.recurrence && it.recurrence !== 'none' ? (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5e00]"
-                    title={`Preventive maintenance — spawns the next occurrence on resolve (${RECURRENCE_LABEL[it.recurrence] ?? it.recurrence})`}
-                  >
-                    <RotateCw size={11} />
-                    {RECURRENCE_LABEL[it.recurrence] ?? it.recurrence}
-                  </span>
-                ) : null}
-                {it.vendorName ?? it.vendor ? (
-                  <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] text-muted">
-                    {it.vendorName ?? it.vendor}
-                  </span>
-                ) : null}
-                {onOpenBids ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenBids(it)}
-                    title="Vendor bids on this item"
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
-                      (it.pendingBidCount ?? 0) > 0
-                        ? 'border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412] hover:brightness-95'
-                        : 'border-rule/60 bg-section text-muted hover:text-navy'
-                    }`}
-                  >
-                    {it.selectedBidId ? <Trophy size={11} /> : <Gavel size={11} />}
-                    Bids{(it.pendingBidCount ?? 0) > 0 ? ` (${it.pendingBidCount})` : ''}
-                  </button>
-                ) : null}
-              </div>
-            </td>
-            <td className="px-4 py-3 text-muted">
-              {it.location ? (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin size={13} className="shrink-0" />
-                  {it.location}
-                </span>
-              ) : (
-                '—'
-              )}
-            </td>
-            <td className="px-4 py-3">
-              <Pill def={PRIORITY_BADGE[it.priority]} />
-            </td>
-            <td className="px-4 py-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                  {STATUS_LABEL[it.status] ?? it.status}
-                </span>
-                <Pill def={URGENCY_BADGE[it.urgency]} />
-              </div>
-            </td>
-            <td className="px-4 py-3 text-right tabular-nums">
-              <div className="font-semibold text-navy">
-                {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
-                {typeof it.actualCost === 'number' && typeof it.estimatedCost === 'number' ? (
-                  <span className="ml-1 text-[11px] font-normal text-muted">est</span>
-                ) : null}
-              </div>
-              {typeof it.actualCost === 'number' ? (
-                <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[12px] text-muted">
-                  <span>act {fmtMoney(it.actualCost)}</span>
-                  {typeof it.variance === 'number' && it.variance !== 0 ? (
-                    <span
-                      className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
-                        it.variance > 0
-                          ? 'bg-danger/10 text-danger'
-                          : 'bg-emerald-50 text-emerald-700'
-                      }`}
-                    >
-                      {it.variance > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                      {it.variance > 0 ? '+' : '−'}
-                      {fmtMoney(Math.abs(it.variance))}
-                    </span>
-                  ) : null}
-                </div>
+  const columns = [
+    {
+      key: 'title',
+      header: 'Item',
+      sortable: true,
+      render: (it) => {
+        const kind = complianceKindBadge(it.complianceKind)
+        const recurring = it.recurrence && it.recurrence !== 'none'
+        const vendor = it.vendorName ?? it.vendor
+        const pending = it.pendingBidCount ?? 0
+        return (
+          <div className="min-w-[13rem] py-1.5">
+            <span className="font-semibold">{it.title}</span>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink2">
+              {it.location ? <span>{it.location}</span> : null}
+              {it.category ? <span>{it.category}</span> : null}
+              {/* AIC Phase F — the kind appears only when the SCHOOL said what
+                  kind of inspection this is. It is never derived from the
+                  category beside it, however suggestive that free text is. */}
+              {kind ? (
+                <Pill variant="status" tone={kind.tone} title="Recorded as a compliance inspection">
+                  <ShieldCheck size={11} aria-hidden="true" />
+                  {kind.label}
+                </Pill>
               ) : null}
-            </td>
-            <td className="px-4 py-3">
-              {it.targetDate ? (
-                <>
-                  <div className="font-semibold text-navy">{shortDate(it.targetDate)}</div>
-                  {it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number' ? (
-                    <div className="text-[11.5px] font-semibold text-danger">
-                      {Math.abs(it.daysUntilTarget)}d overdue
-                    </div>
-                  ) : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number' ? (
-                    <div className="text-[11.5px] font-semibold text-[#7a5e00]">
-                      in {it.daysUntilTarget}d
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <span className="text-muted">—</span>
-              )}
-            </td>
-            {canEdit ? (
-              <td className="px-4 py-3">
-                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                  <IconAction Icon={Pencil} onClick={() => onEdit(it)} label={`Edit ${it.title}`} />
-                  <IconAction
-                    Icon={Trash2}
-                    danger
-                    onClick={() => onDelete(it)}
-                    label={`Delete ${it.title}`}
-                  />
-                </div>
-              </td>
-            ) : null}
-          </motion.tr>
-        ))}
-      </AnimatePresence>
-    </TableShell>
+              {recurring ? (
+                <span
+                  className="inline-flex items-center gap-1"
+                  title={`Preventive maintenance — spawns the next occurrence on resolve (${RECURRENCE_LABEL[it.recurrence] ?? it.recurrence})`}
+                >
+                  <RotateCw size={11} aria-hidden="true" />
+                  {RECURRENCE_LABEL[it.recurrence] ?? it.recurrence}
+                </span>
+              ) : null}
+              {vendor ? <span>{vendor}</span> : null}
+              {onOpenBids ? (
+                <button type="button" onClick={() => onOpenBids(it)} title="Vendor bids on this item" className="dt-link">
+                  {pending > 0 ? <i className="mark tone-watch" aria-hidden="true" /> : null}
+                  {it.selectedBidId ? <Trophy size={11} aria-hidden="true" /> : <Gavel size={11} aria-hidden="true" />}
+                  Bids{pending > 0 ? ` (${pending})` : ''}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'priority',
+      header: 'Priority',
+      sortable: true,
+      sortValue: (it) => PRIORITIES.indexOf(it.priority),
+      render: (it) => <StatusPill def={PRIORITY_BADGE[it.priority]} />,
+    },
+    {
+      // Due date and status share one column (the date, then status · urgency
+      // under it), so the six columns fit beside the needs-attention rail at
+      // 1280. Sorts by target date, as the old Target column did.
+      key: 'targetDate',
+      header: 'Due',
+      sortable: true,
+      render: (it) => (
+        <>
+          <span className="whitespace-nowrap font-semibold">{it.targetDate ? shortDate(it.targetDate) : '—'}</span>
+          {it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number' ? (
+            <span className="dt-sub">{Math.abs(it.daysUntilTarget)}d overdue</span>
+          ) : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number' ? (
+            <span className="dt-sub">in {it.daysUntilTarget}d</span>
+          ) : null}
+          <span className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="text-ink2">{STATUS_LABEL[it.status] ?? it.status}</span>
+            <StatusPill def={URGENCY_BADGE[it.urgency]} />
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'estimatedCost',
+      header: 'Est. cost',
+      num: true,
+      sortable: true,
+      sortValue: (it) => (typeof it.estimatedCost === 'number' ? it.estimatedCost : null),
+      render: (it) => (
+        <>
+          <span className="font-semibold">
+            {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
+          </span>
+          {typeof it.actualCost === 'number' ? (
+            <span className="dt-sub whitespace-nowrap">
+              act {fmtMoney(it.actualCost)}
+              {typeof it.variance === 'number' && it.variance !== 0 ? (
+                <span className="flex items-center justify-end gap-1 font-semibold text-ink">
+                  <i className={`mark ${it.variance > 0 ? 'tone-risk' : 'tone-good'}`} aria-hidden="true" />
+                  {it.variance > 0 ? '+' : '−'}
+                  {fmtMoney(Math.abs(it.variance))}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+  ]
+  if (canEdit)
+    columns.push({
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (it) => (
+        <div className="dt-actions inline-flex justify-end gap-1">
+          <IconAction Icon={Pencil} onClick={() => onEdit(it)} label={`Edit ${it.title}`} />
+          <IconAction Icon={Trash2} danger onClick={() => onDelete(it)} label={`Delete ${it.title}`} />
+        </div>
+      ),
+    })
+
+  return (
+    <DataTable
+      caption="Maintenance register"
+      columns={columns}
+      rows={items}
+      markOf={(it) =>
+        it.urgency === 'overdue' || it.priority === 'critical'
+          ? 'risk'
+          : it.urgency === 'due-soon' || it.priority === 'high'
+            ? 'watch'
+            : null
+      }
+    />
   )
 }
 
@@ -1012,60 +927,52 @@ function FacilitiesWorkspace() {
         vendors={vendors}
         loading={loading}
         canEdit={canEdit}
-        reduce={reduce}
         onEdit={(v) => setVendorModal({ editing: v })}
         onDelete={(v) => removeVendor(v.id)}
         onToggleActive={(v) => updateVendor(v.id, { active: !v.active })}
       />
     ) : (
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* The compliance-inspection filter. `complianceCount` is a count of the
             rows the SCHOOL flagged — nothing is inferred from a title or a
             category, so a school that has flagged nothing sees a plain zero. */}
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: false, label: `All items (${items.length})` },
-            { key: true, label: `Compliance inspections (${complianceCount})` },
-          ].map((f) => {
-            const active = inspectionsOnly === f.key
-            return (
-              <button
-                key={String(f.key)}
-                type="button"
-                onClick={() => setInspectionsOnly(f.key)}
-                aria-pressed={active}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
-                  active
-                    ? 'border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412]'
-                    : 'border-rule/60 bg-section text-muted hover:text-navy'
-                }`}
-              >
-                {f.key ? <ShieldCheck size={12} /> : null}
-                {f.label}
-              </button>
-            )
-          })}
-        </div>
+        <Toolbar aria-label="Filter the maintenance register">
+          <div className="seg">
+            {[
+              { key: false, label: 'All items', n: items.length },
+              { key: true, label: 'Compliance inspections', n: complianceCount },
+            ].map((f) => {
+              const active = inspectionsOnly === f.key
+              return (
+                <button
+                  key={String(f.key)}
+                  type="button"
+                  onClick={() => setInspectionsOnly(f.key)}
+                  aria-pressed={active}
+                  className="seg-btn"
+                >
+                  {f.key ? <ShieldCheck size={12} aria-hidden="true" /> : null}
+                  {f.label}
+                  <span className="tabular-nums opacity-70">{f.n}</span>
+                </button>
+              )
+            })}
+          </div>
+        </Toolbar>
         <MaintenanceTable
           items={visibleItems}
           loading={loading}
           error={error}
           canEdit={canEdit}
-          reduce={reduce}
           onEdit={openEdit}
           onDelete={onDelete}
           onOpenBids={(it) => setBidsItem(it)}
           emptyState={
             inspectionsOnly && items.length > 0 ? (
-              <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-                <p className="font-serif text-[16px] italic text-muted">
-                  No item is flagged as a compliance inspection.
-                </p>
-                <p className="mx-auto mt-1 max-w-lg text-[13px] text-muted">
-                  {COMPLIANCE_KIND_NOTE} Open an item and set its kind — we will not read it off a
-                  title or a category.
-                </p>
-              </div>
+              <StateRow title="No item is flagged as a compliance inspection">
+                {COMPLIANCE_KIND_NOTE} Open an item and set its kind. We will not read it off a title
+                or a category.
+              </StateRow>
             ) : null
           }
         />
@@ -1088,7 +995,7 @@ function FacilitiesWorkspace() {
     <DomainCommandCenter
       showAddData
       moduleKey="facilities"
-      eyebrow="Domain · Facilities engine · system of record"
+      eyebrow={`Facilities · ${activeSchool?.name ?? 'School'}`}
       title="Facilities"
       Icon={Wrench}
       attentionCount={attentionItems.length}
@@ -1101,6 +1008,8 @@ function FacilitiesWorkspace() {
       attentionItems={attentionItems}
       beforeBody={budgetCard}
       registerTitle="Maintenance register"
+      // Location rides in the Item meta line (beside category and vendor) so
+      // the six columns fit in two thirds at 1280 and the rail stays a side rail.
     />
   )
 

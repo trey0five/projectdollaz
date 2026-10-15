@@ -143,8 +143,8 @@ export function GiftFormModal({ open, initial, campaignName, onClose, onSubmit, 
       <Field label="Note (optional)" index={6} reduce={reduce}>
         <input value={form.note} onChange={set('note')} maxLength={2000} className={fieldInput} />
       </Field>
-      <p className="flex items-center gap-1.5 text-[12px] text-muted sm:col-span-2">
-        <ShieldCheck size={13} className="shrink-0 text-gold" />
+      <p className="flex items-center gap-1.5 text-[12px] text-ink2 sm:col-span-2">
+        <ShieldCheck size={13} className="shrink-0 text-ink2" aria-hidden="true" />
         Aggregate only — record amounts, never donor names.
       </p>
     </EntityFormModal>

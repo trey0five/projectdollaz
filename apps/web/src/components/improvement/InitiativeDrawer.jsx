@@ -37,17 +37,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  CalendarClock,
-  CircleCheck,
-  Circle,
-  Flag,
-  Gauge,
-  Link2,
-  SlidersHorizontal,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { CircleCheck, Circle, Trash2, X } from 'lucide-react'
+import { Section as SurfaceSection, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import ProgressSparkline from './ProgressSparkline.jsx'
 import { METRIC_OPTIONS, isPercentMetric } from '../../hooks/useStrategy.js'
 import { measurementPatch, milestonesWithToggle } from './improvementFlow.jsx'
@@ -59,53 +51,37 @@ import {
   RISK_LEVEL_LABELS,
   RISK_SIGNAL_META,
   STATUS_LABELS,
-  hueAlpha,
   milestoneCounts,
   pctLabel,
   shortDate,
 } from './improvementMeta.js'
 
-const TONE_CLASS = {
-  bad: 'border-danger/35 bg-danger/10 text-danger',
-  warn: 'border-amber-400/40 bg-amber-50 text-amber-700',
-  good: 'border-emerald-400/40 bg-emerald-50 text-emerald-700',
-  neutral: 'border-rule/60 bg-cream/60 text-muted',
-}
+// Server risk-signal tone → the status Pill tone (a 2px mark; the text stays ink).
+const TONE = { bad: 'risk', warn: 'watch', good: 'good', neutral: 'neutral' }
 
 function Chip({ label, value, tone = 'neutral', testId }) {
   return (
     <span className="inline-flex items-center gap-1.5" data-testid={testId}>
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-        {label}
-      </span>
-      <span
-        className={`rounded-full border px-2 py-0.5 text-[12px] font-semibold ${TONE_CLASS[tone] ?? TONE_CLASS.neutral}`}
-      >
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">{label}</span>
+      <Pill variant="status" tone={TONE[tone] ?? 'neutral'}>
         {value}
-      </span>
+      </Pill>
     </span>
   )
 }
 
 function Row({ label, children }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule/40 py-1.5 last:border-0">
-      <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</span>
-      <span className="text-[13px] text-navy">{children}</span>
+    <div>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
     </div>
   )
 }
 
-function Section({ title, Icon, children }) {
-  return (
-    <section className="rounded-xl border border-rule/50 bg-white p-3.5">
-      <h3 className="flex items-center gap-1.5 font-serif text-[15px] font-semibold text-navy">
-        {Icon ? <Icon size={14} aria-hidden style={{ color: IMPROVEMENT_HUE }} /> : null}
-        {title}
-      </h3>
-      <div className="mt-2">{children}</div>
-    </section>
-  )
+/** A drawer section: the shared label rule, content on white. */
+function Section({ title, children }) {
+  return <SurfaceSection label={title}>{children}</SurfaceSection>
 }
 
 const STATUS_OPTIONS = ['planned', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -119,8 +95,7 @@ const SOURCE_OPTIONS = [
   { value: 'manual', label: 'A percentage I set by hand' },
 ]
 
-const FIELD =
-  'w-full rounded-lg border border-rule/60 bg-white px-2 py-1.5 text-[13px] text-navy focus:border-transparent focus:outline-none focus:ring-2'
+const FIELD = 'b1-fld'
 
 /** The civil day, for a reading recorded now. */
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -245,17 +220,12 @@ export default function InitiativeDrawer({
       {it ? (
         <motion.div
           key="improvement-drawer"
-          className="fixed inset-0 z-50 flex justify-end"
-          initial={reduce ? { opacity: 0 } : { opacity: 0 }}
+          className="fixed inset-0 z-[55]"
+          initial={reduce ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <button
-            type="button"
-            aria-label="Close initiative"
-            onClick={onClose}
-            className="absolute inset-0 bg-navy/40 backdrop-blur-[2px]"
-          />
+          <button type="button" aria-label="Close initiative" onClick={onClose} className="b1-drawer-scrim" />
           <motion.aside
             role="dialog"
             aria-modal="true"
@@ -264,42 +234,29 @@ export default function InitiativeDrawer({
             animate={{ x: 0, opacity: 1 }}
             exit={reduce ? { opacity: 0 } : { x: 40, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-            className="relative flex h-full w-full max-w-[520px] flex-col overflow-y-auto bg-cream shadow-2xl"
+            className="b1-drawer !w-[min(100vw,33rem)]"
           >
             {/* Header */}
-            <div
-              className="sticky top-0 z-10 border-b border-rule/50 bg-white/95 px-4 py-3 backdrop-blur"
-              style={{ boxShadow: `inset 0 -2px 0 0 ${hueAlpha(0.25)}` }}
-            >
+            <div className="b1-drawer-head flex-col !items-stretch">
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="pg-eyebrow">
                     {ORIGIN_LABELS[it.originType] ?? it.originType}
-                    {it.originRef ? ` · ${it.originRef}` : ''}
+                    {/* A human reference (a standard code) reads; a raw record id does not. */}
+                    {it.originRef && !/^[0-9a-f-]{36}$/i.test(it.originRef) ? ` · ${it.originRef}` : ''}
                   </p>
-                  <h2 className="mt-0.5 font-serif text-[19px] font-semibold leading-tight text-navy">
+                  <h2 className="font-serif text-[24px] font-medium leading-tight text-ink [overflow-wrap:anywhere]">
                     {it.title}
                   </h2>
                 </div>
-                <button
-                  ref={closeRef}
-                  type="button"
-                  onClick={onClose}
-                  className="shrink-0 rounded-full border border-rule/60 bg-white p-1.5 text-muted transition hover:text-navy"
-                  aria-label="Close"
-                >
-                  <X size={15} />
+                <button ref={closeRef} type="button" onClick={onClose} className="b1-icon-act" aria-label="Close">
+                  <X size={16} />
                 </button>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Chip label="Status" value={STATUS_LABELS[it.status] ?? it.status} />
                 {/* ── The two risk fields. NEVER merged. ───────────────────── */}
-                <Chip
-                  label="Signal"
-                  value={signal.label}
-                  tone={signal.tone}
-                  testId="risk-signal"
-                />
+                <Chip label="Signal" value={signal.label} tone={signal.tone} testId="risk-signal" />
                 {it.riskLevel ? (
                   <Chip
                     label="Risk (set by your team)"
@@ -308,17 +265,15 @@ export default function InitiativeDrawer({
                   />
                 ) : null}
               </div>
-              {it.riskNote ? (
-                <p className="mt-2 text-[12.5px] leading-relaxed text-muted">{it.riskNote}</p>
-              ) : null}
+              {it.riskNote ? <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">{it.riskNote}</p> : null}
             </div>
 
-            <div className="flex flex-col gap-3 p-4">
+            <div className="b1-drawer-body">
               {/* ── Progress ─────────────────────────────────────────────── */}
-              <Section title="Progress" Icon={Gauge}>
+              <Section title="Progress">
                 {statusOnly ? (
-                  <p className="text-[13px] leading-relaxed text-muted" data-testid="status-only">
-                    <span className="font-semibold text-navy">
+                  <p className="text-[13px] leading-relaxed text-ink2" data-testid="status-only">
+                    <span className="font-semibold text-ink">
                       {it.progressBasis ?? 'Status only'}
                     </span>{' '}
                     {it.metricKey ? (
@@ -338,23 +293,20 @@ export default function InitiativeDrawer({
                 ) : (
                   <>
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-serif text-[26px] font-semibold text-navy" data-testid="progress-pct">
+                      <span className="font-serif text-[30px] font-medium leading-none tabular-nums text-ink" data-testid="progress-pct">
                         {pct ?? '—'}
                       </span>
-                      <span className="text-[12.5px] text-muted">{it.progressBasis}</span>
+                      <span className="text-[12.5px] text-ink2">{it.progressBasis}</span>
                     </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-section">
+                    <div className="b1-prog b1-prog-lg mt-2.5">
                       {it.progressPct != null ? (
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(Math.max(Number(it.progressPct), 0), 1) * 100}%`,
-                            background: IMPROVEMENT_HUE,
-                          }}
+                        <span
+                          className="b1-prog-fill"
+                          style={{ '--pct': Math.min(Math.max(Number(it.progressPct), 0), 1) * 100 }}
                         />
                       ) : null}
                     </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink2">
                       {paceKnown ? (
                         <span data-testid="pace-label">{PACE_LABELS[it.paceStatus] ?? it.paceStatus}</span>
                       ) : (
@@ -373,14 +325,14 @@ export default function InitiativeDrawer({
 
                 <div className="mt-3">
                   {it.projectedCompletionDate ? (
-                    <p className="text-[12.5px] text-navy" data-testid="projection">
+                    <p className="text-[12.5px] text-ink" data-testid="projection">
                       Projected to finish{' '}
                       <span className="font-semibold">
                         {shortDate(it.projectedCompletionDate) ?? it.projectedCompletionDate}
                       </span>
                     </p>
                   ) : (
-                    <p className="text-[12.5px] text-muted" data-testid="projection-reason">
+                    <p className="text-[12.5px] text-ink2" data-testid="projection-reason">
                       {it.projectionReason ?? 'No completion date is projected.'}
                     </p>
                   )}
@@ -388,13 +340,14 @@ export default function InitiativeDrawer({
               </Section>
 
               {/* ── The recorded series ──────────────────────────────────── */}
-              <Section title="Recorded readings" Icon={CalendarClock}>
+              <Section title="Recorded readings">
                 <ProgressSparkline trend={it.trend ?? []} hue={IMPROVEMENT_HUE} />
               </Section>
 
               {/* ── KPI binding ──────────────────────────────────────────── */}
               {it.metricKey || it.targetRubricScore != null ? (
-                <Section title="What it is measured against" Icon={Flag}>
+                <Section title="What it is measured against">
+                  <dl className="b1-facts">
                   {it.metricKey ? (
                     <>
                       <Row label="KPI">{it.metricLabel ?? it.metricKey}</Row>
@@ -406,21 +359,22 @@ export default function InitiativeDrawer({
                   {it.targetRubricScore != null ? (
                     <Row label="Target rubric score">{it.targetRubricScore} of 4</Row>
                   ) : null}
+                  </dl>
                 </Section>
               ) : null}
 
               {/* ── Milestones ───────────────────────────────────────────── */}
               {Array.isArray(it.milestones) && it.milestones.length > 0 ? (
-                <Section title={`Milestones · ${ms.done} of ${ms.total}`} Icon={CircleCheck}>
+                <Section title={`Milestones · ${ms.done} of ${ms.total}`}>
                   <ul className="flex flex-col gap-1.5">
                     {it.milestones.map((m, i) => {
                       const icon = m.done ? (
-                        <CircleCheck size={15} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden />
+                        <CircleCheck size={15} className="mt-0.5 shrink-0 text-good" aria-hidden />
                       ) : (
-                        <Circle size={15} className="mt-0.5 shrink-0 text-muted" aria-hidden />
+                        <Circle size={15} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
                       )
                       const label = (
-                        <span className={m.done ? 'text-muted line-through' : 'text-navy'}>{m.label}</span>
+                        <span className={m.done ? 'text-ink2 line-through' : 'text-ink'}>{m.label}</span>
                       )
                       return (
                         <li key={m.id ?? `${m.label}-${i}`} className="text-[13px]">
@@ -433,7 +387,7 @@ export default function InitiativeDrawer({
                               disabled={busy}
                               onClick={() => save({ milestones: milestonesWithToggle(it.milestones, i) })}
                               aria-pressed={m.done === true}
-                              className="flex w-full items-start gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-cream/70 disabled:opacity-60"
+                              className="flex w-full items-start gap-2 rounded-sm px-1 py-0.5 text-left transition hover:bg-ink/[.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]/50 disabled:opacity-60"
                             >
                               {icon}
                               {label}
@@ -452,7 +406,8 @@ export default function InitiativeDrawer({
               ) : null}
 
               {/* ── Where it sits ────────────────────────────────────────── */}
-              <Section title="Where it sits" Icon={Link2}>
+              <Section title="Where it sits">
+                <dl className="b1-facts">
                 <Row label="Owner">{it.owner?.name ?? 'Unassigned'}</Row>
                 <Row label="Start">{shortDate(it.startDate) ?? '—'}</Row>
                 <Row label="Due">{shortDate(it.dueDate) ?? '—'}</Row>
@@ -471,14 +426,15 @@ export default function InitiativeDrawer({
                   </Row>
                 ) : null}
                 {it.findingKey ? <Row label="Finding">{it.findingKey}</Row> : null}
+                </dl>
               </Section>
 
               {/* ── The write path. Editors only; every endpoint pre-existed. ── */}
               {canEdit && onUpdate ? (
-                <Section title="Update this initiative" Icon={SlidersHorizontal}>
+                <Section title="Update this initiative">
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="flex min-w-[170px] flex-1 flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="b1-fld-label !mb-0">
                         Status
                       </span>
                       <select
@@ -496,20 +452,14 @@ export default function InitiativeDrawer({
                       </select>
                     </label>
                     {canRecord ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={recordReading}
-                        data-testid="record-reading"
-                        className="rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-navy transition hover:border-gold/60 disabled:opacity-60"
-                      >
+                      <Button size="sm" disabled={busy} onClick={recordReading} data-testid="record-reading">
                         Record today’s reading ({pct})
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
 
                   {canRecord ? (
-                    <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+                    <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink2">
                       Records the figure this page already computed, stamped with today’s date. Two
                       readings a fortnight apart are what a completion date is projected from.
                     </p>
@@ -518,17 +468,16 @@ export default function InitiativeDrawer({
                   <button
                     type="button"
                     onClick={() => setEditing((v) => !v)}
-                    className="mt-3 text-[12.5px] font-semibold underline decoration-dotted"
-                    style={{ color: IMPROVEMENT_HUE }}
+                    className="dt-link mt-3 !text-ink underline decoration-dotted underline-offset-2"
                     data-testid="measure-toggle"
                   >
                     {editing ? 'Cancel' : 'Change how this is measured'}
                   </button>
 
                   {editing ? (
-                    <div className="mt-2 flex flex-col gap-2.5 rounded-lg border border-rule/50 bg-cream/40 p-2.5">
+                    <div className="mt-2 flex flex-col gap-2.5 border-l-2 border-hair pl-3">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                        <span className="b1-fld-label !mb-0">
                           Where does progress come from?
                         </span>
                         <select
@@ -548,7 +497,7 @@ export default function InitiativeDrawer({
                       {draft.progressSource === 'metric' ? (
                         <>
                           <label className="flex flex-col gap-1">
-                            <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                            <span className="b1-fld-label !mb-0">
                               KPI
                             </span>
                             <select
@@ -566,7 +515,7 @@ export default function InitiativeDrawer({
                             </select>
                           </label>
                           <label className="flex flex-col gap-1">
-                            <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                            <span className="b1-fld-label !mb-0">
                               Target value
                             </span>
                             <input
@@ -577,7 +526,7 @@ export default function InitiativeDrawer({
                               onChange={(e) => setDraft({ ...draft, targetValue: e.target.value })}
                               data-testid="target-input"
                             />
-                            <span className="text-[11.5px] text-muted">
+                            <span className="text-[11.5px] text-ink2">
                               In the KPI’s own unit — a percentage is entered as 8.5, not 0.085.
                             </span>
                           </label>
@@ -586,7 +535,7 @@ export default function InitiativeDrawer({
 
                       {draft.progressSource === 'milestone' ? (
                         <label className="flex flex-col gap-1">
-                          <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          <span className="b1-fld-label !mb-0">
                             Milestones — one per line
                           </span>
                           <textarea
@@ -596,7 +545,7 @@ export default function InitiativeDrawer({
                             onChange={(e) => setDraft({ ...draft, milestoneLines: e.target.value })}
                             data-testid="milestone-lines"
                           />
-                          <span className="text-[11.5px] text-muted">
+                          <span className="text-[11.5px] text-ink2">
                             Milestones already ticked stay ticked.
                           </span>
                         </label>
@@ -604,7 +553,7 @@ export default function InitiativeDrawer({
 
                       {draft.progressSource === 'manual' ? (
                         <label className="flex flex-col gap-1">
-                          <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          <span className="b1-fld-label !mb-0">
                             Progress so far (%)
                           </span>
                           <input
@@ -618,30 +567,31 @@ export default function InitiativeDrawer({
                             }
                             data-testid="manual-input"
                           />
-                          <span className="text-[11.5px] text-muted">
+                          <span className="text-[11.5px] text-ink2">
                             A hand-set percentage never projects a completion date and never feeds an
                             org score.
                           </span>
                         </label>
                       ) : null}
 
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         disabled={busy}
                         onClick={async () => {
                           await save(measurementPatch(draft, it))
                           setEditing(false)
                         }}
                         data-testid="measure-save"
-                        className="self-start rounded-full btn-cta px-3.5 py-1.5 text-[12.5px] font-semibold transition disabled:opacity-60"
+                        className="self-start"
                       >
                         Save
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
 
                   {writeError ? (
-                    <p className="mt-2 text-[12.5px] font-semibold text-danger" data-testid="write-error">
+                    <p className="mt-2 text-[12.5px] font-semibold text-risk" data-testid="write-error">
                       {writeError}
                     </p>
                   ) : null}
@@ -649,13 +599,11 @@ export default function InitiativeDrawer({
               ) : null}
 
               {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => onDelete?.(it)}
-                  className="inline-flex items-center gap-1.5 self-start rounded-full border border-danger/40 px-3 py-1.5 text-[12.5px] font-semibold text-danger transition hover:bg-danger/10"
-                >
-                  <Trash2 size={13} aria-hidden /> Delete initiative
-                </button>
+                <div className="mt-8 border-t border-hair pt-4">
+                  <Button variant="quiet" size="sm" onClick={() => onDelete?.(it)} icon={<Trash2 size={13} aria-hidden />} className="!text-risk">
+                    Delete initiative
+                  </Button>
+                </div>
               ) : null}
             </div>
           </motion.aside>

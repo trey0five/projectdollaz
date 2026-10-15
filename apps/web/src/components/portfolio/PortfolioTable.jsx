@@ -26,9 +26,11 @@
 // over three peers is a statistic-shaped decoration. The rank still renders — that
 // is a fact — and the percentile simply is not there.
 // ─────────────────────────────────────────────────────────────────────────────
-import AttentionBandChip, { UrgencyChip, pctText, percentileText } from './AttentionBandChip.jsx'
+import AttentionBandChip, { UrgencyChip, bandTone, pctText, percentileText } from './AttentionBandChip.jsx'
 import DriversList from './DriversList.jsx'
 import { DemoChip } from '../accreditation/ReadinessTrendStrip.jsx'
+import { Section, DataTable } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 
 /**
  * The peer floor, mirroring the API's `MIN_PEERS_FOR_PERCENTILE` (spec §7.4).
@@ -50,30 +52,30 @@ export const MIN_PEERS_FOR_PERCENTILE = 4
  */
 export function PeerCell({ peers = null }) {
   if (!peers || !Number.isFinite(peers.peerCount)) {
-    return <span className="text-[12.5px] text-muted">No peer group</span>
+    return <span className="text-[12.5px] text-ink2">No peer group</span>
   }
   const pctile =
     peers.peerCount >= MIN_PEERS_FOR_PERCENTILE ? percentileText(peers.percentile) : null
   const relaxed = Array.isArray(peers.relaxedDims) && peers.relaxedDims.length > 0
   return (
     <span className="inline-flex flex-col gap-0.5">
-      <span className="text-[12.5px] font-semibold tabular-nums text-navy">
+      <span className="whitespace-nowrap text-[12.5px] font-semibold tabular-nums text-ink">
         {Number.isFinite(peers.rank) ? `Rank ${peers.rank}` : 'Rank —'}
-        <span className="font-normal text-muted">
+        <span className="font-normal text-ink2">
           {' '}
           · {peers.peerCount} {peers.peerCount === 1 ? 'peer' : 'peers'}
         </span>
       </span>
       {pctile ? (
-        <span className="text-[11.5px] text-muted">{pctile}</span>
+        <span className="text-[11.5px] text-ink2">{pctile}</span>
       ) : (
         // Deliberately does not use the WORD either: a sentence containing
         // "percentile" in the cell where a percentile was withheld is the thing a
         // reader skims and mis-remembers as having seen one.
-        <span className="text-[11.5px] text-muted">Peer group too small to place it within</span>
+        <span className="text-[11.5px] text-ink2">Peer group too small to place it within</span>
       )}
       {relaxed && (
-        <span className="text-[11px] text-muted">
+        <span className="text-[11px] text-ink2">
           Peer match relaxed: {peers.relaxedDims.join(', ')}
         </span>
       )}
@@ -87,102 +89,82 @@ function FrameworkLine({ row }) {
   else if (row?.frameworkCode) parts.push(row.frameworkCode)
   if (row?.snapshotDate) parts.push(`as of ${row.snapshotDate}`)
   if (parts.length === 0) return null
-  return <span className="text-[11.5px] text-muted">{parts.join(' · ')}</span>
+  return <span className="text-[11.5px] text-ink2">{parts.join(' · ')}</span>
 }
 
 export default function PortfolioTable({ rows = [], indexComparable = true }) {
   const ranked = Array.isArray(rows) ? rows : []
   if (ranked.length === 0) {
     return (
-      <div className="card-soft px-5 py-8 text-center">
-        <p className="text-[14px] text-muted">
-          No school in this organization can be ranked yet. The panels below name what is missing.
-        </p>
-      </div>
+      <Section label="Ranked by attention">
+        <div className="b1-empty">
+          <p>No school in this organization can be ranked yet. The sections below name what is missing.</p>
+        </div>
+      </Section>
     )
   }
 
-  return (
-    <section aria-labelledby="portfolio-ranked" className="card-soft overflow-hidden">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-5 sm:px-6">
-        <h2 id="portfolio-ranked" className="font-serif text-[17px] font-semibold text-navy">
-          Ranked by attention — {ranked.length} {ranked.length === 1 ? 'school' : 'schools'}
-        </h2>
-        <p className="text-[12px] text-muted">
-          Ordered by the server: band, then urgency, then attention, then evidence coverage.
-          {!indexComparable && ' Index scores are not compared across frameworks.'}
-        </p>
-      </div>
+  // NO sortable column, on purpose: the order is the server's (see above).
+  const columns = [
+    { key: 'rank', header: '#', num: true, render: (row) => <span className="font-semibold text-ink2">{row?.rank ?? '—'}</span> },
+    {
+      key: 'school',
+      header: 'School',
+      render: (row) => (
+        <div className="flex min-w-[12rem] flex-col gap-0.5 py-2">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-ink">{row?.name ?? 'Unnamed school'}</span>
+            {row?.demoData ? <DemoChip /> : null}
+          </span>
+          <FrameworkLine row={row} />
+        </div>
+      ),
+    },
+    { key: 'attention', header: 'Attention', render: (row) => <AttentionBandChip band={row?.attentionBand} score={row?.attentionScore} /> },
+    { key: 'urgency', header: 'Urgency', render: (row) => <UrgencyChip urgency={row?.urgency} reason={row?.urgencyReason} /> },
+    // THE TIEBREAK COLUMN. `verifiedPct` — the evidence-backed figure the server
+    // broke ties on. Never `readinessPct`, never `selfScoredPct`.
+    {
+      key: 'verified',
+      header: 'Evidence-backed',
+      num: true,
+      render: (row) =>
+        pctText(row?.verifiedPct) ?? <span className="font-normal text-ink2">Not measured</span>,
+      className: 'font-semibold',
+    },
+    { key: 'peers', header: 'Peers', render: (row) => <PeerCell peers={row?.peers ?? null} /> },
+    {
+      key: 'why',
+      header: 'Why',
+      className: 'min-w-[16rem] max-w-[26rem] !py-2 align-top',
+      render: (row) => <DriversList drivers={row?.drivers} />,
+    },
+  ]
 
+  return (
+    <Section
+      aria-labelledby="portfolio-ranked"
+      className="!mt-0"
+      label={
+        <span id="portfolio-ranked">
+          Ranked by attention · {ranked.length} {ranked.length === 1 ? 'school' : 'schools'}
+        </span>
+      }
+    >
+      <p className="mb-2 text-[12px] text-ink2">
+        Ordered by the server: band, then urgency, then attention, then evidence coverage.
+        {!indexComparable && ' Index scores are not compared across frameworks.'}
+      </p>
       {/* Wide content scrolls inside its own container — the page never scrolls
           sideways. */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[52rem] border-collapse text-left">
-          <thead>
-            <tr className="border-y border-rule/70 bg-section text-[11px] uppercase tracking-[0.12em] text-muted">
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                #
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                School
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                Attention
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                Urgency
-              </th>
-              {/* THE TIEBREAK COLUMN. Evidence-backed coverage, never a self-score. */}
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                Evidence-backed
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                Peers
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">
-                Why
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranked.map((row) => (
-              <tr key={row?.schoolId ?? row?.rank} className="border-b border-rule/50 align-top">
-                <td className="px-4 py-3.5 text-[13px] font-semibold tabular-nums text-muted">
-                  {row?.rank ?? '—'}
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex flex-col gap-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-navy">{row?.name ?? 'Unnamed school'}</span>
-                      {row?.demoData ? <DemoChip /> : null}
-                    </span>
-                    <FrameworkLine row={row} />
-                  </div>
-                </td>
-                <td className="px-4 py-3.5">
-                  <AttentionBandChip band={row?.attentionBand} score={row?.attentionScore} />
-                </td>
-                <td className="px-4 py-3.5">
-                  <UrgencyChip urgency={row?.urgency} reason={row?.urgencyReason} />
-                </td>
-                {/* `verifiedPct` — the evidence-backed figure the server broke ties
-                    on. Never `readinessPct`, never `selfScoredPct`. */}
-                <td className="px-4 py-3.5 text-[13px] font-semibold tabular-nums text-navy">
-                  {pctText(row?.verifiedPct) ?? (
-                    <span className="font-normal text-muted">Not measured</span>
-                  )}
-                </td>
-                <td className="px-4 py-3.5">
-                  <PeerCell peers={row?.peers ?? null} />
-                </td>
-                <td className="px-4 py-3.5 min-w-[16rem] max-w-[26rem]">
-                  <DriversList drivers={row?.drivers} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <DataTable
+        caption="Schools ranked by attention"
+        columns={columns}
+        rows={ranked}
+        rowKey={(row, i) => row?.schoolId ?? row?.rank ?? i}
+        markOf={(row) => bandTone(row?.attentionBand)}
+        className="[&_.dt]:min-w-[52rem]"
+      />
+    </Section>
   )
 }

@@ -17,7 +17,7 @@
 // per-donor PII).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from 'framer-motion'
 import {
   HeartHandshake,
   Pencil,
@@ -27,7 +27,7 @@ import {
   CalendarClock,
   AlertTriangle,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -49,24 +49,14 @@ import {
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
+import { PageHeader, DataTable, Pill } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 // Back-compat: the campaign form now lives with the other advancement components
 // (shared with CampaignDetailPage) but keeps its old import site.
 export { CampaignFormModal } from '../components/advancement/CampaignFormModal.jsx'
 
-// ── Light-theme register table primitives ────────────────────────────────────
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
+// ── Register atoms: quiet icon actions, a ruled state row ────────────────────
 function IconAction(props) {
   const { onClick, label, title, danger } = props
   const ActionIcon = props.Icon
@@ -76,189 +66,157 @@ function IconAction(props) {
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
+      className={`b1-icon-act${danger ? ' b1-icon-act-danger' : ''}`}
     >
       <ActionIcon size={15} />
     </button>
   )
 }
 
-function TableShell({ children, cols }) {
+/** Loading / error / empty — a ruled block on the ground, never a dashed card. */
+function StateRow({ title, children, error }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>{cols}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+    <div className="b1-empty" role={error ? 'alert' : undefined}>
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p className={error ? 'b1-empty-err' : undefined}>{children}</p> : null}
     </div>
   )
 }
 
-function StateRow({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
-    </div>
-  )
-}
-
-function Badge({ def }) {
-  if (!def) return null
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
-    >
-      {def.label}
-    </span>
-  )
-}
-
-// ── Light-theme entitlement / license gate (shared with CampaignDetailPage) ───
+// ── Entitlement / license gate (shared with CampaignDetailPage) ──────────────
 export function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <HeartHandshake size={26} />
-        </span>
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Advancement isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the Advancement module to track fundraising campaigns and their giving progress —
-              and land its slice of the briefing here.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Resume your plan to manage the advancement register.
-            </p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Advancement"
+        title={notLicensed ? 'Advancement isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the Advancement module to track fundraising campaigns and their giving progress, and land its slice of the briefing here.'
+            : 'Resume your plan to manage the advancement register.'
+        }
+      />
     </div>
   )
 }
 
-// ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
+// ═══════════════════════════ REGISTER TABLE ═════════════════════════════════
 
 function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, onDelete }) {
-  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading campaigns…</p></StateRow>
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+  const navigate = useNavigate()
+  if (loading) return <StateRow>Loading campaigns…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (campaigns.length === 0)
     return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No campaigns yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Add your first campaign to start tracking fundraising progress.
-        </p>
-      </StateRow>
+      <StateRow title="No campaigns yet">Add your first campaign to start tracking fundraising progress.</StateRow>
     )
 
-  return (
-    <TableShell
-      cols={
-        <>
-          <Th>Campaign</Th>
-          <Th>Type</Th>
-          <Th>Progress</Th>
-          <Th right>Raised · Goal</Th>
-          <Th>Close</Th>
-          <Th right>Gifts</Th>
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {campaigns.map((c) => {
-          const outstanding = typeof c.pledgedOutstanding === 'number' ? c.pledgedOutstanding : 0
-          const giftCount = typeof c.giftCount === 'number' ? c.giftCount : 0
-          const detailRoute = `/advancement/campaigns/${c.id}`
-          return (
-            <motion.tr
-              key={c.id}
-              layout={!reduce}
-              initial={reduce ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={reduce ? undefined : { opacity: 0 }}
-              className="group border-t border-rule/50"
+  const detailRoute = (c) => `/advancement/campaigns/${c.id}`
+  const columns = [
+    {
+      key: 'name',
+      header: 'Campaign',
+      sortable: true,
+      render: (c) => (
+        <div className="min-w-[11rem] py-1.5">
+          <Link to={detailRoute(c)} className="font-semibold text-ink underline-offset-2 hover:underline" onClick={(e) => e.stopPropagation()}>
+            {c.name}
+          </Link>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink2">
+            <span>
+              {[TYPE_LABEL[c.campaignType], STATUS_LABEL[c.status] ?? c.status].filter(Boolean).join(' · ')}
+            </span>
+            {URGENCY_BADGE[c.urgency] ? (
+              <Pill variant="status" tone={URGENCY_BADGE[c.urgency].tone}>
+                {URGENCY_BADGE[c.urgency].label}
+              </Pill>
+            ) : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'progress',
+      header: 'Progress',
+      sortable: true,
+      sortValue: (c) => (typeof c.pctOfGoal === 'number' ? c.pctOfGoal : null),
+      render: (c) => (
+        <div className="w-32">
+          <CampaignProgress
+            raised={c.raisedAmount ?? 0}
+            pledgedOutstanding={typeof c.pledgedOutstanding === 'number' ? c.pledgedOutstanding : 0}
+            goal={c.goalAmount}
+            startDate={c.startDate}
+            closeDate={c.closeDate}
+            size="row"
+            reduce={reduce}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'raisedAmount',
+      header: 'Raised · Goal',
+      num: true,
+      sortable: true,
+      render: (c) => {
+        const outstanding = typeof c.pledgedOutstanding === 'number' ? c.pledgedOutstanding : 0
+        return (
+          <>
+            <span className="whitespace-nowrap">
+              <span className="font-semibold">{fmtMoneyFull(c.raisedAmount ?? 0)}</span>
+              <span className="text-ink2">{typeof c.goalAmount === 'number' ? ` / ${fmtMoneyFull(c.goalAmount)}` : ''}</span>
+            </span>
+            {outstanding > 0 ? <span className="dt-sub">+{fmtMoneyFull(outstanding)} pledged</span> : null}
+          </>
+        )
+      },
+    },
+    {
+      key: 'closeDate',
+      header: 'Close',
+      sortable: true,
+      render: (c) => <span className="whitespace-nowrap text-ink2">{c.closeDate ? (shortDate(c.closeDate) ?? c.closeDate) : '—'}</span>,
+    },
+    {
+      key: 'giftCount',
+      header: 'Gifts',
+      num: true,
+      sortable: true,
+      render: (c) => {
+        const giftCount = typeof c.giftCount === 'number' ? c.giftCount : 0
+        return (
+          <div className="inline-flex items-center justify-end gap-1">
+            <Link
+              to={detailRoute(c)}
+              aria-label={`Gifts & pledges for ${c.name}`}
+              title="Gifts & pledges"
+              className="dt-link whitespace-nowrap"
+              onClick={(e) => e.stopPropagation()}
             >
-              <td className="px-4 py-3">
-                <Link
-                  to={detailRoute}
-                  className="font-semibold text-navy underline-offset-2 hover:underline hover:decoration-gold/60"
-                >
-                  {c.name}
-                </Link>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] capitalize text-muted">
-                    {STATUS_LABEL[c.status] ?? c.status}
-                  </span>
-                  <Badge def={URGENCY_BADGE[c.urgency]} />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-muted">{TYPE_LABEL[c.campaignType] ?? '—'}</td>
-              <td className="px-4 py-3">
-                <div className="w-40">
-                  <CampaignProgress
-                    raised={c.raisedAmount ?? 0}
-                    pledgedOutstanding={outstanding}
-                    goal={c.goalAmount}
-                    startDate={c.startDate}
-                    closeDate={c.closeDate}
-                    size="row"
-                    reduce={reduce}
-                  />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <span className="font-semibold text-navy">{fmtMoneyFull(c.raisedAmount ?? 0)}</span>
-                <span className="text-muted">
-                  {typeof c.goalAmount === 'number' ? ` / ${fmtMoneyFull(c.goalAmount)}` : ''}
-                </span>
-                {outstanding > 0 ? (
-                  <div className="mt-0.5 text-[11.5px] font-semibold text-[#7a5e00]">
-                    +{fmtMoneyFull(outstanding)} pledged
-                  </div>
-                ) : null}
-              </td>
-              <td className="px-4 py-3 text-muted">{c.closeDate ? (shortDate(c.closeDate) ?? c.closeDate) : '—'}</td>
-              <td className="px-4 py-3">
-                <div className="flex justify-end gap-1.5">
-                  <Link
-                    to={detailRoute}
-                    aria-label={`Gifts & pledges for ${c.name}`}
-                    title="Gifts & pledges"
-                    className="inline-flex items-center gap-1 rounded-lg border border-rule/60 px-2 py-1 text-[12px] font-semibold text-muted transition hover:border-gold/60 hover:text-navy"
-                  >
-                    {giftCount} gift{giftCount === 1 ? '' : 's'} →
-                  </Link>
-                  {canEdit ? (
-                    <span className="flex gap-1.5 opacity-60 transition group-hover:opacity-100">
-                      <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
-                      <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
-                    </span>
-                  ) : null}
-                </div>
-              </td>
-            </motion.tr>
-          )
-        })}
-      </AnimatePresence>
-    </TableShell>
+              {giftCount} gift{giftCount === 1 ? '' : 's'} →
+            </Link>
+            {canEdit ? (
+              <span className="dt-actions inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
+                <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+              </span>
+            ) : null}
+          </div>
+        )
+      },
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Campaign register"
+      columns={columns}
+      rows={campaigns}
+      onRowClick={(c) => navigate(detailRoute(c))}
+      markOf={(c) => (c.urgency === 'overdue' ? 'risk' : c.urgency === 'closing-soon' ? 'watch' : null)}
+    />
   )
 }
 
@@ -441,7 +399,7 @@ function AdvancementWorkspace() {
     <DomainCommandCenter
       showAddData
       moduleKey="advancement"
-      eyebrow="Domain · Advancement engine · system of record"
+      eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
       title="Advancement"
       Icon={HeartHandshake}
       attentionCount={attentionItems.length}

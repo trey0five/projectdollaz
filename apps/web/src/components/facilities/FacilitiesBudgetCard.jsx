@@ -5,8 +5,10 @@
 // this card only shows the mapped expense-line slice (default ['facilities']),
 // what's committed (open-item estimates — accepted bids included automatically
 // because Accept stamps estimatedCost), what's actually spent this fiscal year,
-// and what remains. The burn bar makes the story visual: solid orange = actual,
-// hatched orange = committed, red pulse = overflow past the budget.
+// and what remains. Premium UI P4: a Section on the ground (no orange wash, no
+// card) — a StatStrip of the four figures and a thin burn rule: solid ink =
+// actual, hatched ink = committed, risk red = overflow past the budget, an ink
+// tick at the budget line. Colour is semantic only.
 //
 // Empty states CTA to Finance's REAL budget setup — NO facilities-side budget
 // entry exists. The href is flag-aware via addDataHref(): under ui.v2 that is the
@@ -19,13 +21,13 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Wallet, Settings2, ArrowRight, AlertTriangle, Check } from 'lucide-react'
+import { Settings2, ArrowRight, Check } from 'lucide-react'
 import { EXPENSE_LINE_KEYS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
 import EntityFormModal from '../ui/EntityFormModal.jsx'
 import { useUiV2 } from '../../context/UiFlagContext.jsx'
 import { addDataHref } from '../../lib/dataDestinations.js'
-
-const FAC_HUE = '#EA580C'
+import { Section, StatStrip, Stat, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 
 function fmtMoney(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
@@ -85,10 +87,8 @@ function BudgetConfigModal({ open, mappedKeys, onClose, onSave, reduce }) {
           return (
             <label
               key={k}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[13.5px] font-semibold transition ${
-                on
-                  ? 'border-[#EA580C]/60 bg-[#EA580C]/10 text-navy'
-                  : 'border-rule/60 bg-cream/40 text-muted hover:border-[#EA580C]/40'
+              className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-[13.5px] font-semibold transition ${
+                on ? 'border-ink/40 text-ink' : 'border-hair text-ink2 hover:border-ink/25'
               }`}
             >
               <input
@@ -99,8 +99,8 @@ function BudgetConfigModal({ open, mappedKeys, onClose, onSave, reduce }) {
               />
               <span
                 aria-hidden
-                className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border transition ${
-                  on ? 'border-[#EA580C] bg-[#EA580C] text-white' : 'border-rule bg-white'
+                className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border transition ${
+                  on ? 'border-ink bg-ink text-white' : 'border-ink/30 bg-white'
                 }`}
               >
                 {on ? <Check size={12} strokeWidth={3} /> : null}
@@ -110,81 +110,61 @@ function BudgetConfigModal({ open, mappedKeys, onClose, onSave, reduce }) {
           )
         })}
       </div>
-      <p className="sm:col-span-2 text-[12px] leading-snug text-muted">
+      <p className="sm:col-span-2 text-[12px] leading-snug text-ink2">
         Facilities inherits these lines from your Finance budget — it never edits them.
       </p>
     </EntityFormModal>
   )
 }
 
-// ── The stacked burn bar: actual (solid) + committed (hatched) vs budget ──────
+// ── The burn rule: actual (solid ink) + committed (hatched ink) vs budget ────
+const INK = 'rgb(var(--c-ink))'
+const HATCH = `repeating-linear-gradient(135deg, ${INK} 0 3px, rgb(var(--c-ink) / 0.35) 3px 6px)`
+
 function BurnBar({ budgetTotal, committed, actual, overBudget, reduce }) {
   const spent = Math.max(committed, 0) + Math.max(actual, 0)
   const scale = Math.max(budgetTotal, spent, 1)
   const pct = (v) => `${Math.max(0, Math.min(100, (v / scale) * 100))}%`
   const budgetPct = (Math.max(budgetTotal, 0) / scale) * 100
+  const grow = (delay = 0) =>
+    reduce ? {} : { initial: { scaleX: 0 }, animate: { scaleX: 1 }, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1], delay } }
 
   return (
     <div>
-      <div className="relative h-3.5 w-full overflow-hidden rounded-full bg-section">
-        {/* Actual — solid orange, from the left */}
+      <div
+        className="relative h-1.5 w-full bg-hair/[.12]"
+        role="img"
+        aria-label={`Actual ${fmtMoney(actual)}, committed ${fmtMoney(committed)} of a ${fmtMoney(budgetTotal)} budget`}
+      >
+        <motion.div className="absolute inset-y-0 left-0 origin-left" style={{ width: pct(actual), background: INK }} {...grow()} />
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-l-full"
-          style={{ backgroundColor: FAC_HUE }}
-          initial={reduce ? { width: pct(actual) } : { width: 0 }}
-          animate={{ width: pct(actual) }}
-          transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+          className="absolute inset-y-0 origin-left"
+          style={{ left: pct(actual), width: pct(committed), backgroundImage: HATCH }}
+          {...grow(0.1)}
         />
-        {/* Committed — hatched 60%-opacity orange, stacked after actual */}
-        <motion.div
-          className="absolute inset-y-0"
-          style={{
-            left: pct(actual),
-            opacity: 0.6,
-            backgroundImage: `repeating-linear-gradient(135deg, ${FAC_HUE}, ${FAC_HUE} 5px, ${FAC_HUE}88 5px, ${FAC_HUE}88 10px)`,
-          }}
-          initial={reduce ? { width: pct(committed) } : { width: 0 }}
-          animate={{ width: pct(committed) }}
-          transition={{ type: 'spring', stiffness: 120, damping: 22, delay: reduce ? 0 : 0.1 }}
-        />
-        {/* Overflow past the budget — danger red with a subtle pulse */}
         {overBudget && spent > budgetTotal ? (
-          <div
-            className={`absolute inset-y-0 rounded-r-full bg-danger ${reduce ? '' : 'animate-pulse'}`}
-            style={{ left: pct(budgetTotal), width: pct(spent - budgetTotal) }}
-          />
+          <div className="absolute inset-y-0 bg-risk" style={{ left: pct(budgetTotal), width: pct(spent - budgetTotal) }} />
         ) : null}
-        {/* Budget marker */}
         {budgetPct > 0 && budgetPct < 100 ? (
-          <div
-            aria-hidden
-            className="absolute inset-y-0 w-[2px] bg-navy/70"
-            style={{ left: pct(budgetTotal) }}
-          />
+          <div aria-hidden className="absolute -inset-y-1 w-px bg-ink" style={{ left: pct(budgetTotal) }} />
         ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] font-semibold text-muted">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] font-semibold text-ink2">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: FAC_HUE }} />
+          <span className="h-2 w-3" style={{ background: INK }} />
           Actual
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-2.5 w-2.5 rounded-sm"
-            style={{
-              opacity: 0.6,
-              backgroundImage: `repeating-linear-gradient(135deg, ${FAC_HUE}, ${FAC_HUE} 2px, ${FAC_HUE}88 2px, ${FAC_HUE}88 4px)`,
-            }}
-          />
+          <span className="h-2 w-3" style={{ backgroundImage: HATCH }} />
           Committed
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-[2px] bg-navy/70" />
+          <span className="h-3 w-px bg-ink" />
           Budget
         </span>
         {overBudget ? (
-          <span className="inline-flex items-center gap-1.5 text-danger">
-            <span className="h-2.5 w-2.5 rounded-sm bg-danger" />
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-3 bg-risk" />
             Over budget
           </span>
         ) : null}
@@ -193,62 +173,28 @@ function BurnBar({ budgetTotal, committed, actual, overBudget, reduce }) {
   )
 }
 
-function Figure({ label, value, tone = 'navy' }) {
-  const cls =
-    tone === 'danger' ? 'text-danger' : tone === 'orange' ? 'text-[#EA580C]' : 'text-navy'
-  return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
-      <p className={`mt-0.5 font-serif text-[22px] font-semibold leading-none tabular-nums ${cls}`}>
-        {value}
-      </p>
-    </div>
-  )
-}
-
-// ── The empty-state CTA card (no budget yet / no category lines yet) ──────────
-function EmptyBudgetCard({ reason }) {
+// ── The empty state (no budget yet / no category lines yet): a ruled row ─────
+function EmptyBudget({ reason }) {
   const uiV2 = useUiV2()
   return (
-    <div className="card-soft relative overflow-hidden p-5 sm:p-6">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{ background: `linear-gradient(120deg, ${FAC_HUE}10, transparent 55%)` }}
-      />
-      <div className="relative flex flex-wrap items-center gap-4">
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-glow"
-          style={{ backgroundColor: FAC_HUE }}
-        >
-          <Wallet size={22} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-[18px] font-semibold text-navy">Facilities budget</h2>
-          <p className="mt-0.5 text-[13.5px] text-muted">
-            {reason === 'no_lines'
-              ? 'Your budget has no category lines yet — import or edit it in Finance'
-              : 'Set up your budget in Finance — Facilities inherits it automatically'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={addDataHref(uiV2, { add: 'budget' })}
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white shadow-glow transition hover:brightness-110"
-            style={{ backgroundColor: FAC_HUE }}
-          >
+    <Section label="Facilities budget" aside={<span>Inherited from Finance</span>}>
+      <div className="b1-empty">
+        <p className="b1-empty-title">No budget to inherit yet</p>
+        <p>
+          {reason === 'no_lines'
+            ? 'Your budget has no category lines yet. Import or edit it in Finance.'
+            : 'Set up your budget in Finance and Facilities inherits it automatically.'}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          <Button variant="primary" size="sm" to={addDataHref(uiV2, { add: 'budget' })} icon={<ArrowRight size={14} />}>
             Set up the budget
-            <ArrowRight size={14} />
-          </Link>
-          <Link
-            to="/budget"
-            className="inline-flex items-center gap-1 rounded-full border border-rule/70 bg-white px-4 py-2 text-[13px] font-semibold text-navy transition hover:border-[#EA580C]/50 hover:text-[#EA580C]"
-          >
+          </Button>
+          <Button size="sm" to="/budget">
             View in Finance
-          </Link>
+          </Button>
         </div>
       </div>
-    </div>
+    </Section>
   )
 }
 
@@ -258,27 +204,29 @@ export default function FacilitiesBudgetCard({ budget, loading, canEdit, onSaveC
 
   if (loading && !budget) {
     return (
-      <div className="card-soft p-5 sm:p-6">
-        <p className="text-[13.5px] text-muted">Loading the facilities budget…</p>
-      </div>
+      <Section label="Facilities budget">
+        <p className="text-[13px] text-ink2">Loading the facilities budget…</p>
+      </Section>
     )
   }
   if (!budget) return null
 
+  const configModal = canEdit ? (
+    <BudgetConfigModal
+      key={configOpen ? 'open' : 'closed'}
+      open={configOpen}
+      mappedKeys={budget.mappedKeys ?? ['facilities']}
+      onClose={() => setConfigOpen(false)}
+      onSave={onSaveConfig}
+      reduce={reduce}
+    />
+  ) : null
+
   if (!budget.hasBudget) {
     return (
       <>
-        <EmptyBudgetCard reason={budget.reason} />
-        {canEdit ? (
-          <BudgetConfigModal
-            key={configOpen ? 'open' : 'closed'}
-            open={configOpen}
-            mappedKeys={budget.mappedKeys ?? ['facilities']}
-            onClose={() => setConfigOpen(false)}
-            onSave={onSaveConfig}
-            reduce={reduce}
-          />
-        ) : null}
+        <EmptyBudget reason={budget.reason} />
+        {configModal}
       </>
     )
   }
@@ -294,112 +242,46 @@ export default function FacilitiesBudgetCard({ budget, loading, canEdit, onSaveC
     resolvedMissingActualCount = 0,
   } = budget
 
+  const money = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fmtMoney(v))
+
   return (
     <>
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-        className={`card-soft relative overflow-hidden p-5 sm:p-6 ${
-          overBudget ? 'border border-danger/40' : ''
-        }`}
+      <Section
+        label="Facilities budget"
+        aside={
+          <>
+            {overBudget ? (
+              <Pill variant="status" tone="risk">
+                Over budget
+              </Pill>
+            ) : null}
+            <span>Inherited from Finance{period?.label ? ` · ${period.label}` : ''}</span>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => setConfigOpen(true)}
+                aria-label="Edit budget mapping"
+                title="Which expense lines count as facilities money"
+                className="b1-icon-act"
+              >
+                <Settings2 size={15} />
+              </button>
+            ) : null}
+            <Link to="/budget" className="sec-more !mt-0">
+              View in Finance
+              <ArrowRight size={14} />
+            </Link>
+          </>
+        }
       >
-        {/* Hue wash — flips to danger when over budget */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: overBudget
-              ? 'linear-gradient(120deg, rgba(220,38,38,0.08), transparent 55%)'
-              : `linear-gradient(120deg, ${FAC_HUE}10, transparent 55%)`,
-          }}
-        />
-        <div className="relative space-y-4">
-          {/* Header row */}
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-glow"
-                style={{ backgroundColor: overBudget ? '#DC2626' : FAC_HUE }}
-              >
-                {overBudget ? <AlertTriangle size={20} /> : <Wallet size={20} />}
-              </span>
-              <div>
-                <h2 className="font-serif text-[18px] font-semibold text-navy">
-                  Facilities budget
-                  {overBudget ? (
-                    <span className="ml-2 align-middle rounded-md border border-danger/30 bg-danger/10 px-2 py-0.5 text-[11px] font-semibold not-italic text-danger">
-                      Over budget
-                    </span>
-                  ) : null}
-                </h2>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span
-                    className="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      borderColor: `${FAC_HUE}55`,
-                      backgroundColor: `${FAC_HUE}14`,
-                      color: '#9A3412',
-                    }}
-                  >
-                    Inherited from Finance
-                  </span>
-                  {period?.label ? (
-                    <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
-                      {period.label}
-                    </span>
-                  ) : null}
-                  {mappedLines.map((l) => (
-                    <span
-                      key={l.key}
-                      className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] text-muted"
-                      title={`${l.label}: ${fmtMoney(l.amount)}`}
-                    >
-                      {l.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setConfigOpen(true)}
-                  aria-label="Edit budget mapping"
-                  title="Which expense lines count as facilities money"
-                  className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy"
-                  style={{ '--tw-ring-color': FAC_HUE }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${FAC_HUE}88`)}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '')}
-                >
-                  <Settings2 size={15} />
-                </button>
-              ) : null}
-              <Link
-                to="/budget"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold transition hover:brightness-110"
-                style={{ color: FAC_HUE }}
-              >
-                View in Finance
-                <ArrowRight size={14} />
-              </Link>
-            </div>
-          </div>
+        <StatStrip cols={4} className="stats-compact">
+          <Stat label="Budget" value={money(budgetTotal)} format="currency" />
+          <Stat label="Committed" value={money(committed)} format="currency" />
+          <Stat label="Actual (this FY)" value={money(actual)} format="currency" />
+          <Stat label="Remaining" value={money(remaining)} format="currency" status={overBudget ? 'risk' : 'good'} />
+        </StatStrip>
 
-          {/* Figures */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Figure label="Budget" value={fmtMoney(budgetTotal)} />
-            <Figure label="Committed" value={fmtMoney(committed)} tone="orange" />
-            <Figure label="Actual (this FY)" value={fmtMoney(actual)} tone="orange" />
-            <Figure
-              label="Remaining"
-              value={fmtMoney(remaining)}
-              tone={overBudget ? 'danger' : 'navy'}
-            />
-          </div>
-
-          {/* Burn bar */}
+        <div className="mt-4">
           <BurnBar
             budgetTotal={budgetTotal}
             committed={committed}
@@ -407,27 +289,22 @@ export default function FacilitiesBudgetCard({ budget, loading, canEdit, onSaveC
             overBudget={overBudget}
             reduce={reduce}
           />
-
-          {resolvedMissingActualCount > 0 ? (
-            <p className="text-[12px] italic text-muted">
-              {resolvedMissingActualCount} resolved item
-              {resolvedMissingActualCount === 1 ? ' has' : 's have'} no actual cost — add actuals so
-              this year&apos;s spend is complete.
-            </p>
-          ) : null}
         </div>
-      </motion.div>
 
-      {canEdit ? (
-        <BudgetConfigModal
-          key={configOpen ? 'open' : 'closed'}
-          open={configOpen}
-          mappedKeys={budget.mappedKeys ?? ['facilities']}
-          onClose={() => setConfigOpen(false)}
-          onSave={onSaveConfig}
-          reduce={reduce}
-        />
-      ) : null}
+        {mappedLines.length ? (
+          <p className="sec-note">
+            Counts {mappedLines.map((l) => `${l.label} (${fmtMoney(l.amount)})`).join(' · ')}
+          </p>
+        ) : null}
+        {resolvedMissingActualCount > 0 ? (
+          <p className="sec-note">
+            {resolvedMissingActualCount} resolved item
+            {resolvedMissingActualCount === 1 ? ' has' : 's have'} no actual cost. Add actuals so
+            this year&apos;s spend is complete.
+          </p>
+        ) : null}
+      </Section>
+      {configModal}
     </>
   )
 }

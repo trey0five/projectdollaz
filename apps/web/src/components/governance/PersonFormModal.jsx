@@ -13,8 +13,7 @@ import { useState } from 'react'
 import { UserRound } from 'lucide-react'
 import EntityFormModal, { Field, fieldInput, fieldTextarea } from '../ui/EntityFormModal.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
-import { useUiV2 } from '../../context/UiFlagContext.jsx'
-import { PERSON_GROUPS, GOV_HUE, groupLabel } from './peopleMeta.js'
+import { PERSON_GROUPS, groupLabel } from './peopleMeta.js'
 
 export const EMPTY_PERSON = {
   name: '',
@@ -41,29 +40,14 @@ export function personBody(form) {
   }
 }
 
-/** Purple group chip toggles (theme-aware: dark modal vs v2 light modal). */
-function GroupToggles({ groups, onToggle, v2 }) {
+/** Group toggles — a segmented control (ink when pressed; no hue fill). */
+function GroupToggles({ groups, onToggle }) {
   return (
-    <div className="mt-1.5 flex flex-wrap gap-2">
+    <div className="seg mt-1.5">
       {PERSON_GROUPS.map((g) => {
         const on = groups.includes(g)
         return (
-          <button
-            key={g}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onToggle(g)}
-            className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition ${
-              on
-                ? v2
-                  ? 'border-[#7C3AED]/60 bg-[#7C3AED]/10 text-[#5B21B6]'
-                  : 'border-[#A78BFA]/70 bg-[#7C3AED]/30 text-white'
-                : v2
-                  ? 'border-rule text-muted hover:border-navy/40 hover:text-navy'
-                  : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white'
-            }`}
-            style={on ? { boxShadow: `0 0 0 1px ${GOV_HUE}22` } : undefined}
-          >
+          <button key={g} type="button" aria-pressed={on} onClick={() => onToggle(g)} className="seg-btn">
             {groupLabel(g)}
           </button>
         )
@@ -73,7 +57,6 @@ function GroupToggles({ groups, onToggle, v2 }) {
 }
 
 export default function PersonFormModal({ initial, onClose, onSave, reduce }) {
-  const v2 = useUiV2()
   const [form, setForm] = useState(initial ?? EMPTY_PERSON)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -146,7 +129,7 @@ export default function PersonFormModal({ initial, onClose, onSave, reduce }) {
         />
       </Field>
       <Field label="Groups" span={2} index={3} reduce={reduce} hint="A person can belong to more than one.">
-        <GroupToggles groups={form.groups} onToggle={toggleGroup} v2={v2} />
+        <GroupToggles groups={form.groups} onToggle={toggleGroup} />
       </Field>
       <Field label="Term start" index={4} reduce={reduce}>
         <DatePicker
@@ -165,12 +148,12 @@ export default function PersonFormModal({ initial, onClose, onSave, reduce }) {
       <Field label="Bio / qualifications" span={2} index={6} reduce={reduce}>
         <textarea value={form.bio} onChange={set('bio')} maxLength={2000} rows={2} className={fieldTextarea} />
       </Field>
-      <label className="flex cursor-pointer select-none items-center gap-2.5 text-[14px] font-medium text-white/80 sm:col-span-2">
+      <label className="flex cursor-pointer select-none items-center gap-2.5 text-[14px] font-medium text-ink sm:col-span-2">
         <input
           type="checkbox"
           checked={!!form.active}
           onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-          className="h-[18px] w-[18px] rounded border-white/30 bg-navy-deep/50 accent-gold"
+          className="h-[18px] w-[18px] rounded-sm accent-[#2563EB]"
         />
         Active (currently serving)
       </label>

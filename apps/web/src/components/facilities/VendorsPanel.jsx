@@ -8,15 +8,15 @@
 // deactivating instead (the active toggle).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Truck, Pencil, Trash2, Mail, Phone } from 'lucide-react'
+import { DataTable, Pill } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import EntityFormModal, {
   Field,
   fieldInput,
   fieldTextarea,
 } from '../ui/EntityFormModal.jsx'
 
-const FAC_HUE = '#EA580C'
 
 // ═══════════════════════════ VENDOR FORM MODAL ═══════════════════════════════
 
@@ -146,42 +146,20 @@ export function VendorFormModal({ open, initial, onClose, onSave, reduce }) {
 
 // ═══════════════════════════ VENDORS REGISTER TABLE ══════════════════════════
 
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
-export default function VendorsPanel({
-  vendors,
-  loading,
-  canEdit,
-  reduce,
-  onEdit,
-  onDelete,
-  onToggleActive,
-}) {
+export default function VendorsPanel({ vendors, loading, canEdit, onEdit, onDelete, onToggleActive }) {
   const [actionErr, setActionErr] = useState('')
 
   if (loading)
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="text-[14px] text-muted">Loading vendors…</p>
+      <div className="b1-empty">
+        <p>Loading vendors…</p>
       </div>
     )
   if (vendors.length === 0)
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="font-serif text-[16px] italic text-muted">No vendors yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Add the companies that do your maintenance work — then reference them on items and bids.
-        </p>
+      <div className="b1-empty">
+        <p className="b1-empty-title">No vendors yet</p>
+        <p>Add the companies that do your maintenance work, then reference them on items and bids.</p>
       </div>
     )
 
@@ -207,125 +185,100 @@ export default function VendorsPanel({
     }
   }
 
+  const columns = [
+    {
+      key: 'name',
+      header: 'Vendor',
+      sortable: true,
+      render: (v) => (
+        <div className={`py-1.5 ${v.active ? '' : 'opacity-60'}`}>
+          <span className="font-semibold">{v.name}</span>
+          {v.notes ? <span className="dt-sub max-w-md truncate">{v.notes}</span> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'contact',
+      header: 'Contact',
+      render: (v) => (
+        <div className="py-1.5 text-ink2">
+          {v.contactName ? <span className="block text-ink">{v.contactName}</span> : null}
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
+            {v.contactEmail ? (
+              <span className="inline-flex items-center gap-1">
+                <Mail size={12} aria-hidden="true" />
+                {v.contactEmail}
+              </span>
+            ) : null}
+            {v.contactPhone ? (
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Phone size={12} aria-hidden="true" />
+                {v.contactPhone}
+              </span>
+            ) : null}
+            {!v.contactName && !v.contactEmail && !v.contactPhone ? '—' : null}
+          </span>
+        </div>
+      ),
+    },
+    { key: 'category', header: 'Category', sortable: true, render: (v) => <span className="text-ink2">{v.category ?? '—'}</span> },
+    {
+      key: 'active',
+      header: 'Status',
+      render: (v) =>
+        canEdit ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!v.active}
+            aria-label={`${v.active ? 'Deactivate' : 'Activate'} ${v.name}`}
+            onClick={() => doToggle(v)}
+            className="inline-flex items-center gap-2 rounded-sm text-[12px] font-semibold text-ink2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]/50"
+          >
+            <span className={`relative h-[18px] w-8 rounded-full transition-colors ${v.active ? 'bg-ink' : 'bg-hair/25'}`}>
+              <span
+                className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-all ${
+                  v.active ? 'left-[16px]' : 'left-[2px]'
+                }`}
+              />
+            </span>
+            {v.active ? 'Active' : 'Inactive'}
+          </button>
+        ) : (
+          <Pill variant="status" tone={v.active ? 'good' : 'neutral'}>
+            {v.active ? 'Active' : 'Inactive'}
+          </Pill>
+        ),
+    },
+  ]
+  if (canEdit)
+    columns.push({
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (v) => (
+        <div className="dt-actions inline-flex justify-end gap-1">
+          <button type="button" onClick={() => onEdit(v)} aria-label={`Edit ${v.name}`} title="Edit" className="b1-icon-act">
+            <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => doDelete(v)}
+            aria-label={`Delete ${v.name}`}
+            title="Delete (400s if referenced — deactivate instead)"
+            className="b1-icon-act b1-icon-act-danger"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ),
+    })
+
   return (
     <div className="space-y-2">
-      {actionErr ? <p className="text-[12.5px] font-medium text-danger">{actionErr}</p> : null}
-      <div className="overflow-x-auto rounded-xl border border-rule/50">
-        <table className="w-full text-left text-[14px]">
-          <thead className="bg-cream">
-            <tr>
-              <Th>Vendor</Th>
-              <Th>Contact</Th>
-              <Th>Category</Th>
-              <Th>Status</Th>
-              {canEdit ? <Th right>Actions</Th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            <AnimatePresence initial={false}>
-              {vendors.map((v) => (
-                <motion.tr
-                  key={v.id}
-                  layout={!reduce}
-                  initial={reduce ? false : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={reduce ? undefined : { opacity: 0 }}
-                  className={`group border-t border-rule/50 ${v.active ? '' : 'opacity-55'}`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 font-semibold text-navy">
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
-                        style={{ backgroundColor: v.active ? FAC_HUE : '#9CA3AF' }}
-                      >
-                        <Truck size={14} />
-                      </span>
-                      {v.name}
-                    </div>
-                    {v.notes ? (
-                      <p className="mt-1 max-w-md truncate text-[12px] text-muted">{v.notes}</p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {v.contactName ? <div className="text-navy">{v.contactName}</div> : null}
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px]">
-                      {v.contactEmail ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Mail size={12} />
-                          {v.contactEmail}
-                        </span>
-                      ) : null}
-                      {v.contactPhone ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Phone size={12} />
-                          {v.contactPhone}
-                        </span>
-                      ) : null}
-                      {!v.contactName && !v.contactEmail && !v.contactPhone ? '—' : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{v.category ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={!!v.active}
-                        aria-label={`${v.active ? 'Deactivate' : 'Activate'} ${v.name}`}
-                        onClick={() => doToggle(v)}
-                        className={`relative h-[22px] w-10 rounded-full transition ${
-                          v.active ? '' : 'bg-rule'
-                        }`}
-                        style={v.active ? { backgroundColor: FAC_HUE } : undefined}
-                      >
-                        <span
-                          className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow transition-all ${
-                            v.active ? 'left-[22px]' : 'left-[3px]'
-                          }`}
-                        />
-                      </button>
-                    ) : (
-                      <span
-                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${
-                          v.active
-                            ? 'border-emerald-300/70 bg-emerald-50 text-emerald-700'
-                            : 'border-rule/60 bg-section text-muted'
-                        }`}
-                      >
-                        {v.active ? 'Active' : 'Inactive'}
-                      </span>
-                    )}
-                  </td>
-                  {canEdit ? (
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(v)}
-                          aria-label={`Edit ${v.name}`}
-                          title="Edit"
-                          className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-gold/60 hover:text-navy"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => doDelete(v)}
-                          aria-label={`Delete ${v.name}`}
-                          title="Delete (400s if referenced — deactivate instead)"
-                          className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-danger/50 hover:text-danger"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  ) : null}
-                </motion.tr>
-              ))}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </div>
+      {actionErr ? <p className="text-[12.5px] font-medium text-risk">{actionErr}</p> : null}
+      <DataTable caption="Vendors" columns={columns} rows={vendors} markOf={(v) => (v.active ? null : 'neutral')} />
     </div>
   )
 }

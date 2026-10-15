@@ -1,19 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CampaignDetailPage — /advancement/campaigns/:campaignId, the full-page home for
 // ONE fundraising campaign (replaces the old dark row-expand gifts overlay on the
-// register). LIGHT page wrapped in the advancement ModuleAccent so every accent —
-// including the back pill and the hero thermometer gradient — goes rose.
+// register). Wrapped in the advancement ModuleAccent so the header rule and the
+// progress rule take the module hue.
 //
-// Layout: BackLink → hero card (name + chips + date range + Edit) with the
-// size="hero" CampaignProgress → three stat tiles (raised / pledged outstanding /
-// remaining to goal) → gifts & pledges ledger (light GiftFormModal for entry) →
-// notes. Deep-link safe: cold loads gate on the module 402 (GatePanel) and an
+// Layout (Premium UI P4, the ledger): BackLink → PageHeader (name, type · status
+// · FY · window as meta, Edit as the action) → the size="hero" CampaignProgress
+// rule → a StatStrip (raised / pledged outstanding / remaining to goal) → the
+// gifts & pledges DataTable in a Section → notes as a Section. No cards. Deep-link safe: cold loads gate on the module 402 (GatePanel) and an
 // unknown id lands a friendly "Campaign not found". AGGREGATE only — no donor PII.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
-import { CalendarClock, HeartHandshake, Pencil, Plus, ShieldCheck } from 'lucide-react'
+import { Pencil, Plus, ShieldCheck } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
 import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -27,35 +27,11 @@ import {
   TYPE_LABEL,
   STATUS_LABEL,
   URGENCY_BADGE,
-  fmtMoneyFull,
   shortDate,
 } from '../components/advancement/campaignMeta.js'
 import { GatePanel } from './AdvancementPage.jsx'
-
-function Chip({ children, cls = 'border-rule/60 bg-section text-muted' }) {
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${cls}`}>
-      {children}
-    </span>
-  )
-}
-
-function StatTile({ label, value }) {
-  return (
-    <div className="card-soft p-5">
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</p>
-      <p className="mt-1 font-serif text-2xl font-semibold text-navy">{value}</p>
-    </div>
-  )
-}
-
-function CenteredState({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
-    </div>
-  )
-}
+import { PageHeader, StatStrip, Stat, Section, Pill, Button } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 function CampaignDetailBody() {
   const { campaignId } = useParams()
@@ -136,20 +112,13 @@ function CampaignDetailBody() {
 
   if (!campaign) {
     return (
-      <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <BackLink fallback="/advancement" fallbackLabel="Back to Advancement" />
-        <CenteredState>
-          {loading ? (
-            <p className="text-[14px] text-muted">Loading campaign…</p>
-          ) : (
-            <>
-              <p className="font-serif text-[16px] italic text-muted">Campaign not found.</p>
-              <p className="mt-1 text-[13px] text-muted">
-                It may have been deleted, or belong to a different school.
-              </p>
-            </>
-          )}
-        </CenteredState>
+        <PageHeader
+          eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
+          title={loading ? 'Loading campaign…' : 'Campaign not found'}
+          meta={loading ? null : 'It may have been deleted, or belong to a different school.'}
+        />
       </div>
     )
   }
@@ -172,90 +141,75 @@ function CampaignDetailBody() {
       }
     : null
 
+  const metaParts = [
+    campaign.campaignType ? (TYPE_LABEL[campaign.campaignType] ?? campaign.campaignType) : null,
+    STATUS_LABEL[campaign.status] ?? campaign.status,
+    campaign.fiscalYear ? `FY ${campaign.fiscalYear}` : null,
+    campaign.startDate || campaign.closeDate
+      ? `${shortDate(campaign.startDate) ?? '—'} → ${shortDate(campaign.closeDate) ?? '—'}`
+      : null,
+  ].filter(Boolean)
+  const urgency = URGENCY_BADGE[campaign.urgency]
+
   return (
-    <div className="mx-auto max-w-page space-y-6 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink fallback="/advancement" fallbackLabel="Back to Advancement" />
 
-      {/* ── Hero — the campaign's identity + its thermometer ─────────────────── */}
-      <div className="card-soft p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-              <HeartHandshake size={13} className="text-gold" />
-              Advancement · Campaign
-            </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold leading-tight text-navy">
-              {campaign.name}
-            </h1>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              {campaign.campaignType ? <Chip>{TYPE_LABEL[campaign.campaignType] ?? campaign.campaignType}</Chip> : null}
-              <Chip>{STATUS_LABEL[campaign.status] ?? campaign.status}</Chip>
-              {URGENCY_BADGE[campaign.urgency] ? (
-                <Chip cls={URGENCY_BADGE[campaign.urgency].cls}>{URGENCY_BADGE[campaign.urgency].label}</Chip>
-              ) : null}
-              {campaign.fiscalYear ? <Chip>FY {campaign.fiscalYear}</Chip> : null}
-              {campaign.startDate || campaign.closeDate ? (
-                <Chip>
-                  <CalendarClock size={12} className="text-gold" />
-                  {shortDate(campaign.startDate) ?? '—'} → {shortDate(campaign.closeDate) ?? '—'}
-                </Chip>
-              ) : null}
-            </div>
-          </div>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-            >
-              <Pencil size={14} /> Edit campaign
-            </button>
+      {/* ── Header — the campaign's identity ─────────────────────────────────── */}
+      <PageHeader
+        eyebrow={`Advancement · ${activeSchool?.name ?? 'School'}`}
+        title={campaign.name}
+        actions={
+          canEdit ? (
+            <Button onClick={() => setEditOpen(true)} icon={<Pencil size={14} />}>
+              Edit campaign
+            </Button>
+          ) : null
+        }
+      >
+        <div className="pg-meta flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>{metaParts.join(' · ')}</span>
+          {urgency ? (
+            <Pill variant="status" tone={urgency.tone}>
+              {urgency.label}
+            </Pill>
           ) : null}
         </div>
+      </PageHeader>
 
-        <div className="mt-5">
-          <CampaignProgress
-            size="hero"
-            raised={raised}
-            pledgedOutstanding={outstanding}
-            goal={campaign.goalAmount}
-            startDate={campaign.startDate}
-            closeDate={campaign.closeDate}
-            reduce={reduce}
-          />
-        </div>
+      {/* ── Progress rule + the three figures ────────────────────────────────── */}
+      <div className="mt-6">
+        <CampaignProgress
+          size="hero"
+          raised={raised}
+          pledgedOutstanding={outstanding}
+          goal={campaign.goalAmount}
+          startDate={campaign.startDate}
+          closeDate={campaign.closeDate}
+          reduce={reduce}
+        />
       </div>
-
-      {/* ── Stat tiles ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatTile label="Raised" value={fmtMoneyFull(raised)} />
-        <StatTile label="Pledged outstanding" value={fmtMoneyFull(outstanding)} />
-        <StatTile label="Remaining to goal" value={remaining != null ? fmtMoneyFull(remaining) : '—'} />
-      </div>
+      <StatStrip cols={3} className="mt-6">
+        <Stat label="Raised" value={raised} format="currency" />
+        <Stat label="Pledged outstanding" value={outstanding} format="currency" />
+        <Stat label="Remaining to goal" value={remaining != null ? remaining : '—'} format="currency" />
+      </StatStrip>
 
       {/* ── Gifts & pledges ──────────────────────────────────────────────────── */}
-      <div className="card-soft p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-serif text-lg font-semibold text-navy">
-              Gifts &amp; pledges
-              {giftCount > 0 ? <span className="ml-2 text-[13px] font-sans font-semibold text-muted">{giftCount}</span> : null}
-            </h2>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
-              <ShieldCheck size={13} className="text-gold" />
-              Aggregate only — record amounts, never donor names. &ldquo;Raised&rdquo; is the sum of what has been received.
-            </p>
-          </div>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={() => setGiftModal({ entity: null })}
-              className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-            >
-              <Plus size={15} /> Add gift / pledge
-            </button>
-          ) : null}
-        </div>
+      <Section
+        label={giftCount > 0 ? `Gifts & pledges · ${giftCount}` : 'Gifts & pledges'}
+        aside={
+          canEdit ? (
+            <Button variant="primary" size="sm" onClick={() => setGiftModal({ entity: null })} icon={<Plus size={14} />}>
+              Add gift / pledge
+            </Button>
+          ) : null
+        }
+      >
+        <p className="mb-3 flex items-center gap-1.5 text-[12px] text-ink2">
+          <ShieldCheck size={13} aria-hidden="true" />
+          Aggregate only. Record amounts, never donor names. &ldquo;Raised&rdquo; is the sum of what has been received.
+        </p>
         <GiftsLedger
           gifts={gifts}
           loading={giftsLoading}
@@ -264,14 +218,13 @@ function CampaignDetailBody() {
           onWriteOff={onWriteOff}
           onDelete={onGiftDelete}
         />
-      </div>
+      </Section>
 
       {/* ── Notes ────────────────────────────────────────────────────────────── */}
       {campaign.notes ? (
-        <div className="card-soft p-5">
-          <h2 className="mb-2 font-serif text-lg font-semibold text-navy">Notes</h2>
-          <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-muted">{campaign.notes}</p>
-        </div>
+        <Section label="Notes">
+          <p className="max-w-prose whitespace-pre-wrap text-[14px] leading-relaxed text-ink2">{campaign.notes}</p>
+        </Section>
       ) : null}
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
@@ -302,7 +255,7 @@ function CampaignDetailBody() {
 export default function CampaignDetailPage() {
   return (
     <ModuleAccent moduleKey="advancement">
-      <div className="min-h-screen bg-section">
+      <div className="min-h-screen">
         <BillingBanner />
         <CampaignDetailBody />
       </div>

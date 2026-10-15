@@ -28,8 +28,9 @@
 // panel that says which thing is unavailable — never a white screen.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
 import { Building2, Layers, ShieldAlert } from 'lucide-react'
+import { PageHeader, Button } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 import BackLink from '../components/ui/BackLink.jsx'
 import { LensIndicator, LensSwitcher } from '../components/home/LensControls.jsx'
 import PortfolioTable from '../components/portfolio/PortfolioTable.jsx'
@@ -42,54 +43,33 @@ import { portfolioApi } from '../lib/api.js'
 /** The DTO's ArrayMaxSize on `schoolIds` (spec §4.6) — stated, not guessed at. */
 const BULK_ADOPT_MAX_SCHOOLS = 60
 
-function CenteredPanel({ children }) {
-  return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-          <Layers size={26} />
-        </span>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 /** The org-scope gate. A dead end would be a bug; this is the way in. */
 function ScopeGate({ hasOrg, onSwitch }) {
   return (
-    <CenteredPanel>
-      <h2 className="font-serif text-xl font-semibold text-navy">
-        The portfolio is an organization view
-      </h2>
-      {hasOrg ? (
-        <>
-          <p className="max-w-md text-[15px] text-muted">
-            It ranks every school in your organization side by side, so it only means anything at
-            organization scope.
-          </p>
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="mt-1 inline-flex min-h-[42px] items-center gap-2 rounded-lg bg-gold-gradient px-4 text-[14px] font-semibold text-white shadow-glow"
-          >
-            <Building2 size={16} aria-hidden />
-            Switch to organization
-          </button>
-        </>
-      ) : (
-        <p className="max-w-md text-[15px] text-muted">
-          This account is not part of a multi-school organization, so there is no portfolio to rank.
-        </p>
-      )}
-    </CenteredPanel>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <BackLink />
+      <PageHeader
+        eyebrow="Portfolio · Organization"
+        title="The portfolio is an organization view"
+        meta={
+          hasOrg
+            ? 'It ranks every school in your organization side by side, so it only means anything at organization scope.'
+            : 'This account is not part of a multi-school organization, so there is no portfolio to rank.'
+        }
+        actions={
+          hasOrg ? (
+            <Button variant="primary" onClick={onSwitch} icon={<Building2 size={16} aria-hidden />}>
+              Switch to organization
+            </Button>
+          ) : null
+        }
+      />
+    </div>
   )
 }
 
 // ── The workspace ────────────────────────────────────────────────────────────
 function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
-  const reduce = useReducedMotion()
   // Owner-only "preview as" lens, exactly like the org briefing: the org routes
   // are JwtAuth-only and the SERVER clamps, so this can never widen access.
   const [previewLens, setPreviewLens] = useState(null)
@@ -246,80 +226,69 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
 
   const notes = Array.isArray(portfolio?.notes) ? portfolio.notes : []
 
+  const meta = [
+    Number.isFinite(portfolio?.rankedCount) && Number.isFinite(portfolio?.schoolCount)
+      ? `${portfolio.rankedCount} of ${portfolio.schoolCount} schools ranked`
+      : `${orgSchoolCount} schools`,
+    portfolio?.asOf ? `as of ${portfolio.asOf}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
-    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
 
-      {/* Hero */}
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="card-soft flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:gap-5 sm:px-7 sm:py-6"
-      >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-          <Layers size={24} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gold">
-            Organization · accreditation portfolio
-          </p>
-          <h1 className="truncate py-0.5 font-serif text-2xl font-semibold leading-[1.35] text-navy sm:text-[28px]">
+      {/* Header — the organization, the count, the owner-only preview lens */}
+      <PageHeader
+        eyebrow="Portfolio · Accreditation across the organization"
+        title={
+          <span className="inline-flex items-center gap-3">
+            <Layers size={26} strokeWidth={1.75} className="shrink-0 text-navy-soft" aria-hidden="true" />
             {orgName || 'Organization'}
-          </h1>
-          <p className="text-[13px] text-muted">
-            {Number.isFinite(portfolio?.rankedCount) && Number.isFinite(portfolio?.schoolCount)
-              ? `${portfolio.rankedCount} of ${portfolio.schoolCount} schools ranked`
-              : `${orgSchoolCount} schools`}
-            {portfolio?.asOf ? ` · as of ${portfolio.asOf}` : ''}
-          </p>
-        </div>
-        {lens && (
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <LensIndicator lens={lens} />
-            <LensSwitcher
-              lens={lens}
-              callerRole={callerRole}
-              availableLenses={availableLenses}
-              onChange={setPreviewLens}
-            />
-          </div>
-        )}
-      </motion.div>
+          </span>
+        }
+        meta={meta}
+        actions={
+          lens ? (
+            <>
+              <LensIndicator lens={lens} />
+              <LensSwitcher lens={lens} callerRole={callerRole} availableLenses={availableLenses} onChange={setPreviewLens} />
+            </>
+          ) : null
+        }
+      />
 
       {/* The server's NOTES — including the mixed-framework sentence. A note that
           only exists in JSON has not been delivered (spec §7.2). */}
       {notes.length > 0 && (
-        <div className="card-soft border-l-4 border-gold bg-gold/[0.06] px-5 py-4">
-          <ul className="space-y-1.5">
-            {notes.map((n, i) => (
-              <li key={i} className="text-[13.5px] leading-relaxed text-navy">
-                {n}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-6 space-y-1.5 border-l-2 pl-4" style={{ borderLeftColor: 'rgb(var(--c-watch))' }}>
+          {notes.map((n, i) => (
+            <li key={i} className="max-w-prose text-[13.5px] leading-relaxed text-ink">
+              {n}
+            </li>
+          ))}
+        </ul>
       )}
 
       {/* The disclaimer is a first-class PAYLOAD FIELD, printed verbatim — not UI
           chrome this page composed (the Phase-H rule). */}
       {portfolio?.disclaimer && (
-        <div className="card-soft flex items-start gap-3 border-l-4 border-gold bg-gold/[0.04] px-5 py-4">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold">
-            <ShieldAlert size={17} aria-hidden />
-          </span>
-          <p className="text-[13.5px] leading-relaxed text-muted">{portfolio.disclaimer}</p>
-        </div>
+        <p className="mt-6 flex max-w-prose items-start gap-2.5 text-[13px] leading-relaxed text-ink2">
+          <ShieldAlert size={16} aria-hidden className="mt-0.5 shrink-0 text-ink2" />
+          {portfolio.disclaimer}
+        </p>
       )}
 
+      <div className="mt-8">
       {/* Ranked */}
       {portfolioLoading ? (
-        <div className="card-soft animate-pulse px-6 py-14 text-center">
-          <p className="font-serif text-base italic text-muted">Assembling the portfolio…</p>
+        <div className="b1-empty">
+          <p>Assembling the portfolio…</p>
         </div>
       ) : portfolioError ? (
-        <div className="card-soft border-dashed px-6 py-12 text-center">
-          <p className="font-serif text-base italic text-muted">{portfolioError}</p>
+        <div className="b1-empty" role="alert">
+          <p>{portfolioError}</p>
         </div>
       ) : (
         <>
@@ -344,11 +313,18 @@ function PortfolioWorkspace({ orgId, orgName, orgSchoolCount }) {
       />
 
       <VelocityPanel data={velocity} loading={velocityLoading} error={velocityError} />
+      </div>
 
-      {portfolio?.engineVersion && (
-        <p className="text-[11.5px] text-muted">
-          Portfolio engine {portfolio.engineVersion}
-          {portfolio?.generatedAt ? ` · generated ${portfolio.generatedAt}` : ''}
+      {portfolio?.generatedAt && Number.isFinite(new Date(portfolio.generatedAt).getTime()) && (
+        <p className="mt-8 text-[11.5px] text-ink2">
+          Updated{' '}
+          {new Date(portfolio.generatedAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            // UTC, so the date agrees with the server's "as of" in the header.
+            timeZone: 'UTC',
+          })}
         </p>
       )}
     </div>
@@ -370,9 +346,7 @@ export default function PortfolioPage() {
   if (!orgResolved) {
     return (
       <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
-        <div className="card-soft animate-pulse px-6 py-14 text-center">
-          <p className="font-serif text-base italic text-muted">Resolving your organization…</p>
-        </div>
+        <PageHeader eyebrow="Portfolio · Organization" title="Portfolio" meta="Resolving your organization…" />
       </div>
     )
   }

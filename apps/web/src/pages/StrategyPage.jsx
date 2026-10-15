@@ -8,13 +8,12 @@
 // a tab away. Self-measuring: metric goals read LIVE from the financials.
 //
 // School-scoped. Gated by the 'strategy' module — an unlicensed school gets a
-// friendly light 402 panel (useStrategy notLicensed). Board/viewer may READ. The
-// add/edit forms reuse the shared premium EntityFormModal (dark overlay).
+// plain 402 page header (useStrategy notLicensed). Board/viewer may READ. The
+// add/edit forms reuse the shared EntityFormModal.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { useReducedMotion } from 'framer-motion'
 import {
-  Target,
   TrendingUp,
   TrendingDown,
   Check,
@@ -22,11 +21,13 @@ import {
   Clock,
   Plus,
   Compass,
+  Pencil,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import BackLink from '../components/ui/BackLink.jsx'
+import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
+import { moduleLabel } from '../components/module/moduleAnatomy.js'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -44,6 +45,8 @@ import {
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useStrategy } from '../hooks/useStrategy.js'
+import { PageHeader, Section, Button } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 const TABS = [
   { key: 'plans', label: 'Plan & Pillars' },
@@ -61,111 +64,110 @@ function shortDate(iso) {
 // Overall pace → the KPI card status token (good=gold, watch, risk).
 const PACE_TO_STATUS = { on_track: 'good', achieved: 'good', at_risk: 'watch', behind: 'risk', no_data: 'neutral' }
 
-// ── Light-theme gate / empty panels ──────────────────────────────────────────
-function CenteredPanel({ children }) {
+// ── Gate / empty: a plain page header on the ground, never a hero card ───────
+// The same Dashboard › Strategic Planning trail the populated page (ModuleTabs)
+// renders, so the empty, gate and loading states speak one navigation grammar.
+function StrategyTrail() {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <Target size={26} />
-        </span>
-        {children}
-      </div>
+    <div className="mb-2">
+      <ModuleBreadcrumb crumbs={[{ label: 'Dashboard', to: '/app' }, { label: moduleLabel('strategy') }]} />
     </div>
   )
 }
 
 function GatePanel({ notLicensed }) {
   return (
-    <CenteredPanel>
-      {notLicensed ? (
-        <>
-          <h2 className="font-serif text-xl font-semibold text-navy">Strategic Planning isn&apos;t on your plan yet</h2>
-          <p className="max-w-md text-[15px] text-muted">
-            Add the Strategic Planning module to turn your board&apos;s plan into a living scorecard — goals that
-            measure themselves against your live financials, and their slice of the briefing here.
-          </p>
-        </>
-      ) : (
-        <>
-          <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-          <p className="max-w-md text-[15px] text-muted">Resume your plan to manage the strategic-plan register.</p>
-        </>
-      )}
-    </CenteredPanel>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <StrategyTrail />
+      <PageHeader
+        eyebrow="Strategic Planning"
+        title={notLicensed ? 'Strategic Planning isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the Strategic Planning module to turn your board\u2019s plan into a living scorecard: goals that measure themselves against your live financials, and their slice of the briefing here.'
+            : 'Resume your plan to manage the strategic-plan register.'
+        }
+      />
+    </div>
   )
 }
 
-function EmptyPlanPanel({ canEdit, onCreate }) {
+function EmptyPlanPanel({ schoolName, canEdit, onCreate }) {
   return (
-    <CenteredPanel>
-      <h2 className="font-serif text-xl font-semibold text-navy">No strategic plan yet</h2>
-      <p className="max-w-md text-[15px] text-muted">
-        Create your plan, add a few pillars, then bind goals to the metrics you already track — days cash on hand,
-        operating margin, enrollment — and watch them measure themselves.
-      </p>
-      {canEdit ? (
-        <button
-          type="button"
-          onClick={onCreate}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[13px] font-semibold transition"
-        >
-          <Plus size={15} /> Create strategic plan
-        </button>
-      ) : null}
-    </CenteredPanel>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <StrategyTrail />
+      <PageHeader
+        eyebrow={`Strategic Planning · ${schoolName ?? 'School'}`}
+        title={
+          <span className="inline-flex items-center gap-3">
+            <Compass size={26} strokeWidth={1.75} className="shrink-0 text-navy-soft" aria-hidden="true" />
+            Strategic Planning
+          </span>
+        }
+        meta="No strategic plan yet"
+      />
+      <Section label="Start the plan">
+        <div className="b1-empty b1-empty-left">
+          <p className="b1-empty-title">Create your plan, add a few pillars, then bind goals to the metrics you already track.</p>
+          <p>
+            Days cash on hand, operating margin, enrollment: a goal bound to a live metric measures itself, so the
+            scorecard is never typed in.
+          </p>
+          {canEdit ? (
+            <Button variant="primary" onClick={onCreate} icon={<Plus size={15} />} className="mt-1">
+              Create strategic plan
+            </Button>
+          ) : (
+            <p>An owner or accountant can create the plan.</p>
+          )}
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+/** A ruled state row inside a register tab (empty / none yet). */
+function StateRow({ title, children }) {
+  return (
+    <div className="b1-empty">
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p>{children}</p> : null}
+    </div>
   )
 }
 
 // ═══════════════════════════ Register tab bodies ════════════════════════════
 function PlansBody({ plan, pillars, canEdit, onEditPlan, onNewPillar, onEditPillar, onDeletePillar }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rule/50 bg-cream/50 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Active plan</p>
-          <p className="truncate font-serif text-[17px] font-semibold text-navy">{plan.name}</p>
+    <div className="flex flex-col gap-8">
+      <dl className="b1-facts">
+        <div>
+          <dt>Active plan</dt>
+          <dd className="inline-flex items-center justify-end gap-2">
+            <span className="font-serif text-[17px] font-medium">{plan.name}</span>
+            {canEdit ? (
+              <Button size="sm" variant="quiet" onClick={onEditPlan} icon={<Pencil size={13} />}>
+                Edit plan
+              </Button>
+            ) : null}
+          </dd>
         </div>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={onEditPlan}
-            className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-navy transition hover:border-gold/60 hover:text-gold"
-          >
-            Edit plan
-          </button>
-        ) : null}
-      </div>
+      </dl>
 
       {pillars.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-          <p className="font-serif text-[16px] italic text-muted">No pillars yet.</p>
-          <p className="mt-1 text-[13px] text-muted">Add a pillar to group your goals under a strategic theme.</p>
-        </div>
+        <StateRow title="No pillars yet">Add a pillar to group your goals under a strategic theme.</StateRow>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {pillars.map((p, i) => (
-            <PillarCard
-              key={p.id}
-              pillar={p}
-              index={i}
-              canEdit={canEdit}
-              onEdit={onEditPillar}
-              onDelete={onDeletePillar}
-            />
+        <div className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+          {pillars.map((p) => (
+            <PillarCard key={p.id} pillar={p} canEdit={canEdit} onEdit={onEditPillar} onDelete={onDeletePillar} />
           ))}
         </div>
       )}
 
       {canEdit ? (
-        <button
-          type="button"
-          onClick={onNewPillar}
-          className="inline-flex items-center gap-1.5 self-start rounded-lg border border-rule/60 px-3 py-1.5 text-[13px] font-semibold text-muted transition hover:border-gold/60 hover:text-navy"
-        >
-          <Plus size={14} /> Add pillar
-        </button>
+        <Button size="sm" onClick={onNewPillar} icon={<Plus size={14} />} className="self-start">
+          Add pillar
+        </Button>
       ) : null}
     </div>
   )
@@ -173,46 +175,29 @@ function PlansBody({ plan, pillars, canEdit, onEditPlan, onNewPillar, onEditPill
 
 function GoalsBody({ goals, canEdit, onEdit, onDelete }) {
   if (goals.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="font-serif text-[16px] italic text-muted">No goals yet.</p>
-        <p className="mt-1 text-[13px] text-muted">Bind a goal to a live metric and it starts measuring itself.</p>
-      </div>
-    )
+    return <StateRow title="No goals yet">Bind a goal to a live metric and it starts measuring itself.</StateRow>
   }
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      {goals.map((g, i) => (
-        <div key={g.id} id={`strategy-goal-${g.id}`}>
-          <GoalCard goal={g} index={i} canEdit={canEdit} onEdit={onEdit} onDelete={onDelete} />
-        </div>
+    <ul className="b1-list">
+      {goals.map((g) => (
+        <li key={g.id} id={`strategy-goal-${g.id}`}>
+          <GoalCard goal={g} canEdit={canEdit} onEdit={onEdit} onDelete={onDelete} />
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
 
 function InitiativesBody({ initiatives, canEdit, onEdit, onDelete }) {
   if (initiatives.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="font-serif text-[16px] italic text-muted">No initiatives yet.</p>
-        <p className="mt-1 text-[13px] text-muted">Add the projects that will move your goals forward.</p>
-      </div>
-    )
+    return <StateRow title="No initiatives yet">Add the projects that will move your goals forward.</StateRow>
   }
   return (
-    <div className="rounded-xl border border-rule/50 px-3">
-      {initiatives.map((it, i) => (
-        <InitiativeRow
-          key={it.id}
-          initiative={it}
-          index={i}
-          canEdit={canEdit}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+    <ul className="b1-list">
+      {initiatives.map((it) => (
+        <InitiativeRow key={it.id} initiative={it} canEdit={canEdit} onEdit={onEdit} onDelete={onDelete} />
       ))}
-    </div>
+    </ul>
   )
 }
 
@@ -360,15 +345,22 @@ function StrategyWorkspace() {
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
   if (loading) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+        <StrategyTrail />
+        <PageHeader eyebrow={`Strategic Planning · ${activeSchool?.name ?? 'School'}`} title="Strategic Planning" meta="Loading the plan…" />
       </div>
     )
   }
   if (!hasPlan) {
     return (
       <>
-        <EmptyPlanPanel canEdit={canEdit} onCreate={() => setModal({ type: 'plan', entity: null })} />
+        <ModuleAccent moduleKey="strategy">
+          <EmptyPlanPanel
+            schoolName={activeSchool?.name}
+            canEdit={canEdit}
+            onCreate={() => setModal({ type: 'plan', entity: null })}
+          />
+        </ModuleAccent>
         {renderModal()}
       </>
     )
@@ -521,7 +513,8 @@ function StrategyWorkspace() {
 
   const errorBanner = error ? (
     <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
-      <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
+      <p role="alert" className="inline-flex items-center gap-2 text-[13px] font-semibold text-ink">
+        <i className="mark tone-risk" aria-hidden="true" />
         {error}
       </p>
     </div>
@@ -531,7 +524,7 @@ function StrategyWorkspace() {
     <DomainCommandCenter
       showAddData
       moduleKey="strategy"
-      eyebrow="Domain · Strategic Planning · self-measuring scorecard"
+      eyebrow={`Strategic Planning · ${activeSchool?.name ?? 'School'}`}
       title="Strategic Planning"
       Icon={Compass}
       attentionCount={attentionItems.length}

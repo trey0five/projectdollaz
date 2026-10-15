@@ -15,13 +15,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from 'framer-motion'
 import {
   Landmark,
   Pencil,
   Trash2,
   ListPlus,
-  X,
   CheckCircle2,
   TrendingDown,
   AlertTriangle,
@@ -57,11 +56,12 @@ import { usePolicies } from '../hooks/usePolicies.js'
 import { useCommittees } from '../hooks/useCommittees.js'
 import { useMeetings } from '../hooks/useMeetings.js'
 import { usePeople } from '../hooks/usePeople.js'
+import { PageHeader, DataTable, Toolbar, Pill, Button } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 import PersonFormModal from '../components/governance/PersonFormModal.jsx'
 import PersonDetailPanel from '../components/governance/PersonDetailPanel.jsx'
 import CommitteeMembers from '../components/governance/CommitteeMembers.jsx'
 import {
-  GOV_HUE,
   groupLabel,
   termStatusOf,
   TERM_BADGE,
@@ -74,124 +74,20 @@ const COMMITTEE_KINDS = ['board', 'finance', 'governance', 'advancement', 'acade
 const MEETING_STATUSES = ['scheduled', 'held', 'cancelled']
 const MINUTES_STATUSES = ['none', 'draft', 'pending_approval', 'approved']
 
-// ── Light-theme review badge (restyled from the old dark pills) ──────────────
-const REVIEW_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  'due-soon': { label: 'Due soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  current: { label: 'Current', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  unknown: { label: 'No review date', cls: 'border-rule/60 bg-section text-muted' },
-}
-
-function ReviewBadge({ status, nextReviewDate, daysUntilDue }) {
-  const b = REVIEW_BADGE[status] ?? REVIEW_BADGE.unknown
-  let suffix = ''
-  if (status === 'due-soon' && typeof daysUntilDue === 'number') suffix = ` · in ${daysUntilDue}d`
-  else if (status === 'overdue' && typeof daysUntilDue === 'number')
-    suffix = ` · ${Math.abs(daysUntilDue)}d ago`
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${b.cls}`}
-      title={nextReviewDate ? `Next review: ${nextReviewDate}` : 'No adopted or last-reviewed date'}
-    >
-      {b.label}
-      {suffix}
-    </span>
-  )
-}
-
-/** A small light-theme pill (shared idiom for committee active + meeting signals). */
-function Pill({ cls, children, title }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${cls}`}
-      title={title}
-    >
-      {children}
-    </span>
-  )
-}
-
-// ── Light-theme register table primitives ────────────────────────────────────
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
-function IconAction(props) {
-  const { onClick, label, title, danger } = props
-  const ActionIcon = props.Icon
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
-    >
-      <ActionIcon size={15} />
-    </button>
-  )
-}
-
-function TableShell({ children, cols }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>{cols}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  )
-}
-
-function StateRow({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
-    </div>
-  )
-}
-
-
 // ── Light-theme entitlement / license gate ───────────────────────────────────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <Landmark size={26} />
-        </span>
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Governance isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the Governance module to track board policies, committees, and meetings — and land
-              its slice of the briefing here.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Resume your plan to manage governance records.
-            </p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Governance"
+        title={notLicensed ? 'Governance isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the Governance module to track board policies, committees, and meetings, and land its slice of the briefing here.'
+            : 'Resume your plan to manage governance records.'
+        }
+      />
     </div>
   )
 }
@@ -389,12 +285,12 @@ function CommitteeFormModal({ initial, onClose, onSave, reduce }) {
           className={fieldTextarea}
         />
       </Field>
-      <label className="flex cursor-pointer select-none items-center gap-2.5 text-[14px] font-medium text-white/80 sm:col-span-2">
+      <label className="flex cursor-pointer select-none items-center gap-2.5 text-[14px] font-medium text-ink sm:col-span-2">
         <input
           type="checkbox"
           checked={!!form.active}
           onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-          className="h-[18px] w-[18px] rounded border-white/30 bg-navy-deep/50 accent-gold"
+          className="h-[18px] w-[18px] rounded-sm accent-[#2563EB]"
         />
         Active committee
       </label>
@@ -528,82 +424,135 @@ function MeetingFormModal({ initial, committees, onClose, onSave, reduce }) {
   )
 }
 
+// ── Review status → a status Pill (2px semantic mark + ink text) ─────────────
+const REVIEW_TONE = {
+  overdue: { label: 'Overdue', tone: 'risk' },
+  'due-soon': { label: 'Due soon', tone: 'watch' },
+  current: { label: 'Current', tone: 'good' },
+  unknown: { label: 'No review date', tone: 'neutral' },
+}
+
+function ReviewBadge({ status, nextReviewDate, daysUntilDue }) {
+  const b = REVIEW_TONE[status] ?? REVIEW_TONE.unknown
+  let suffix = ''
+  if (status === 'due-soon' && typeof daysUntilDue === 'number') suffix = ` · in ${daysUntilDue}d`
+  else if (status === 'overdue' && typeof daysUntilDue === 'number')
+    suffix = ` · ${Math.abs(daysUntilDue)}d ago`
+  return (
+    <Pill
+      variant="status"
+      tone={b.tone}
+      title={nextReviewDate ? `Next review: ${nextReviewDate}` : 'No adopted or last-reviewed date'}
+    >
+      {b.label}
+      {suffix}
+    </Pill>
+  )
+}
+
+/** Active / inactive — a status Pill, the one shape for every meaning. */
+function ActivePill({ active }) {
+  return (
+    <Pill variant="status" tone={active ? 'good' : 'neutral'}>
+      {active ? 'Active' : 'Inactive'}
+    </Pill>
+  )
+}
+
+// ── Register primitives: quiet icon actions, a ruled state row ───────────────
+function IconAction(props) {
+  const { onClick, label, title, danger } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`b1-icon-act${danger ? ' b1-icon-act-danger' : ''}`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+/** Loading / error / empty — a ruled block on the ground, never a dashed card. */
+function StateRow({ title, children, error }) {
+  return (
+    <div className="b1-empty" role={error ? 'alert' : undefined}>
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p className={error ? 'b1-empty-err' : undefined}>{children}</p> : null}
+    </div>
+  )
+}
+
+/** The edit-actions column shared by every register (hover-revealed). */
+const actionsColumn = (render) => ({
+  key: 'actions',
+  header: <span className="sr-only">Actions</span>,
+  headerClassName: 'dt-num',
+  className: 'dt-num',
+  render: (row) => (
+    <div className="dt-actions inline-flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      {render(row)}
+    </div>
+  ),
+})
+
 // ═══════════════════════════ LIGHT REGISTER TABLES ══════════════════════════
 
-function PoliciesTable({ policies, loading, error, canEdit, reduce, onEdit, onDelete, onMakeTask }) {
-  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading policies…</p></StateRow>
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+function PoliciesTable({ policies, loading, error, canEdit, onEdit, onDelete, onMakeTask }) {
+  if (loading) return <StateRow>Loading policies…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (policies.length === 0)
     return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No policies yet.</p>
-        <p className="mt-1 text-[13px] text-muted">Add your first policy to start tracking review cycles.</p>
-      </StateRow>
+      <StateRow title="No policies yet">Add your first policy to start tracking review cycles.</StateRow>
+    )
+
+  const columns = [
+    { key: 'title', header: 'Policy', sortable: true, render: (p) => <span className="font-semibold">{p.title}</span> },
+    { key: 'category', header: 'Category', sortable: true, render: (p) => <span className="text-ink2">{p.category}</span> },
+    { key: 'owner', header: 'Owner', render: (p) => <span className="text-ink2">{p.owner ?? '—'}</span> },
+    { key: 'status', header: 'Status', render: (p) => <span className="capitalize text-ink2">{p.status}</span> },
+    {
+      key: 'review',
+      header: 'Review',
+      sortable: true,
+      sortValue: (p) => p.daysUntilDue ?? null,
+      render: (p) => (
+        <ReviewBadge status={p.reviewStatus} nextReviewDate={p.nextReviewDate} daysUntilDue={p.daysUntilDue} />
+      ),
+    },
+  ]
+  if (canEdit)
+    columns.push(
+      actionsColumn((p) => (
+        <>
+          {p.reviewStatus === 'overdue' || p.reviewStatus === 'due-soon' ? (
+            <IconAction
+              Icon={ListPlus}
+              onClick={() => onMakeTask(p)}
+              label={`Create task to review ${p.title}`}
+              title="Create a task to review this policy"
+            />
+          ) : null}
+          <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.title}`} />
+          <IconAction Icon={Trash2} danger onClick={() => onDelete(p)} label={`Delete ${p.title}`} />
+        </>
+      )),
     )
 
   return (
-    <TableShell
-      cols={
-        <>
-          <Th>Policy</Th>
-          <Th>Category</Th>
-          <Th>Owner</Th>
-          <Th>Status</Th>
-          <Th>Review</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {policies.map((p) => (
-          <motion.tr
-            key={p.id}
-            layout={!reduce}
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            className="group border-t border-rule/50"
-          >
-            <td className="px-4 py-3 font-semibold text-navy">{p.title}</td>
-            <td className="px-4 py-3 text-muted">{p.category}</td>
-            <td className="px-4 py-3 text-muted">{p.owner ?? '—'}</td>
-            <td className="px-4 py-3">
-              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                {p.status}
-              </span>
-            </td>
-            <td className="px-4 py-3">
-              <ReviewBadge
-                status={p.reviewStatus}
-                nextReviewDate={p.nextReviewDate}
-                daysUntilDue={p.daysUntilDue}
-              />
-            </td>
-            {canEdit ? (
-              <td className="px-4 py-3">
-                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                  {p.reviewStatus === 'overdue' || p.reviewStatus === 'due-soon' ? (
-                    <IconAction
-                      Icon={ListPlus}
-                      onClick={() => onMakeTask(p)}
-                      label={`Create task to review ${p.title}`}
-                      title="Create a task to review this policy"
-                    />
-                  ) : null}
-                  <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.title}`} />
-                  <IconAction Icon={Trash2} danger onClick={() => onDelete(p)} label={`Delete ${p.title}`} />
-                </div>
-              </td>
-            ) : null}
-          </motion.tr>
-        ))}
-      </AnimatePresence>
-    </TableShell>
+    <DataTable
+      caption="Policies"
+      columns={columns}
+      rows={policies}
+      markOf={(p) => {
+        // No review date is not a flag: mark only watch / risk / good, never neutral.
+        const t = REVIEW_TONE[p.reviewStatus]?.tone
+        return t && t !== 'neutral' ? t : null
+      }}
+    />
   )
 }
 
@@ -616,174 +565,123 @@ const GROUP_PILLS = [
   { key: 'staff', label: 'Staff' },
 ]
 
-/** Purple group chip (the governance module hue, on the light register). */
-function GroupChip({ group }) {
-  return (
-    <span
-      className="inline-flex items-center rounded-md border px-2 py-0.5 text-[11.5px] font-semibold"
-      style={{ borderColor: `${GOV_HUE}55`, backgroundColor: `${GOV_HUE}14`, color: '#5B21B6' }}
-    >
-      {groupLabel(group)}
-    </span>
-  )
-}
-
 function PersonTermBadge({ person }) {
   const status = termStatusOf(person)
   const b = TERM_BADGE[status]
   const end = isoDay(person.termEnd)
   return (
-    <Pill cls={b.cls} title={end ? `Term ends ${end}` : 'No term end on file'}>
+    <Pill variant="status" tone={b.tone} title={end ? `Term ends ${end}` : 'No term end on file'}>
       {b.label}
       {status === 'expiring_90d' && end ? ` · ${shortDate(end)}` : ''}
     </Pill>
   )
 }
 
-function PeopleTable({
-  people,
-  loading,
-  error,
-  filter,
-  onFilter,
-  canEdit,
-  reduce,
-  onOpen,
-  onEdit,
-  onDelete,
-}) {
-  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading people…</p></StateRow>
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+function PeopleTable({ people, loading, error, filter, onFilter, canEdit, onOpen, onEdit, onDelete }) {
+  if (loading) return <StateRow>Loading people…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
 
   const filtered = filter === 'all' ? people : people.filter((p) => p.groups?.includes(filter))
+  const count = (key) => (key === 'all' ? people.length : people.filter((p) => p.groups?.includes(key)).length)
 
-  const pills = (
-    <div className="mb-3 flex flex-wrap gap-1.5">
-      {GROUP_PILLS.map((g) => {
-        const active = g.key === filter
-        return (
-          <button
-            key={g.key}
-            type="button"
-            onClick={() => onFilter(g.key)}
-            aria-pressed={active}
-            className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
-              active ? 'text-white' : 'border-rule/70 bg-white text-muted hover:text-navy'
-            }`}
-            style={active ? { backgroundColor: GOV_HUE, borderColor: GOV_HUE } : undefined}
-          >
-            {g.label}
-          </button>
-        )
-      })}
-    </div>
+  // The group filter is a segmented control on a Toolbar (not a chip wall).
+  const toolbar = (
+    <Toolbar className="mb-2" aria-label="Filter people by group">
+      <span className="toolbar-label">Group</span>
+      <div className="seg">
+        {GROUP_PILLS.map((g) => {
+          const active = g.key === filter
+          return (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => onFilter(g.key)}
+              aria-pressed={active}
+              className="seg-btn"
+            >
+              {g.label}
+              <span className="tabular-nums opacity-70">{count(g.key)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </Toolbar>
   )
 
   if (people.length === 0)
     return (
       <>
-        {pills}
-        <StateRow>
-          <p className="font-serif text-[16px] italic text-muted">No people yet.</p>
-          <p className="mt-1 text-[13px] text-muted">
-            Add your board members and finance team to track terms, committees, and credentials.
-          </p>
+        {toolbar}
+        <StateRow title="No people yet">
+          Add your board members and finance team to track terms, committees, and credentials.
         </StateRow>
       </>
     )
 
+  const columns = [
+    {
+      key: 'name',
+      header: 'Person',
+      sortable: true,
+      // A name never wraps to three lines at phone width; the table scrolls in its wrap.
+      className: 'min-w-[150px] whitespace-nowrap',
+      headerClassName: 'min-w-[150px]',
+      render: (p) => (
+        <>
+          <span className="font-semibold">{p.name}</span>
+          {p.title ? <span className="dt-sub">{p.title}</span> : null}
+        </>
+      ),
+    },
+    {
+      key: 'groups',
+      header: 'Groups',
+      render: (p) =>
+        (p.groups ?? []).length ? (
+          <span className="text-ink2">{p.groups.map(groupLabel).join(', ')}</span>
+        ) : (
+          <span className="text-ink2">—</span>
+        ),
+    },
+    { key: 'term', header: 'Term', render: (p) => <PersonTermBadge person={p} /> },
+    {
+      key: 'documentCount',
+      header: 'Docs',
+      num: true,
+      sortable: true,
+      sortValue: (p) => p.documentCount ?? 0,
+      render: (p) => (
+        <span title={`${p.documentCount ?? 0} document${p.documentCount === 1 ? '' : 's'} on file`}>
+          {p.documentCount ?? 0}
+        </span>
+      ),
+    },
+    { key: 'active', header: 'Status', render: (p) => <ActivePill active={p.active} /> },
+  ]
+  if (canEdit)
+    columns.push(
+      actionsColumn((p) => (
+        <>
+          <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.name}`} />
+          <IconAction Icon={Trash2} danger onClick={() => onDelete(p)} label={`Delete ${p.name}`} />
+        </>
+      )),
+    )
+
   return (
     <>
-      {pills}
-      {filtered.length === 0 ? (
-        <StateRow>
-          <p className="font-serif text-[16px] italic text-muted">No one in this group yet.</p>
-        </StateRow>
-      ) : (
-        <TableShell
-          cols={
-            <>
-              <Th>Person</Th>
-              <Th>Groups</Th>
-              <Th>Term</Th>
-              <Th>Docs</Th>
-              <Th>Status</Th>
-              {canEdit ? <Th right>Actions</Th> : null}
-            </>
-          }
-        >
-          <AnimatePresence initial={false}>
-            {filtered.map((p) => (
-              <motion.tr
-                key={p.id}
-                layout={!reduce}
-                initial={reduce ? false : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={reduce ? undefined : { opacity: 0 }}
-                onClick={() => onOpen(p)}
-                className="group cursor-pointer border-t border-rule/50 transition hover:bg-cream/60"
-              >
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-navy">{p.name}</div>
-                  {p.title ? (
-                    <div className="mt-0.5 font-serif text-[12.5px] italic text-muted">{p.title}</div>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(p.groups ?? []).length ? (
-                      p.groups.map((g) => <GroupChip key={g} group={g} />)
-                    ) : (
-                      <span className="text-[12px] text-muted/60">—</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <PersonTermBadge person={p} />
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${
-                      p.documentCount > 0
-                        ? 'border-emerald-300/70 bg-emerald-50 text-emerald-700'
-                        : 'border-rule/60 bg-section text-muted'
-                    }`}
-                    title={`${p.documentCount ?? 0} document${p.documentCount === 1 ? '' : 's'} on file`}
-                  >
-                    <FileText size={11} />
-                    {p.documentCount ?? 0}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {p.active ? (
-                    <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
-                  ) : (
-                    <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
-                  )}
-                </td>
-                {canEdit ? (
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                      <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.name}`} />
-                      <IconAction
-                        Icon={Trash2}
-                        danger
-                        onClick={() => onDelete(p)}
-                        label={`Delete ${p.name}`}
-                      />
-                    </div>
-                  </td>
-                ) : null}
-              </motion.tr>
-            ))}
-          </AnimatePresence>
-        </TableShell>
-      )}
+      {toolbar}
+      <DataTable
+        caption="People"
+        columns={columns}
+        rows={filtered}
+        onRowClick={onOpen}
+        empty="No one in this group yet."
+        markOf={(p) => {
+          const s = termStatusOf(p)
+          return s === 'expired' ? 'risk' : s === 'expiring_90d' ? 'watch' : null
+        }}
+      />
     </>
   )
 }
@@ -793,239 +691,181 @@ function PeopleTable({
  *  labelled "legacy". */
 function ChairCell({ committee }) {
   const { name, source } = effectiveChair(committee)
-  if (!name) return <span className="text-muted">—</span>
+  if (!name) return <span className="text-ink2">—</span>
   return (
-    <span className="inline-flex items-center gap-1.5 text-muted">
+    <span className="inline-flex items-center gap-1.5 text-ink2">
       {name}
       {source === 'legacy' ? (
-        <span
-          className="rounded-md border border-rule/60 bg-section px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted"
-          title="From the committee's free-text chair note — add a chair-role member to replace it"
-        >
-          legacy
-        </span>
+        <Pill title="From the committee's free-text chair note — add a chair-role member to replace it">legacy</Pill>
       ) : null}
     </span>
   )
 }
 
-function CommitteesTable({
-  committees,
-  loading,
-  error,
-  canEdit,
-  reduce,
-  onEdit,
-  onDelete,
-  expandedId,
-  onToggle,
-  renderMembers,
-}) {
-  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading committees…</p></StateRow>
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+/** Committees keep a hand-built `.dt` table: a row EXPANDS into its member list
+ *  (a full-width second row), which the DataTable primitive does not model. */
+function CommitteesTable({ committees, loading, error, canEdit, onEdit, onDelete, expandedId, onToggle, renderMembers }) {
+  if (loading) return <StateRow>Loading committees…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (committees.length === 0)
-    return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No committees yet.</p>
-        <p className="mt-1 text-[13px] text-muted">Add a committee to organize your meetings.</p>
-      </StateRow>
-    )
+    return <StateRow title="No committees yet">Add a committee to organize your meetings.</StateRow>
 
   const colCount = canEdit ? 6 : 5
 
   return (
-    <TableShell
-      cols={
-        <>
-          <Th>Committee</Th>
-          <Th>Kind</Th>
-          <Th>Chair</Th>
-          <Th>Members</Th>
-          <Th>Status</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {committees.map((c) => {
-          const expanded = expandedId === c.id
-          return [
-            <motion.tr
-              key={c.id}
-              layout={!reduce}
-              initial={reduce ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={reduce ? undefined : { opacity: 0 }}
-              onClick={() => onToggle(c.id)}
-              className="group cursor-pointer border-t border-rule/50 transition hover:bg-cream/60"
-            >
-              <td className="px-4 py-3 font-semibold text-navy">
-                <span className="inline-flex items-center gap-1.5">
-                  <ChevronRight
-                    size={14}
-                    className={`shrink-0 text-muted transition-transform ${expanded ? 'rotate-90' : ''}`}
-                    style={expanded ? { color: GOV_HUE } : undefined}
-                    aria-hidden
-                  />
-                  {c.name}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                  {c.kind}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <ChairCell committee={c} />
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${
-                    (c.memberCount ?? 0) > 0
-                      ? 'border-rule/60 bg-section text-navy'
-                      : 'border-gold/40 bg-gold/10 text-[#7a5e00]'
-                  }`}
-                  title={`${c.memberCount ?? 0} member${c.memberCount === 1 ? '' : 's'}`}
-                >
-                  <Users size={11} />
-                  {c.memberCount ?? 0}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                {c.active ? (
-                  <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
-                ) : (
-                  <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
-                )}
-              </td>
-              {canEdit ? (
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                    <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
-                    <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
-                  </div>
+    <div className="dt-wrap">
+      <table className="dt">
+        <caption className="sr-only">Committees</caption>
+        <thead>
+          <tr>
+            <th scope="col">Committee</th>
+            <th scope="col">Kind</th>
+            <th scope="col">Chair</th>
+            <th scope="col" className="dt-num">Members</th>
+            <th scope="col">Status</th>
+            {canEdit ? (
+              <th scope="col" className="dt-num">
+                <span className="sr-only">Actions</span>
+              </th>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {committees.map((c) => {
+            const expanded = expandedId === c.id
+            const members = c.memberCount ?? 0
+            return [
+              <tr key={c.id} onClick={() => onToggle(c.id)} className="dt-row-link" aria-expanded={expanded}>
+                <td>
+                  <button
+                    type="button"
+                    className="dt-link text-ink"
+                    aria-expanded={expanded}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onToggle(c.id)
+                    }}
+                  >
+                    <ChevronRight
+                      size={14}
+                      className={`shrink-0 transition-transform ${expanded ? 'rotate-90 tone-hue' : ''}`}
+                      aria-hidden
+                    />
+                    <span className="text-ink">{c.name}</span>
+                  </button>
                 </td>
-              ) : null}
-            </motion.tr>,
-            expanded ? (
-              <tr key={`${c.id}-members`} className="border-t border-rule/30 bg-cream/30">
-                <td colSpan={colCount} className="px-4 py-3">
-                  {renderMembers(c)}
+                <td className="capitalize text-ink2">{c.kind}</td>
+                <td>
+                  <ChairCell committee={c} />
                 </td>
-              </tr>
-            ) : null,
-          ]
-        })}
-      </AnimatePresence>
-    </TableShell>
+                <td className="dt-num" title={`${members} member${members === 1 ? '' : 's'}`}>
+                  {members === 0 ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <i className="mark tone-watch" aria-hidden="true" />0
+                    </span>
+                  ) : (
+                    members
+                  )}
+                </td>
+                <td>
+                  <ActivePill active={c.active} />
+                </td>
+                {canEdit ? (
+                  <td className="dt-num" onClick={(e) => e.stopPropagation()}>
+                    <div className="dt-actions inline-flex justify-end gap-1">
+                      <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                      <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+                    </div>
+                  </td>
+                ) : null}
+              </tr>,
+              expanded ? (
+                <tr key={`${c.id}-members`} className="dt-expand">
+                  <td colSpan={colCount} className="!h-auto !py-3">
+                    {renderMembers(c)}
+                  </td>
+                </tr>
+              ) : null,
+            ]
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
-function MeetingsTable({
-  meetings,
-  loading,
-  error,
-  canEdit,
-  reduce,
-  onEdit,
-  onDelete,
-  onApprove,
-}) {
-  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading meetings…</p></StateRow>
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+function MeetingsTable({ meetings, loading, error, canEdit, onEdit, onDelete, onApprove }) {
+  if (loading) return <StateRow>Loading meetings…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (meetings.length === 0)
-    return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No meetings yet.</p>
-        <p className="mt-1 text-[13px] text-muted">Schedule a meeting to track its agenda and minutes.</p>
-      </StateRow>
+    return <StateRow title="No meetings yet">Schedule a meeting to track its agenda and minutes.</StateRow>
+
+  const columns = [
+    { key: 'title', header: 'Meeting', sortable: true, render: (m) => <span className="font-semibold">{m.title}</span> },
+    { key: 'committeeName', header: 'Committee', render: (m) => <span className="text-ink2">{m.committeeName ?? '—'}</span> },
+    {
+      key: 'scheduledAt',
+      header: 'Date',
+      sortable: true,
+      render: (m) => <span className="whitespace-nowrap tabular-nums text-ink2">{m.scheduledAt ?? '—'}</span>,
+    },
+    { key: 'status', header: 'Status', render: (m) => <span className="capitalize text-ink2">{m.status}</span> },
+    {
+      key: 'signals',
+      header: 'Signals',
+      render: (m) => (
+        <div className="flex flex-wrap gap-1.5">
+          {m.agendaMissing ? (
+            <Pill variant="status" tone="watch">
+              Agenda due
+            </Pill>
+          ) : null}
+          {m.minutesOverdue ? (
+            <Pill variant="status" tone="risk">
+              Minutes overdue
+            </Pill>
+          ) : m.minutesPending ? (
+            <Pill variant="status" tone="watch">
+              Minutes pending
+            </Pill>
+          ) : null}
+          {m.minutesStatus === 'approved' ? (
+            <Pill variant="status" tone="good">
+              Minutes approved
+            </Pill>
+          ) : null}
+          {!m.agendaMissing && !m.minutesPending && !m.minutesOverdue && m.minutesStatus !== 'approved' ? (
+            <span className="text-ink2">—</span>
+          ) : null}
+        </div>
+      ),
+    },
+  ]
+  if (canEdit)
+    columns.push(
+      actionsColumn((m) => (
+        <>
+          {m.minutesStatus === 'pending_approval' ? (
+            <IconAction
+              Icon={CheckCircle2}
+              onClick={() => onApprove(m.id)}
+              label={`Mark minutes approved for ${m.title}`}
+              title="Mark minutes approved"
+            />
+          ) : null}
+          <IconAction Icon={Pencil} onClick={() => onEdit(m)} label={`Edit ${m.title}`} />
+          <IconAction Icon={Trash2} danger onClick={() => onDelete(m)} label={`Delete ${m.title}`} />
+        </>
+      )),
     )
 
   return (
-    <TableShell
-      cols={
-        <>
-          <Th>Meeting</Th>
-          <Th>Committee</Th>
-          <Th>Date</Th>
-          <Th>Status</Th>
-          <Th>Signals</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {meetings.map((m) => (
-          <motion.tr
-            key={m.id}
-            layout={!reduce}
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            className="group border-t border-rule/50"
-          >
-            <td className="px-4 py-3 font-semibold text-navy">{m.title}</td>
-            <td className="px-4 py-3 text-muted">{m.committeeName ?? '—'}</td>
-            <td className="px-4 py-3 text-muted">{m.scheduledAt ?? '—'}</td>
-            <td className="px-4 py-3">
-              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                {m.status}
-              </span>
-            </td>
-            <td className="px-4 py-3">
-              <div className="flex flex-wrap gap-1.5">
-                {m.agendaMissing ? (
-                  <Pill cls="border-gold/40 bg-gold/10 text-[#7a5e00]">Agenda due</Pill>
-                ) : null}
-                {m.minutesOverdue ? (
-                  <Pill cls="border-danger/30 bg-danger/10 text-danger">Minutes overdue</Pill>
-                ) : m.minutesPending ? (
-                  <Pill cls="border-gold/40 bg-gold/10 text-[#7a5e00]">Minutes pending</Pill>
-                ) : null}
-                {m.minutesStatus === 'approved' ? (
-                  <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Minutes approved</Pill>
-                ) : null}
-                {!m.agendaMissing &&
-                !m.minutesPending &&
-                !m.minutesOverdue &&
-                m.minutesStatus !== 'approved' ? (
-                  <span className="text-[12px] text-muted/60">—</span>
-                ) : null}
-              </div>
-            </td>
-            {canEdit ? (
-              <td className="px-4 py-3">
-                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                  {m.minutesStatus === 'pending_approval' ? (
-                    <button
-                      type="button"
-                      onClick={() => onApprove(m.id)}
-                      aria-label={`Mark minutes approved for ${m.title}`}
-                      title="Mark minutes approved"
-                      className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-emerald-400/60 hover:text-emerald-600"
-                    >
-                      <CheckCircle2 size={15} />
-                    </button>
-                  ) : null}
-                  <IconAction Icon={Pencil} onClick={() => onEdit(m)} label={`Edit ${m.title}`} />
-                  <IconAction Icon={Trash2} danger onClick={() => onDelete(m)} label={`Delete ${m.title}`} />
-                </div>
-              </td>
-            ) : null}
-          </motion.tr>
-        ))}
-      </AnimatePresence>
-    </TableShell>
+    <DataTable
+      caption="Meetings"
+      columns={columns}
+      rows={meetings}
+      markOf={(m) => (m.minutesOverdue ? 'risk' : m.agendaMissing || m.minutesPending ? 'watch' : null)}
+    />
   )
 }
 
@@ -1105,7 +945,6 @@ function GovernanceWorkspace() {
   const [panelRefresh, setPanelRefresh] = useState(0)
   const [expandedCommitteeId, setExpandedCommitteeId] = useState(null)
 
-  const openCreate = (type) => setModal({ type, entity: null })
   const openEdit = (type, entity) => setModal({ type, entity })
   const closeModal = () => setModal(null)
 
@@ -1382,11 +1221,8 @@ function GovernanceWorkspace() {
         title: `${p.name} has no credentials on file`,
         why: 'Accreditors ask for CVs and licenses · upload them to their profile',
         meta: (
-          <span
-            className="mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-            style={{ borderColor: `${GOV_HUE}55`, backgroundColor: `${GOV_HUE}14`, color: '#5B21B6' }}
-          >
-            <UserRound size={11} />
+          <span className="mt-1 inline-flex items-center gap-1 text-[12px] text-ink2">
+            <UserRound size={12} aria-hidden="true" />
             {p.title ?? 'Finance team'}
           </span>
         ),
@@ -1454,7 +1290,6 @@ function GovernanceWorkspace() {
         filter={groupFilter}
         onFilter={setGroupFilter}
         canEdit={canEdit}
-        reduce={reduce}
         onOpen={openPerson}
         onEdit={(p) => openEdit('person', p)}
         onDelete={onDeletePerson}
@@ -1467,7 +1302,6 @@ function GovernanceWorkspace() {
         loading={meetingsHook.loading}
         error={meetingsHook.error}
         canEdit={canEdit}
-        reduce={reduce}
         onEdit={(m) => openEdit('meeting', m)}
         onDelete={onDeleteMeeting}
         onApprove={approveMinutes}
@@ -1480,7 +1314,6 @@ function GovernanceWorkspace() {
         loading={committeesHook.loading}
         error={committeesHook.error}
         canEdit={canEdit}
-        reduce={reduce}
         onEdit={(c) => openEdit('committee', c)}
         onDelete={onDeleteCommittee}
         expandedId={expandedCommitteeId}
@@ -1505,7 +1338,6 @@ function GovernanceWorkspace() {
         loading={policiesHook.loading}
         error={policiesHook.error}
         canEdit={canEdit}
-        reduce={reduce}
         onEdit={(p) => openEdit('policy', p)}
         onDelete={onDeletePolicy}
         onMakeTask={createTaskFromPolicy}
@@ -1598,21 +1430,16 @@ function GovernanceWorkspace() {
   // The accreditation-ready governance report — a dedicated print route (opens in
   // a new tab so the command center stays put; auto-fires the print dialog there).
   const reportButton = (
-    <a
-      href="/governance/report/print"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-gold/60 hover:text-gold"
-    >
-      <Printer size={14} /> Governance report
-    </a>
+    <Button href="/governance/report/print" target="_blank" rel="noopener noreferrer" icon={<Printer size={14} />}>
+      Governance report
+    </Button>
   )
 
   const commandCenter = (
     <DomainCommandCenter
       showAddData
       moduleKey="governance"
-      eyebrow="Domain · Govern engine · system of record"
+      eyebrow={`Governance · ${activeSchool?.name ?? 'School'}`}
       title="Governance"
       Icon={Landmark}
       attentionCount={attentionItems.length}

@@ -2,7 +2,8 @@
 // HR & Staffing route (Phase 6) — the hr module's DOMAIN COMMAND CENTER at /hr.
 // A staffing command center on EXISTING endpoints only: the student-teacher
 // ratio (banded), teaching/total staff FTEs, teaching share and FTE change as
-// .kpi-3d KPI cards; staffing trends (shared TrendSpark) across saved periods;
+// Stats in the command center's StatStrip; staffing trends as a ruled StatStrip
+// of latest values over the shared TrendSpark (no mini-cards);
 // a Needs-attention rail (ratio risk/watch → the Analytics deep link that has
 // always worked; missing FTEs → the Add tab); and the hr.staffing RecordFlow as
 // the module's add path (partial PUT onto the operational row — the Data hub's
@@ -60,6 +61,8 @@ import {
 import { useSparkTrends } from '../components/analytics/v2/data.js'
 import { formatMetric } from '../components/analytics/v2/helpers.js'
 import { formatMetricValue } from '../lib/metricMeta.js'
+import { PageHeader, StatStrip, Stat } from '../components/ui/surface/index.js'
+import '../styles/pending/b1-domain.css'
 
 // The hr module hue (locked brand hue — matches tileRegistry/moduleAnatomy).
 const HR_HUE = '#059669'
@@ -89,32 +92,29 @@ function bandTarget(m) {
   return `target ${dir === 'lower' ? '≤' : '≥'} ${formatMetricValue(b.good, m.unit ?? 'ratio')}`
 }
 
-// ── Light-theme gate panel (StrategyPage pattern) ────────────────────────────
+// ── Gate: a plain page header on the ground (StrategyPage pattern) ──────────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <Users2 size={26} />
-        </span>
-        {notLicensed ? (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">HR &amp; Staffing isn&apos;t on your plan yet</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the HR &amp; Staffing module for a staffing command center — the student-teacher
-              ratio, FTEs and trends on one page, with staffing flags in your morning briefing.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">Resume your plan to see your staffing picture.</p>
-          </>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="HR & Staffing"
+        title={notLicensed ? 'HR & Staffing isn\u2019t on your plan yet' : 'Your subscription is paused'}
+        meta={
+          notLicensed
+            ? 'Add the HR & Staffing module for a staffing command center: the student-teacher ratio, FTEs and trends on one page, with staffing flags in your morning briefing.'
+            : 'Resume your plan to see your staffing picture.'
+        }
+      />
     </div>
   )
+}
+
+// The latest point of a /trends series, formatted — the figure above its spark.
+function latest(trend, fmt) {
+  const pts = trend?.points ?? []
+  const v = pts.length ? pts[pts.length - 1]?.value : null
+  return v == null || !Number.isFinite(Number(v)) ? '—' : fmt(Number(v))
 }
 
 // ═══════════════════════════ PAGE ═══════════════════════════════════════════
@@ -204,7 +204,7 @@ function HrWorkspace() {
   const teachingFte = operational?.teachingFte != null ? Number(operational.teachingFte) : null
   const totalStaffFte = operational?.totalStaffFte != null ? Number(operational.totalStaffFte) : null
 
-  // ── KPI row (.kpi-3d via DomainKpiCard) ────────────────────────────────────
+  // ── KPI row (Stats via DomainKpiCard) ────────────────────────────────────
   const kpis = useMemo(
     () => [
       {
@@ -365,22 +365,29 @@ function HrWorkspace() {
     evalSummary,
   ])
 
-  // ── Staffing trends (the register slot HR shipped with) ────────────────────
+  // ── Staffing trends (the register slot HR shipped with): a ruled strip of
+  //    the latest figure over its trend line — no mini-cards. ─────────────────
+  const fmtRatio = (v) => v.toFixed(1)
+  const fmtShare = (v) => `${(v * 100).toFixed(0)}%`
+  const fmtFte = (v) => v.toLocaleString('en-US', { maximumFractionDigits: 1 })
   const trendsTable = (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="rounded-xl border border-rule/50 p-3">
-        <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-muted">Students per teacher</p>
-        <TrendSpark trend={trends.student_teacher_ratio} color={HR_HUE} formatter={(v) => v.toFixed(1)} />
-      </div>
-      <div className="rounded-xl border border-rule/50 p-3">
-        <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-muted">Teaching share</p>
-        <TrendSpark trend={trends.teaching_staff_share} color={HR_HUE} formatter={(v) => `${(v * 100).toFixed(0)}%`} />
-      </div>
-      <div className="rounded-xl border border-rule/50 p-3">
-        <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-muted">Total staff FTE</p>
-        <TrendSpark trend={trends.total_staff_fte} color={HR_HUE} formatter={(v) => v.toLocaleString('en-US', { maximumFractionDigits: 1 })} />
-      </div>
-    </div>
+    <StatStrip cols={3} className="stats-compact lg:!grid-cols-3">
+      <Stat label="Students per teacher" value={latest(trends.student_teacher_ratio, fmtRatio)}>
+        <div className="mt-2">
+          <TrendSpark trend={trends.student_teacher_ratio} color={HR_HUE} formatter={fmtRatio} />
+        </div>
+      </Stat>
+      <Stat label="Teaching share" value={latest(trends.teaching_staff_share, fmtShare)}>
+        <div className="mt-2">
+          <TrendSpark trend={trends.teaching_staff_share} color={HR_HUE} formatter={fmtShare} />
+        </div>
+      </Stat>
+      <Stat label="Total staff FTE" value={latest(trends.total_staff_fte, fmtFte)}>
+        <div className="mt-2">
+          <TrendSpark trend={trends.total_staff_fte} color={HR_HUE} formatter={fmtFte} />
+        </div>
+      </Stat>
+    </StatStrip>
   )
 
   // ── Gate / loading ─────────────────────────────────────────────────────────
@@ -389,8 +396,8 @@ function HrWorkspace() {
   if (!hasModule('hr')) return <GatePanel notLicensed={entitled} />
   if (metricsLoading && !metrics.length) {
     return (
-      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+        <PageHeader eyebrow={`HR & Staffing · ${activeSchool?.name ?? 'School'}`} title="HR & Staffing" meta="Loading your staffing picture…" />
       </div>
     )
   }
@@ -403,7 +410,6 @@ function HrWorkspace() {
         error={evalError}
         restricted={evalRestricted}
         canEdit={canEdit}
-        reduce={reduce}
         onAdd={openAddEvaluation}
         onEdit={openEditEvaluation}
         onDelete={onDeleteEvaluation}
@@ -422,7 +428,7 @@ function HrWorkspace() {
     <DomainCommandCenter
       showAddData={canEdit}
       moduleKey="hr"
-      eyebrow="Domain · HR & Staffing · the people behind the ratios"
+      eyebrow={`HR & Staffing · ${activeSchool?.name ?? 'School'}`}
       title="HR & Staffing"
       Icon={Users2}
       attentionCount={attentionItems.length}

@@ -28,6 +28,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Check, Loader2, Users } from 'lucide-react'
+import { Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import DatePicker from '../ui/DatePicker.jsx'
 
 /**
@@ -65,19 +67,11 @@ function StatusPill({ status }) {
   const skipped = SKIPPED.has(status)
   const done = status === 'created' || status === 'reused' || status === 'already_adopted'
   const failed = status === 'failed'
-  const tone = failed
-    ? 'border-danger/50 bg-danger/10 text-danger'
-    : skipped
-      ? 'border-rule/70 bg-section text-muted'
-      : done
-        ? 'border-emerald-300/70 bg-emerald-50 text-emerald-700'
-        : 'border-gold/40 bg-gold/10 text-navy'
+  const tone = failed ? 'risk' : skipped ? 'neutral' : done ? 'good' : 'watch'
   return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[11.5px] font-semibold ${tone}`}
-    >
+    <Pill variant="status" tone={tone} className="shrink-0">
       {adoptStatusLabel(status)}
-    </span>
+    </Pill>
   )
 }
 
@@ -93,18 +87,18 @@ function StatusPill({ status }) {
 function PreviewList({ schools, heading, summary = null }) {
   return (
     <div className="mt-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{heading}</p>
-      {summary && <p className="mt-1 text-[12.5px] font-semibold text-navy">{summary}</p>}
-      <ul className="mt-1.5 space-y-1.5">
+      <p className="sec-label">{heading}</p>
+      {summary && <p className="mt-1 text-[12.5px] font-semibold text-ink">{summary}</p>}
+      <ul className="b1-list mt-1.5">
         {schools.map((s, i) => (
           <li
             key={s?.schoolId ?? i}
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-rule/60 bg-section px-3 py-2"
+            className="b1-row justify-between"
           >
-            <span className="text-[13px] font-semibold text-navy">{s?.name ?? s?.schoolId}</span>
+            <span className="text-[13px] font-semibold text-ink">{s?.name ?? s?.schoolId}</span>
             <StatusPill status={s?.status} />
             {s?.failureMessage ? (
-              <span className="w-full text-[12px] leading-snug text-danger">
+              <span className="w-full text-[12px] leading-snug text-risk">
                 {s.failureMessage}
               </span>
             ) : null}
@@ -251,88 +245,80 @@ export default function BulkAdoptFlow({
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-gold/30 bg-gold/[0.05] px-4 py-4">
+    <div className="panel mt-3 px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="flex items-center gap-2 font-serif text-[15px] font-semibold text-navy">
-          <Users size={16} aria-hidden className="text-gold" />
+        <h4 className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+          <Users size={16} aria-hidden className="text-ink2" />
           Push one intervention to these schools
         </h4>
         {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[12.5px] font-semibold text-muted underline-offset-2 hover:underline"
-          >
+          <Button variant="quiet" size="sm" onClick={onClose}>
             Close
-          </button>
+          </Button>
         )}
       </div>
 
-      <p className="mt-1 text-[12.5px] leading-snug text-muted">
+      <p className="mt-1 text-[12.5px] leading-snug text-ink2">
         One initiative is created at each school, on that school&apos;s own copy of the standard.
         Schools that already adopted it keep the initiative they have — nothing is duplicated.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <label className="b1-fld-label flex flex-col gap-1">
           Initiative title
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={200}
-            className="min-h-[40px] rounded-lg border-2 border-hair bg-white px-3 text-[14px] font-medium normal-case tracking-normal text-navy outline-none ring-gold/40 focus-visible:ring-2"
+            className="b1-fld normal-case tracking-normal"
           />
         </label>
-        <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <label className="b1-fld-label flex flex-col gap-1">
           Due date (optional)
           <DatePicker
             value={dueDate}
             onChange={setDueDate}
-            className="min-h-[40px] w-full rounded-lg border-2 border-hair bg-white px-3 text-left text-[14px] font-medium normal-case tracking-normal text-navy outline-none ring-gold/40 focus-visible:ring-2"
+            className="b1-fld text-left normal-case tracking-normal"
           />
         </label>
       </div>
 
       {!titleOk && (
-        <p className="mt-2 text-[12px] text-muted">
+        <p className="mt-2 text-[12px] text-ink2">
           Give the initiative a title of at least 3 characters before proposing.
         </p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <Button
           onClick={propose}
           disabled={busy !== null || !titleOk || !canWrite}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-hair px-3.5 text-[13.5px] font-semibold text-navy transition hover:border-gold disabled:cursor-not-allowed disabled:opacity-50"
+          icon={busy === 'propose' ? <Loader2 size={14} aria-hidden className="animate-spin" /> : null}
         >
-          {busy === 'propose' && <Loader2 size={14} aria-hidden className="animate-spin" />}
           {proposal ? 'Re-propose' : 'Propose'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
           onClick={confirm}
           disabled={confirmDisabled}
           aria-disabled={confirmDisabled}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-gold-gradient px-4 text-[13.5px] font-semibold text-white shadow-glow transition disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+          icon={busy === 'confirm' ? <Loader2 size={14} aria-hidden className="animate-spin" /> : <Check size={14} aria-hidden />}
         >
-          {busy === 'confirm' && <Loader2 size={14} aria-hidden className="animate-spin" />}
-          <Check size={14} aria-hidden />
           Confirm
-        </button>
+        </Button>
         {!proposal && !result && (
-          <span className="text-[12px] text-muted">
+          <span className="text-[12px] text-ink2">
             Propose first — confirm stays disabled until you have seen the list.
           </span>
         )}
         {proposal && !inputsChanged && (
-          <span className="text-[12px] text-muted">
+          <span className="text-[12px] text-ink2">
             {willCreate} of {previewSchools.length} would create a new initiative.
           </span>
         )}
         {inputsChanged && (
-          <span className="text-[12px] font-semibold text-navy">
+          <span className="text-[12px] font-semibold text-ink">
             You changed the {proposal.proposedTitle !== title.trim() ? 'title' : 'due date'} after
             proposing. Propose again to refresh the list before confirming.
           </span>
@@ -340,7 +326,7 @@ export default function BulkAdoptFlow({
       </div>
 
       {!canWrite && (
-        <p className="mt-2 text-[12.5px] font-semibold text-muted">
+        <p className="mt-2 text-[12.5px] font-semibold text-ink2">
           You are not an owner or business manager at every school in this list, so this action is
           read-only for you.
         </p>
@@ -349,9 +335,10 @@ export default function BulkAdoptFlow({
       {error && (
         <p
           role="alert"
-          className="mt-3 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12.5px] font-semibold text-danger"
+          className="mt-3 flex items-start gap-2 border-l-2 pl-3 text-[12.5px] font-semibold text-ink"
+          style={{ borderLeftColor: 'rgb(var(--c-risk))' }}
         >
-          <AlertTriangle size={14} aria-hidden className="mt-[1px] shrink-0" />
+          <AlertTriangle size={14} aria-hidden className="mt-[1px] shrink-0 text-risk" />
           {error}
         </p>
       )}

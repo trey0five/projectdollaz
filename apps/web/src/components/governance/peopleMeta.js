@@ -10,10 +10,6 @@ export const PERSON_GROUPS = ['board', 'finance_team', 'staff']
 // apps/api/src/governance/dto/person.dto.ts (MEMBER_ROLES)
 export const MEMBER_ROLES = ['chair', 'vice_chair', 'secretary', 'member']
 
-// The governance module hue (matches tileRegistry) — used for the purple group
-// chips on the light roster; everything else inherits the module accent chrome.
-export const GOV_HUE = '#7C3AED'
-
 // Tag convention for person credential documents in the knowledge store.
 export const CREDENTIAL_TAGS = ['cv', 'license', 'degree', 'background_check']
 
@@ -70,12 +66,13 @@ export function termStatusOf(person) {
   return 'active'
 }
 
-/** Light-theme badge classes per term status (coral/danger when expiring/expired). */
+/** Term status → a status Pill: label + semantic tone (the 2px mark colour;
+ *  the text stays ink). Expiring and expired both read as risk. */
 export const TERM_BADGE = {
-  active: { label: 'Term active', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  expiring_90d: { label: 'Expires soon', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  expired: { label: 'Term expired', cls: 'border-danger/40 bg-danger/15 text-danger' },
-  no_term: { label: 'No term', cls: 'border-rule/60 bg-section text-muted' },
+  active: { label: 'Term active', tone: 'good' },
+  expiring_90d: { label: 'Expires soon', tone: 'risk' },
+  expired: { label: 'Term expired', tone: 'risk' },
+  no_term: { label: 'No term', tone: 'neutral' },
 }
 
 /**

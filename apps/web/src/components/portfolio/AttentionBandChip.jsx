@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { AlarmClock } from 'lucide-react'
 import { riskBandMeta } from '../accreditation/RiskChip.jsx'
+import { Pill } from '../ui/surface/index.js'
 
 /**
  * `urgencyReason` tokens, frozen in the spec's §2.4 table. Urgency is a SORT KEY
@@ -83,30 +84,40 @@ export function percentileText(percentile) {
 }
 
 /**
+ * Band → status tone (2px mark + ink text). Carried HERE rather than read off
+ * `riskBandMeta(band).tone`, so the portfolio's marks never depend on how the
+ * accreditation RiskChip is styled (the way PaceChip carries its own tone map).
+ * The band WORD still comes from the one shared vocabulary above.
+ */
+export const BAND_TONE = Object.freeze({
+  clear: 'good',
+  watch: 'watch',
+  elevated: 'watch',
+  high: 'risk',
+  critical: 'risk',
+})
+
+/** A band → its tone, or null for no band (a not-ranked school gets no mark). */
+export function bandTone(band) {
+  return BAND_TONE[band] ?? null
+}
+
+/**
  * The band chip. `score` is the server's integer attention score and is rendered
  * WITHOUT a percent sign on purpose: it is an attention index, not a share of
  * anything, and the row's one true percentage (`verifiedPct`) is the column
  * beside it.
  */
-export default function AttentionBandChip({ band = null, score = null, size = 'md' }) {
+export default function AttentionBandChip({ band = null, score = null }) {
   const meta = riskBandMeta(band)
-  const small = size === 'sm'
-  const pad = small ? 'px-2 py-0.5 text-[11.5px]' : 'px-2.5 py-1 text-[12px]'
   const hasScore = score != null && Number.isFinite(score)
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-md border font-semibold ${meta.chip} ${pad}`}
-      >
-        <span
-          aria-hidden
-          className="inline-block h-[6px] w-[6px] rounded-full"
-          style={{ backgroundColor: meta.dot }}
-        />
+      <Pill variant="status" tone={bandTone(band) ?? 'neutral'}>
         {meta.label}
-      </span>
+      </Pill>
       {hasScore && (
-        <span className="text-[12px] font-semibold tabular-nums text-muted">
+        <span className="text-[12px] font-semibold tabular-nums text-ink2">
           <span className="sr-only">Attention score </span>
           {Math.round(score)}
         </span>
@@ -123,14 +134,11 @@ export default function AttentionBandChip({ band = null, score = null, size = 'm
 export function UrgencyChip({ urgency = null, reason = null }) {
   const label = urgencyLabel(reason)
   const pressing = urgency === 3 || urgency === 2
-  if (!label) return <span className="text-[12.5px] text-muted">—</span>
+  if (!label) return <span className="text-[12.5px] text-ink2">—</span>
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-[12.5px] ${
-        pressing ? 'font-semibold text-navy' : 'text-muted'
-      }`}
-    >
-      {pressing && <AlarmClock size={13} aria-hidden className="shrink-0 text-danger" />}
+    <span className={`inline-flex items-center gap-1.5 text-[12.5px] ${pressing ? 'font-semibold text-ink' : 'text-ink2'}`}>
+      {pressing && <i className="mark tone-risk" aria-hidden="true" />}
+      {pressing && <AlarmClock size={13} aria-hidden className="shrink-0 text-ink2" />}
       {label}
     </span>
   )

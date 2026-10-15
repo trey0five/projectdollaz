@@ -76,13 +76,12 @@ export const COMPLIANCE_KIND_OPTIONS = MAINTENANCE_COMPLIANCE_KINDS.map((k) => (
 export const COMPLIANCE_KIND_NOTE =
   'We only call something an inspection when you tell us it is one.'
 
-/** Light-theme chip classes: life-safety kinds read hotter than the rest. */
+/** Status-Pill tone for a kind: life-safety kinds carry the risk mark, every
+ *  other kind the watch mark (the text stays ink — colour lives in the mark). */
 export function complianceKindBadge(k) {
   if (!k) return null
   return {
     label: complianceKindLabel(k),
-    cls: isLifeSafetyKind(k)
-      ? 'border-danger/30 bg-danger/10 text-danger'
-      : 'border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412]',
+    tone: isLifeSafetyKind(k) ? 'risk' : 'watch',
   }
 }

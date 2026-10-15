@@ -19,8 +19,7 @@
 // that GovernancePerson (a partial, opt-in roster) cannot vouch for.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ClipboardCheck, Pencil, Trash2, Plus, UserRound, Lock } from 'lucide-react'
+import { ClipboardCheck, Pencil, Trash2, Plus, Lock } from 'lucide-react'
 import EntityFormModal, {
   Field,
   Select,
@@ -30,8 +29,9 @@ import EntityFormModal, {
 import DatePicker from '../ui/DatePicker.jsx'
 import { governancePeopleApi, isModuleNotLicensed } from '../../lib/api.js'
 import { shortDate } from '../../lib/dates.js'
+import { DataTable, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b1-domain.css'
 import {
-  HR_HUE,
   STAFF_EVALUATION_STATUSES,
   STATUS_BADGE,
   OVERDUE_BADGE,
@@ -208,7 +208,7 @@ export function StaffEvaluationFormModal({
       {isEdit ? (
         <Field label="Member of staff" span={2} index={0} reduce={reduce}>
           <input value={editingPersonName ?? '—'} readOnly disabled className={fieldInput} />
-          <span className="mt-1 block text-[11.5px] text-white/50">
+          <span className="mt-1 block text-[11.5px] text-ink2">
             An evaluation stays with the person it was recorded for. To move it, delete this record
             and add a new one.
           </span>
@@ -225,9 +225,9 @@ export function StaffEvaluationFormModal({
             ))}
           </Select>
           {unavailable ? (
-            <span className="mt-1 block text-[11.5px] text-white/60">{unavailable}</span>
+            <span className="mt-1 block text-[11.5px] text-ink2">{unavailable}</span>
           ) : !peopleLoading && people.length === 0 ? (
-            <span className="mt-1 block text-[11.5px] text-white/60">
+            <span className="mt-1 block text-[11.5px] text-ink2">
               No one on your people register is in the Staff group yet. Add them in Governance
               first — we never keep a second copy of a person.
             </span>
@@ -290,33 +290,22 @@ export function StaffEvaluationFormModal({
 
 // ═══════════════════════════ THE REGISTER TABLE ══════════════════════════════
 
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
-function Pill({ def, children }) {
+function StatusPill({ def, children }) {
   if (!def) return null
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
-    >
+    <Pill variant="status" tone={def.tone}>
       {children ?? def.label}
-    </span>
+    </Pill>
   )
 }
 
-function StateRow({ children }) {
+/** Loading / error / empty — a ruled block on the ground, never a dashed card. */
+function StateRow({ title, children, error, action }) {
   return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
+    <div className="b1-empty" role={error ? 'alert' : undefined}>
+      {title ? <p className="b1-empty-title">{title}</p> : null}
+      {children ? <p className={error ? 'b1-empty-err' : undefined}>{children}</p> : null}
+      {action}
     </div>
   )
 }
@@ -324,14 +313,9 @@ function StateRow({ children }) {
 /** The restricted surface: the frozen sentence, verbatim, and nothing else. */
 function RestrictedPanel() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      <span
-        className="flex h-11 w-11 items-center justify-center rounded-xl text-white"
-        style={{ backgroundColor: HR_HUE }}
-      >
-        <Lock size={20} />
-      </span>
-      <p className="max-w-lg text-[14px] leading-relaxed text-muted">{VIEWER_RESTRICTION_NOTE}</p>
+    <div className="b1-empty">
+      <Lock size={18} className="text-ink2" aria-hidden="true" />
+      <p className="max-w-lg text-[14px] leading-relaxed">{VIEWER_RESTRICTION_NOTE}</p>
     </div>
   )
 }
@@ -342,7 +326,6 @@ export default function StaffEvaluationsPanel({
   error,
   restricted,
   canEdit,
-  reduce,
   onAdd,
   onEdit,
   onDelete,
@@ -352,142 +335,125 @@ export default function StaffEvaluationsPanel({
   // answer, and no partial register ever leaks past it.
   if (restricted) return <RestrictedPanel />
 
-  if (loading)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-muted">Loading staff evaluations…</p>
-      </StateRow>
-    )
-  if (error)
-    return (
-      <StateRow>
-        <p className="text-[14px] text-danger">{error}</p>
-      </StateRow>
-    )
+  if (loading) return <StateRow>Loading staff evaluations…</StateRow>
+  if (error) return <StateRow error>{error}</StateRow>
   if (evaluations.length === 0)
     return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No staff evaluations recorded yet.</p>
-        {/* The SAME condition the Evidence Index states, because it is the same
-            promise: the accreditation row is answered by an evaluation carrying
-            the date it was COMPLETED, not by the existence of a scheduled one.
-            Saying only "record your cycle here" made the promise unkeepable for
-            every school that recorded a cycle and left it open. */}
-        <p className="mt-1 text-[13px] text-muted">
-          Record your evaluation cycle here, and once an evaluation carries the date it was
-          completed, your accreditation evidence for it answers itself — we never ask you to enter
-          it twice.
-        </p>
-        {canEdit && onAdd ? (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-white transition hover:brightness-110"
-            style={{ backgroundColor: HR_HUE }}
-          >
-            <Plus size={14} /> Add evaluation
-          </button>
-        ) : null}
+      /* The SAME condition the Evidence Index states, because it is the same
+         promise: the accreditation row is answered by an evaluation carrying
+         the date it was COMPLETED, not by the existence of a scheduled one.
+         Saying only "record your cycle here" made the promise unkeepable for
+         every school that recorded a cycle and left it open. */
+      <StateRow
+        title="No staff evaluations recorded yet"
+        action={
+          canEdit && onAdd ? (
+            <Button variant="primary" size="sm" onClick={onAdd} icon={<Plus size={14} />} className="mt-1">
+              Add evaluation
+            </Button>
+          ) : null
+        }
+      >
+        Record your evaluation cycle here, and once an evaluation carries the date it was completed,
+        your accreditation evidence for it answers itself — we never ask you to enter it twice.
       </StateRow>
     )
 
+  const columns = [
+    {
+      key: 'personName',
+      header: 'Person',
+      sortable: true,
+      render: (ev) => (
+        <div className="py-1.5">
+          <span className="font-semibold">{ev.personName ?? '—'}</span>
+          {ev.personTitle ? <span className="dt-sub">{ev.personTitle}</span> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'cycleLabel',
+      header: 'Cycle',
+      render: (ev) => (
+        <div className="py-1.5">
+          <span>{ev.cycleLabel ?? '—'}</span>
+          {ev.evaluatorName ? <span className="dt-sub">Evaluator: {ev.evaluatorName}</span> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'dueDate',
+      header: 'Due',
+      sortable: true,
+      render: (ev) => (
+        <>
+          <span className="whitespace-nowrap font-semibold">{shortDate(ev.dueDate) ?? '—'}</span>
+          {/* `isOverdue` / `daysOverdue` are the SERVER's — the client does no
+              date math and never guesses at one it was not given. */}
+          {ev.isOverdue ? (
+            <span className="dt-sub">
+              {typeof ev.daysOverdue === 'number' ? `${ev.daysOverdue}d past due` : 'past due'}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'completedDate',
+      header: 'Completed',
+      sortable: true,
+      render: (ev) => <span className="whitespace-nowrap text-ink2">{ev.completedDate ? shortDate(ev.completedDate) : '—'}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (ev) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusPill def={STATUS_BADGE[ev.status]}>{statusLabel(ev.status)}</StatusPill>
+          {ev.isOverdue ? <StatusPill def={OVERDUE_BADGE} /> : null}
+        </div>
+      ),
+    },
+  ]
+  if (canEdit)
+    columns.push({
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      headerClassName: 'dt-num',
+      className: 'dt-num',
+      render: (ev) => (
+        <div className="dt-actions inline-flex justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => onEdit(ev)}
+            aria-label={`Edit ${ev.cycleLabel ?? 'evaluation'}`}
+            title="Edit"
+            className="b1-icon-act"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(ev)}
+            aria-label={`Delete ${ev.cycleLabel ?? 'evaluation'}`}
+            title="Delete"
+            className="b1-icon-act b1-icon-act-danger"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ),
+    })
+
+  /* No add button here on the populated register: the command center's own
+     "+ New" already owns that action for the active tab. The empty state keeps
+     its CTA because there is no register there to act on. */
   return (
-    <div className="space-y-3">
-      {/* No add button here on the populated register: the command center's own
-          "+ New" already owns that action for the active tab. The empty state
-          keeps its CTA because there is no register there to act on. */}
-      <div className="overflow-x-auto rounded-xl border border-rule/50">
-        <table className="w-full text-left text-[14px]">
-          <thead className="bg-cream">
-            <tr>
-              <Th>Person</Th>
-              <Th>Cycle</Th>
-              <Th>Due</Th>
-              <Th>Completed</Th>
-              <Th>Status</Th>
-              {canEdit ? <Th right>Actions</Th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            <AnimatePresence initial={false}>
-              {evaluations.map((ev) => (
-                <motion.tr
-                  key={ev.id}
-                  layout={!reduce}
-                  initial={reduce ? false : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={reduce ? undefined : { opacity: 0 }}
-                  className="group border-t border-rule/50"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 font-semibold text-navy">
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
-                        style={{ backgroundColor: HR_HUE }}
-                      >
-                        <UserRound size={14} />
-                      </span>
-                      {ev.personName ?? '—'}
-                    </div>
-                    {ev.personTitle ? (
-                      <p className="mt-1 text-[12px] text-muted">{ev.personTitle}</p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    <div className="text-navy">{ev.cycleLabel ?? '—'}</div>
-                    {ev.evaluatorName ? (
-                      <p className="mt-0.5 text-[12px]">Evaluator: {ev.evaluatorName}</p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-navy">{shortDate(ev.dueDate) ?? '—'}</div>
-                    {/* `isOverdue` / `daysOverdue` are the SERVER's — the client does
-                        no date math and never guesses at one it was not given. */}
-                    {ev.isOverdue ? (
-                      <div className="mt-0.5 text-[11.5px] font-semibold text-danger">
-                        {typeof ev.daysOverdue === 'number' ? `${ev.daysOverdue}d past due` : 'past due'}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {ev.completedDate ? shortDate(ev.completedDate) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Pill def={STATUS_BADGE[ev.status]}>{statusLabel(ev.status)}</Pill>
-                      {ev.isOverdue ? <Pill def={OVERDUE_BADGE} /> : null}
-                    </div>
-                  </td>
-                  {canEdit ? (
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(ev)}
-                          aria-label={`Edit ${ev.cycleLabel ?? 'evaluation'}`}
-                          title="Edit"
-                          className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-gold/60 hover:text-navy"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(ev)}
-                          aria-label={`Delete ${ev.cycleLabel ?? 'evaluation'}`}
-                          title="Delete"
-                          className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-danger/50 hover:text-danger"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  ) : null}
-                </motion.tr>
-              ))}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable
+      caption="Staff evaluations"
+      columns={columns}
+      rows={evaluations}
+      markOf={(ev) => (ev.isOverdue ? 'risk' : ev.status === 'completed' ? 'good' : null)}
+    />
   )
 }

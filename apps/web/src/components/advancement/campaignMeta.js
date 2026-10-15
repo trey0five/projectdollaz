@@ -3,7 +3,7 @@
 // chip palettes and formatters used by the register (AdvancementPage), the
 // campaign detail route (CampaignDetailPage) and the advancement components
 // (CampaignFormModal / CampaignProgress / GiftFormModal / GiftsLedger). Pure
-// data + pure functions — no JSX, no React.
+// data + pure functions — no JSX, no React. Status maps carry a Pill `tone`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const STATUSES = ['planned', 'active', 'closed']
@@ -21,11 +21,11 @@ export const STATUS_LABEL = {
   closed: 'Closed',
 }
 
-// ── Light-theme urgency badge (restyled from the old dark pills) ──────────────
+// ── Urgency → status Pill tone (2px mark + ink text; never a tinted chip) ────
 export const URGENCY_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  'closing-soon': { label: 'Closing soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  'on-track': { label: 'On track', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  overdue: { label: 'Overdue', tone: 'risk' },
+  'closing-soon': { label: 'Closing soon', tone: 'watch' },
+  'on-track': { label: 'On track', tone: 'good' },
   none: null,
 }
 
@@ -33,13 +33,12 @@ export const URGENCY_BADGE = {
 export const GIFT_KINDS = ['gift', 'pledge']
 export const GIFT_KIND_LABEL = { gift: 'Gift', pledge: 'Pledge' }
 
-// LIGHT-palette status chips (the old dark GiftsPanel tones, re-cut for the
-// light page surfaces).
+// Gift status → status Pill tone.
 export const GIFT_STATUS = {
-  received: { label: 'Received', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  partial: { label: 'Partial', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  pledged: { label: 'Pledged', cls: 'border-rule/60 bg-section text-muted' },
-  written_off: { label: 'Written off', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  received: { label: 'Received', tone: 'good' },
+  partial: { label: 'Partial', tone: 'watch' },
+  pledged: { label: 'Pledged', tone: 'neutral' },
+  written_off: { label: 'Written off', tone: 'risk' },
 }
 
 // ── Formatters ───────────────────────────────────────────────────────────────
