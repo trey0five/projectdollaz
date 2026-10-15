@@ -16,16 +16,26 @@
 // with your next change"); the plan renders as a reference line only when a
 // plan EXISTS. Dots carry native tooltips (date · count) — nothing hover-gated
 // beyond detail.
+//
+// PREMIUM UI P4 (a2): a Section on the ground (label rule + the latest reading as
+// its aside), no card; the plan is an ink dashed reference, never gold.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { TrendingUp } from 'lucide-react'
 import { moduleHue } from '../module/moduleAnatomy.js'
+import Section from '../ui/surface/Section.jsx'
 
 const ENROLL_HUE = moduleHue('enrollment')
 const H = 120
 const PAD = { top: 12, right: 14, bottom: 20, left: 40 }
 const W = 640 // viewBox width; the svg stretches
+const AXIS_INK = '#44506E' // --c-ink-2
+const LABEL = (
+  <span className="inline-flex items-center gap-1.5">
+    <TrendingUp size={13} style={{ color: ENROLL_HUE }} aria-hidden /> Headcount over time
+  </span>
+)
 
 function fmtShort(iso) {
   const d = new Date(`${iso}T00:00:00`)
@@ -59,15 +69,12 @@ export default function EnrollmentTrend({ snapshots = [], planTotal = null }) {
     // ONE distinct day is not a trend, and drawing a dot pretending otherwise
     // is how the flat line happened. Say what it is.
     return (
-      <div className="card-soft p-4 sm:p-5">
-        <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
-          <TrendingUp size={13} style={{ color: ENROLL_HUE }} /> Headcount over time
-        </h4>
-        <p className="mt-2 text-[13.5px] text-muted">
-          One snapshot so far — <span className="font-semibold text-navy">{latest.total.toLocaleString('en-US')}</span> on{' '}
+      <Section label={LABEL}>
+        <p className="text-small text-ink2">
+          One snapshot so far — <span className="font-semibold tabular-nums text-ink">{latest.total.toLocaleString('en-US')}</span> on{' '}
           {fmtShort(latest.day)}. The trend starts with your next change.
         </p>
-      </div>
+      </Section>
     )
   }
 
@@ -88,16 +95,15 @@ export default function EnrollmentTrend({ snapshots = [], planTotal = null }) {
   const area = `${line} L${X(t1).toFixed(1)} ${H - PAD.bottom} L${X(t0).toFixed(1)} ${H - PAD.bottom} Z`
 
   return (
-    <div className="card-soft p-4 sm:p-5">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
-          <TrendingUp size={13} style={{ color: ENROLL_HUE }} /> Headcount over time
-        </h4>
-        <span className="text-[12px] text-muted">
-          Latest <span className="font-bold text-navy tabular-nums">{latest.total.toLocaleString('en-US')}</span> ·{' '}
+    <Section
+      label={LABEL}
+      aside={
+        <span>
+          Latest <span className="font-semibold tabular-nums text-ink">{latest.total.toLocaleString('en-US')}</span> ·{' '}
           {fmtShort(latest.day)}
         </span>
-      </div>
+      }
+    >
 
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label={`Headcount from ${fmtShort(series[0].day)} to ${fmtShort(latest.day)}`}>
         <defs>
@@ -107,17 +113,17 @@ export default function EnrollmentTrend({ snapshots = [], planTotal = null }) {
           </linearGradient>
         </defs>
         {/* y guides: min / max labels, quiet */}
-        <text x={PAD.left - 6} y={Y(hi) + 4} textAnchor="end" className="fill-[#8b94a5]" fontSize="10">
+        <text x={PAD.left - 6} y={Y(hi) + 4} textAnchor="end" fill={AXIS_INK} fontSize="10">
           {hi.toLocaleString('en-US')}
         </text>
-        <text x={PAD.left - 6} y={Y(lo) + 4} textAnchor="end" className="fill-[#8b94a5]" fontSize="10">
+        <text x={PAD.left - 6} y={Y(lo) + 4} textAnchor="end" fill={AXIS_INK} fontSize="10">
           {lo.toLocaleString('en-US')}
         </text>
         {/* plan reference — only when a plan exists; labelled, never implied */}
         {planTotal != null ? (
           <g>
-            <line x1={PAD.left} x2={W - PAD.right} y1={Y(planTotal)} y2={Y(planTotal)} stroke="#b89650" strokeWidth="1.5" strokeDasharray="5 4" />
-            <text x={W - PAD.right} y={Y(planTotal) - 4} textAnchor="end" fontSize="10" className="fill-[#8a7433]" fontWeight="700">
+            <line x1={PAD.left} x2={W - PAD.right} y1={Y(planTotal)} y2={Y(planTotal)} stroke={AXIS_INK} strokeWidth="1.25" strokeDasharray="5 4" />
+            <text x={W - PAD.right} y={Y(planTotal) - 4} textAnchor="end" fontSize="10" fill={AXIS_INK} fontWeight="600">
               plan {planTotal.toLocaleString('en-US')}
             </text>
           </g>
@@ -146,16 +152,16 @@ export default function EnrollmentTrend({ snapshots = [], planTotal = null }) {
           </circle>
         ))}
         {/* x labels: first + last date */}
-        <text x={X(t0)} y={H - 6} textAnchor="start" fontSize="10" className="fill-[#8b94a5]">
+        <text x={X(t0)} y={H - 6} textAnchor="start" fontSize="10" fill={AXIS_INK}>
           {fmtShort(series[0].day)}
         </text>
-        <text x={X(t1)} y={H - 6} textAnchor="end" fontSize="10" className="fill-[#8b94a5]">
+        <text x={X(t1)} y={H - 6} textAnchor="end" fontSize="10" fill={AXIS_INK}>
           {fmtShort(latest.day)}
         </text>
       </svg>
-      <p className="mt-1.5 text-[11.5px] text-muted">
+      <p className="sec-note">
         One reading per day, from your enrollment snapshots — the roster writes one each day it changes.
       </p>
-    </div>
+    </Section>
   )
 }

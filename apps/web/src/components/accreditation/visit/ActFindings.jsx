@@ -39,15 +39,22 @@
 // says a visiting team would raise it with the head of school rather than under a
 // standard code. `alsoServes` carries the other codes a finding touches, so a
 // finding appears exactly once and its other standards are still visible.
+//
+// PREMIUM UI P4 (a2): each standard code is a sub-rule (code tag + hairline),
+// its findings are ruled rows on the ground, severity / likelihood / "already
+// being worked" are ledger Pills, and the consequence is a ruled note.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, CircleCheck, Landmark } from 'lucide-react'
 import FindingBasisChain from './FindingBasisChain.jsx'
+import { SEVERITY_LABEL, SEVERITY_TONE } from '../ruleActions.js'
+import { Pill } from '../../ui/surface/index.js'
+import '../../../styles/pending/a2-carry.css'
 
 const SEVERITY_BADGE = {
-  critical: { label: 'Critical', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  warn: { label: 'Warning', cls: 'border-[#F59E0B]/45 bg-amber-50 text-amber-800' },
-  info: { label: 'Informational', cls: 'border-rule/60 bg-section text-muted' },
+  critical: { label: SEVERITY_LABEL.critical, tone: SEVERITY_TONE.critical },
+  warn: { label: SEVERITY_LABEL.warn, tone: SEVERITY_TONE.warn },
+  info: { label: SEVERITY_LABEL.info, tone: SEVERITY_TONE.info },
 }
 
 /**
@@ -58,12 +65,9 @@ const SEVERITY_BADGE = {
 function LikelihoodChip({ likelihood }) {
   if (!likelihood) return null
   return (
-    <span
-      data-testid="likelihood"
-      className="rounded-md border border-navy/20 bg-navy/5 px-1.5 py-0.5 text-[11px] font-semibold capitalize text-navy"
-    >
+    <Pill data-testid="likelihood" className="capitalize">
       {likelihood}
-    </span>
+    </Pill>
   )
 }
 
@@ -73,37 +77,30 @@ function FindingCard({ finding, defaultOpen = true }) {
   const alsoServes = Array.isArray(finding?.alsoServes) ? finding.alsoServes : []
   const basis = Array.isArray(finding?.basis) ? finding.basis : []
   return (
-    <li className="rounded-xl border border-rule/50 bg-white p-3" data-testid="visit-finding">
+    <li data-testid="visit-finding">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${sev.cls}`}>
+        <Pill variant="status" tone={sev.tone}>
           {sev.label}
-        </span>
+        </Pill>
         <LikelihoodChip likelihood={finding?.likelihood} />
         {alsoServes.map((code) => (
-          <span
-            key={code}
-            className="rounded-md border border-rule/60 bg-cream/60 px-1.5 py-0.5 text-[10.5px] font-semibold text-muted"
-            title="This finding also touches this standard"
-          >
+          <span key={code} className="a2-code" title="This finding also touches this standard">
             {code}
           </span>
         ))}
         <span className="flex-1" />
         {/* Phase G back-link: this gap already has an owner and a date. */}
         {finding?.worked ? (
-          <span
-            data-testid="worked"
-            className="inline-flex items-center gap-1 rounded-md border border-emerald-300/70 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700"
-          >
+          <Pill variant="status" tone="good" data-testid="worked">
             <CircleCheck size={11} aria-hidden /> already being worked
-          </span>
+          </Pill>
         ) : null}
       </div>
 
-      <p className="mt-1.5 text-[14px] font-semibold leading-snug text-navy">{finding?.title}</p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{finding?.rationale}</p>
+      <p className="mt-2 text-[15px] font-semibold leading-snug text-ink">{finding?.title}</p>
+      <p className="mt-1 text-small leading-relaxed text-ink2">{finding?.rationale}</p>
       {finding?.consequence ? (
-        <p className="mt-1.5 rounded-lg border border-dashed border-rule/60 bg-cream/50 px-2.5 py-1.5 text-[12.5px] leading-relaxed text-navy">
+        <p className="a2-note mt-2" data-tone={sev.tone}>
           {finding.consequence}
         </p>
       ) : null}
@@ -112,7 +109,7 @@ function FindingCard({ finding, defaultOpen = true }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-navy hover:underline"
+        className="dt-link mt-2.5 text-[12px]"
       >
         {open ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
         {/* The count is the length of an array on screen, not a claim about the
@@ -131,19 +128,17 @@ function FindingCard({ finding, defaultOpen = true }) {
 function Group({ code, findings, note = null, Icon = null }) {
   const list = Array.isArray(findings) ? findings : []
   return (
-    <section className="rounded-2xl border border-rule/60 bg-cream/30 p-3" data-testid="finding-group">
-      <h3 className="flex flex-wrap items-center gap-2">
-        {Icon ? <Icon size={15} className="shrink-0 text-navy/70" aria-hidden /> : null}
-        <span
-          data-testid="group-code"
-          className="rounded-md border border-navy/20 bg-white px-2 py-0.5 font-mono text-[12px] font-semibold text-navy"
-        >
+    <section data-testid="finding-group">
+      <h3 className="sec-head !mb-1">
+        {Icon ? <Icon size={14} className="shrink-0 text-ink2" aria-hidden /> : null}
+        <span data-testid="group-code" className="text-[13px] font-semibold tracking-[0.02em] text-ink">
           {code}
         </span>
+        <span className="sec-rule" aria-hidden="true" />
       </h3>
       {/* The school-level note is the server's frozen sentence, verbatim. */}
-      {note ? <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{note}</p> : null}
-      <ul className="mt-2 space-y-2">
+      {note ? <p className="mb-1 text-small leading-relaxed text-ink2">{note}</p> : null}
+      <ul className="a2-rows a2-rows-open">
         {list.map((f, i) => (
           /* No `defaultOpen` prop: EVERY card opens with its chain. See rule 3. */
           <FindingCard key={f?.findingKey ?? `finding-${i}`} finding={f} />
@@ -159,7 +154,7 @@ export default function ActFindings({ findings = null, schoolLevelNote = '' }) {
 
   if (groups.length === 0 && schoolLevel.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-6 text-center text-[13px] text-muted">
+      <p className="a2-empty">
         No rule fired against your register on this run. Act 5 below names every rule that could
         not be evaluated — a rule we could not run is not a rule that passed.
       </p>
@@ -167,7 +162,7 @@ export default function ActFindings({ findings = null, schoolLevelNote = '' }) {
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-6">
       {groups.map((g, i) => (
         <Group
           key={g?.code ?? g?.key ?? `group-${i}`}

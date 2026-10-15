@@ -28,6 +28,11 @@
 // breaks, a dashed connector spans the gap so the eye is not left to invent one,
 // and the honest marker goes on the GRADE AXIS — never a point in the plot, and
 // never a zero.
+//
+// PREMIUM UI P4 (a2): the net-change chip is the ledger Pill (ink figure, a 2px
+// mark: grew → good, shrank → risk, held/unknown → neutral); the small multiple
+// is a hairline figure at the panel radius (no glow); the enlarged view is the
+// one float dialog with its rungs in a DataTable.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -35,6 +40,9 @@ import { motion } from 'framer-motion'
 import { Maximize2, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { segmentsOf, useMeasuredWidth } from '../academics/cohortKit.js'
 import { useTooltip } from '../analytics/charts/Tooltip.jsx'
+import DataTable from '../ui/surface/DataTable.jsx'
+import Pill from '../ui/surface/Pill.jsx'
+import '../../styles/pending/a2-carry.css'
 import {
   EASE,
   ENROLL_HUE,
@@ -89,14 +97,7 @@ export function pointsOf(cohort) {
  */
 function NetChangeChip({ cohort, moveFloor, reduce, delay = 0, big = false }) {
   const { direction, netChange, startGrade, endGrade } = cohort
-  const tone =
-    direction === 'grew'
-      ? 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30'
-      : direction === 'shrank'
-        ? 'bg-rose-500/12 text-rose-700 ring-rose-500/30'
-        : direction === 'held'
-          ? 'bg-navy/[0.06] text-navy/60 ring-navy/15'
-          : 'bg-navy/[0.04] text-muted ring-navy/10'
+  const tone = direction === 'grew' ? 'good' : direction === 'shrank' ? 'risk' : 'neutral'
   const Icon = direction === 'grew' ? TrendingUp : direction === 'shrank' ? TrendingDown : null
 
   const title =
@@ -107,16 +108,20 @@ function NetChangeChip({ cohort, moveFloor, reduce, delay = 0, big = false }) {
         : `${signedCount(netChange)} students between ${gradeLabelOf(startGrade)} and ${gradeLabelOf(endGrade)}.`
 
   return (
-    <motion.span
+    <Pill
+      variant="status"
+      tone={tone}
+      // A motion span, so the chip settles in once.
+      as={motion.span}
       initial={reduce ? false : { opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: EASE, delay }}
       title={title}
-      className={`inline-flex max-w-full items-center gap-1 overflow-hidden rounded-full font-bold tabular-nums ring-1 ${tone} ${
-        big ? 'gap-1.5 px-2.5 py-1 text-[12.5px]' : 'px-2 py-[3px] text-[10.5px]'
-      }`}
+      className={`max-w-full overflow-hidden tabular-nums ${
+        big ? '!h-6 !px-2.5 !text-[12.5px]' : ''
+      } ${direction === 'unknown' ? 'text-ink2' : ''}`}
     >
-      {Icon ? <Icon size={big ? 13 : 10} strokeWidth={2.6} /> : null}
+      {Icon ? <Icon size={big ? 13 : 10} strokeWidth={2.4} className="shrink-0 text-ink2" aria-hidden /> : null}
       {direction === 'unknown' ? (
         // SHORT in the grid, full sentence when enlarged. The long form ran off
         // a 200px panel and printed across the one beside it; the `title` above
@@ -125,15 +130,15 @@ function NetChangeChip({ cohort, moveFloor, reduce, delay = 0, big = false }) {
       ) : direction === 'held' ? (
         <>
           {signedCount(netChange)}
-          <span className="truncate font-medium opacity-80"> · steady</span>
+          <span className="truncate font-medium text-ink2"> · steady</span>
         </>
       ) : (
         <>
           {signedCount(netChange)}
-          {big ? <span className="font-medium opacity-80"> students</span> : null}
+          {big ? <span className="font-medium text-ink2"> students</span> : null}
         </>
       )}
-    </motion.span>
+    </Pill>
   )
 }
 
@@ -501,17 +506,17 @@ function CohortExpanded({ cohort, points, scale, ticks, moveFloor, minCell, redu
         // re-fit its axis" is a string comparison rather than a squint.
         data-enr-ticks={ticks.join(',')}
         data-enr-scale={`${scale.lo},${scale.hi}`}
-        className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl outline-none"
+        className="a2-dialog relative max-h-[85vh] w-full max-w-3xl overflow-y-auto outline-none"
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
         animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: reduce ? 0.12 : 0.28, ease: EASE }}
       >
-        <div className="flex flex-wrap items-start gap-3 border-b border-navy/10 px-5 py-4">
+        <div className="flex flex-wrap items-start gap-3 border-b border-hair px-5 py-4">
           <div className="min-w-0 flex-1">
-            <h3 id={titleId} className="text-[17px] font-bold leading-tight text-navy">
+            <h3 id={titleId} className="font-serif text-[22px] font-medium leading-7 text-ink">
               {cohort.label}
             </h3>
-            <p className="mt-0.5 text-[12px] text-muted">
+            <p className="mt-0.5 text-[12px] text-ink2">
               {gradeLabelOf(cohort.startGrade)} → {gradeLabelOf(cohort.endGrade)} · {schoolYearLabel(cohort.startYear)}{' '}
               to {schoolYearLabel(cohort.endYear)}
             </p>
@@ -521,9 +526,9 @@ function CohortExpanded({ cohort, points, scale, ticks, moveFloor, minCell, redu
             type="button"
             onClick={onClose}
             aria-label="Close the enlarged cohort"
-            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-navy/[0.06] hover:text-navy"
+            className="a2-icon-btn"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
@@ -546,44 +551,43 @@ function CohortExpanded({ cohort, points, scale, ticks, moveFloor, minCell, redu
         </div>
 
         <div className="px-5 pb-5 pt-2">
-          <table className="w-full border-collapse text-left text-[12.5px]">
-            <caption className="sr-only">
-              Every rung of {cohort.label}, with the headcount recorded that school year
-            </caption>
-            <thead>
-              <tr className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
-                <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 font-bold">Grade</th>
-                <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 font-bold">School year</th>
-                <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">Students</th>
-                <th scope="col" className="border-b border-navy/10 py-1.5 font-bold">Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {points.map((p, i) => (
-                <tr key={`row-${p.schoolYear}-${p.grade}-${i}`} className="align-top">
-                  <td className="border-b border-navy/[0.06] py-1.5 pr-3 font-semibold text-navy">
-                    {gradeLabelOf(p.grade)}
-                  </td>
-                  <td className="border-b border-navy/[0.06] py-1.5 pr-3 tabular-nums text-muted">
-                    {schoolYearLabel(p.schoolYear)}
-                  </td>
-                  {/* A withheld or missing number stays withheld or missing —
-                      never a dash a reader could take for a zero. */}
-                  <td
-                    className={`border-b border-navy/[0.06] py-1.5 pr-3 text-right tabular-nums ${
-                      p.value !== null ? 'font-bold text-navy' : 'text-muted'
-                    }`}
-                  >
+          <DataTable
+            caption={`Every rung of ${cohort.label}, with the headcount recorded that school year`}
+            rows={points}
+            rowKey={(p, i) => `row-${p.schoolYear}-${p.grade}-${i}`}
+            columns={[
+              {
+                key: 'grade',
+                header: 'Grade',
+                render: (p) => <span className="font-semibold text-ink">{gradeLabelOf(p.grade)}</span>,
+              },
+              {
+                key: 'year',
+                header: 'School year',
+                className: 'tabular-nums text-ink2',
+                render: (p) => schoolYearLabel(p.schoolYear),
+              },
+              {
+                key: 'students',
+                header: 'Students',
+                num: true,
+                // A withheld or missing number stays withheld or missing —
+                // never a dash a reader could take for a zero.
+                render: (p) => (
+                  <span className={p.value !== null ? 'font-semibold text-ink' : 'text-ink2'}>
                     {cellToken(p.count)}
-                  </td>
-                  <td className="border-b border-navy/[0.06] py-1.5 text-muted">
-                    {p.value !== null ? '' : cellTitle(p.count, { minCell })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
+                  </span>
+                ),
+              },
+              {
+                key: 'note',
+                header: 'Note',
+                className: 'text-ink2',
+                render: (p) => (p.value !== null ? '' : cellTitle(p.count, { minCell })),
+              },
+            ]}
+          />
+          <p className="sec-note">
             Drawn on the same headcount scale as the grid behind this — {scale.lo} to {scale.hi} students — so the shape
             here is the shape there. This follows the SIZE of a class as it moves up the grades; it does not follow the
             same children, because transfers in and out are invisible to it.
@@ -652,8 +656,7 @@ export default function EnrollmentCohortPanel({
         // no reading keeps its slot — so this counts SLOTS, not drawn dots, and
         // a panel that quietly shortened itself would show up here.
         data-enr-legs={points.length}
-        className="enr-coh-panel group relative isolate min-w-0 cursor-zoom-in overflow-hidden rounded-2xl bg-white transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
-        style={{ boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.07), 0 14px 34px -28px rgba(16,28,61,0.5)' }}
+        className="enr-coh-panel group relative isolate min-w-0 cursor-zoom-in overflow-hidden rounded-[var(--r-panel)] border border-hair bg-white transition-colors duration-200 hover:border-hair/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:ring-offset-2"
       >
         <figcaption className="sr-only">
           {cohort.label}, {gradeLabelOf(cohort.startGrade)} to {gradeLabelOf(cohort.endGrade)}
@@ -670,7 +673,7 @@ export default function EnrollmentCohortPanel({
 
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-1 text-[10px] font-bold text-sky-700 opacity-0 ring-1 ring-navy/10 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+          className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-[var(--r-ctl)] border border-hair bg-white px-1.5 py-1 text-[10px] font-bold text-ink2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
         >
           <Maximize2 size={11} strokeWidth={2.6} />
         </span>

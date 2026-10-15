@@ -177,6 +177,14 @@ export const SEVERITY_TONE = Object.freeze({
   info: 'neutral',
 })
 
+/** severity → the reader's word. One map, so the resolve panel and the mock
+ *  visit's findings never print the same severity two different ways. */
+export const SEVERITY_LABEL = Object.freeze({
+  critical: 'Critical',
+  warn: 'Warning',
+  info: 'Informational',
+})
+
 /** Sort weight: critical leads, then warn, then info. */
 export const SEVERITY_RANK = Object.freeze({ critical: 0, warn: 1, info: 2 })
 

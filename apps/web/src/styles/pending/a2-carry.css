@@ -1,0 +1,463 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENDING — slice a2-carry (Premium UI P4 carry-over: the last dark accreditation
+   surfaces, the Mock Visit acts, the enrollment/academics upload surfaces).
+   Classes these surfaces need that surface.css does not carry yet. Imported by
+   the a2 components that use them; to be consolidated into surface.css (and this
+   file deleted) in the P4-C CSS pass. Screen-only: nothing here targets .ui-v1
+   or @media print.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* A status line ON THE GROUND: a 2px semantic mark on the left, INK text (never
+   coloured text, never a tinted wash). data-tone = good | watch | risk | neutral. */
+.a2-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.125rem 0 0.125rem 0.75rem;
+  border-left: 2px solid rgb(var(--c-ink-2) / 0.5);
+  font-size: 13px;
+  line-height: 19px;
+  color: rgb(var(--c-ink));
+}
+.a2-note[data-tone='good'] { border-left-color: rgb(var(--c-good)); }
+.a2-note[data-tone='watch'] { border-left-color: rgb(var(--c-watch)); }
+.a2-note[data-tone='risk'] { border-left-color: rgb(var(--c-risk)); }
+.a2-note > svg { flex: none; margin-top: 2px; color: rgb(var(--c-ink-2)); }
+
+/* An empty / degraded state as ruled prose (no dashed card). */
+.a2-empty {
+  padding: 1.25rem 0;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  font-size: 13px;
+  line-height: 19px;
+  color: rgb(var(--c-ink-2));
+}
+/* A rule directly above already closes the block — do not double it. */
+.sec-head + .a2-empty,
+.a2-rows-open + .a2-empty {
+  border-top: 0;
+}
+/* The empty state's lead line: UI type, not a second display heading under the
+   section's own Garamond title. */
+.a2-empty-title {
+  margin: 0 0 0.25rem;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+}
+
+/* Ruled rows: content on the ground, a hairline between rows (no per-row card). */
+.a2-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+.a2-rows > li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.a2-rows-tight > li {
+  padding: 0.5rem 0;
+}
+/* A ruled list directly under a label rule (the rule above already closes it). */
+.a2-rows.a2-rows-open {
+  border-top: 0;
+}
+/* A ruled list nested in a ruled row (a finding's basis chain): no rule above,
+   none under its last row — the parent row's own rule closes it. */
+.a2-rows .a2-rows {
+  border-top: 0;
+}
+.a2-rows .a2-rows > li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* SignalPanel's ledger: fixed tracks (not auto table layout) so every figure
+   shares one right edge — Signal | Value | Status | Change | source chevron.
+   The panel also renders in the narrow evidence drawer, so a container query
+   folds status + change under the figure when the panel itself is narrow. */
+.a2-sig {
+  container-type: inline-size;
+}
+.a2-sig-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem 6rem 6.5rem 1.75rem;
+  align-items: center;
+  column-gap: 1rem;
+}
+.a2-sig-head {
+  padding: 0 0 0.375rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.a2-sig-num {
+  text-align: right;
+  justify-self: end;
+  white-space: nowrap;
+}
+.a2-sig-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.a2-sig-src {
+  grid-column: 1 / -1;
+  margin-top: 0.5rem;
+}
+.a2-sig-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-ctl);
+  color: rgb(var(--c-ink-2));
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.a2-sig-toggle:hover { color: rgb(var(--c-ink)); background: rgb(var(--c-ink) / 0.04); }
+.a2-sig-toggle[aria-expanded='true'] { color: rgb(var(--c-ink)); }
+.a2-sig-toggle:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 1px;
+}
+@container (max-width: 520px) {
+  .a2-sig-row {
+    grid-template-columns: minmax(0, 1fr) 6rem 1.75rem;
+    row-gap: 0.375rem;
+  }
+  /* label | value | chevron on the first line; status + change under the value */
+  .a2-sig-row > :nth-child(3) { grid-column: 1 / 2; grid-row: 2; }
+  .a2-sig-row > :nth-child(4) { grid-column: 2 / 4; grid-row: 2; justify-content: flex-end; }
+  .a2-sig-row > :nth-child(5) { grid-column: 3; grid-row: 1; }
+  .a2-sig-head > :nth-child(3),
+  .a2-sig-head > :nth-child(4) { display: none; }
+  /* a row with no value has no status or change: no second line of dashes */
+  .a2-sig-row[data-live='false'] > :nth-child(3),
+  .a2-sig-row[data-live='false'] > :nth-child(4) { display: none; }
+}
+
+/* The ink eyebrow with a 2px module-hue rule under it (upload surfaces). */
+.a2-eyebrow {
+  display: inline-block;
+  margin: 0;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid rgb(var(--c-module, var(--c-navy-soft)));
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.a2-title {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  text-wrap: balance;
+}
+
+/* The dropzone: dashed hairline at the panel radius, ON THE GROUND (no tint).
+   data-over flips the border to primary while a file is dragged over it. */
+.a2-drop {
+  display: flex;
+  border: 1px dashed rgb(var(--hair) / 0.3);
+  border-radius: var(--r-panel);
+  background: transparent;
+  color: rgb(var(--c-ink));
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.a2-drop:hover { border-color: rgb(var(--hair) / 0.45); }
+.a2-drop[data-over='true'] {
+  border-color: #2563eb;
+  background: rgb(37 99 235 / 0.04);
+}
+/* The file input itself is visually hidden (sr-only) but focusable: when it has
+   keyboard focus, the whole dropzone shows the primary ring. */
+.a2-drop:has(input[type='file']:focus-visible) {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.a2-drop > svg { flex: none; color: rgb(var(--c-module, var(--c-ink-2))); }
+
+/* A key/value fact line (preview headers): label caps, ink value, no chip. */
+.a2-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+}
+.a2-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink));
+}
+.a2-fact > b {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.a2-fact > span {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A block separated from the one above by a hairline (inside a Panel / drawer). */
+.a2-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+
+/* A compact plain field (drawer forms): 34px, hairline, primary focus ring. */
+.a2-field {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: 6px;
+  background: #ffffff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 20px;
+  color: rgb(var(--c-ink));
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.a2-field::placeholder { color: rgb(var(--c-ink-2) / 0.6); }
+.a2-field:hover:not(:disabled) { border-color: rgb(var(--hair) / 0.3); }
+.a2-field:focus,
+.a2-field:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
+}
+.a2-field:disabled {
+  background: rgb(var(--c-ground));
+  color: rgb(var(--c-ink-2));
+  cursor: not-allowed;
+}
+.a2-label {
+  display: block;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+
+/* A floating dialog / drawer: the ONE float elevation, hairline, panel radius. */
+.a2-dialog {
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-float);
+  color: rgb(var(--c-ink));
+}
+/* A DataTable inside the white float dialog: its sticky head paints the dialog
+   white, not the page ground (a grey band otherwise). → proposed DataTable
+   `surface` prop. */
+.a2-dialog .dt thead th {
+  background: #ffffff;
+}
+/* The drawer that hosts a standard's evidence under the register. */
+.a2-drawer {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-float);
+  overflow: hidden;
+}
+.a2-drawer::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: rgb(var(--c-module, var(--c-navy-soft)));
+}
+
+/* A square icon button on a hairline (edit / delete / close). */
+.a2-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: 6px;
+  background: #ffffff;
+  color: rgb(var(--c-ink-2));
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.a2-icon-btn:hover { color: rgb(var(--c-ink)); border-color: rgb(var(--hair) / 0.3); }
+.a2-icon-btn[data-tone='risk']:hover { color: rgb(var(--c-risk)); }
+.a2-icon-btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+
+/* A code tag (standard code / rule id): the Pill shape in the body font. */
+.a2-code {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.375rem;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: var(--r-ctl);
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgb(var(--c-ink-2));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A selectable row (framework radio, source picker row): hairline row that
+   darkens on hover and carries a 2px primary mark when selected. */
+.a2-choice {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: var(--r-panel);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.a2-choice:hover:not(:disabled) { border-color: rgb(var(--hair) / 0.3); }
+.a2-choice[aria-checked='true'] {
+  border-color: #2563eb;
+  box-shadow: inset 2px 0 0 #2563eb;
+}
+.a2-choice:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.a2-radio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgb(var(--hair) / 0.3);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #ffffff;
+}
+.a2-choice[aria-checked='true'] .a2-radio {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+/* ── The dark→light remap for the four children the evidence drawer hosts that
+   still speak the navy vocabulary (SuggestionsStrip, StrategyLinkChip,
+   StandardDocuments, ExplainerDrawer — outside this slice). Scoped to the
+   drawer: translates their white-on-navy utilities to ink-on-white so the
+   drawer can be light without editing them. Delete once they are migrated. ── */
+.a2-ink .text-white,
+.a2-ink .text-white\/85,
+.a2-ink .text-white\/80,
+.a2-ink .text-white\/75 { color: rgb(var(--c-ink)); }
+.a2-ink .text-white\/70,
+.a2-ink .text-white\/65,
+.a2-ink .text-white\/60,
+.a2-ink .text-white\/55,
+.a2-ink .text-white\/50,
+.a2-ink .text-white\/45,
+.a2-ink .text-white\/40,
+.a2-ink .text-white\/35 { color: rgb(var(--c-ink-2)); }
+.a2-ink .text-\[\#fde68a\],
+.a2-ink .text-\[\#fbbf24\]\/90,
+.a2-ink .text-\[\#F59E0B\],
+.a2-ink .text-emerald-300,
+.a2-ink .text-red-300 { color: rgb(var(--c-ink)); }
+.a2-ink .bg-navy\/40,
+.a2-ink .bg-navy\/50,
+.a2-ink .bg-navy\/60 { background-color: #ffffff; }
+.a2-ink .bg-white\/5,
+.a2-ink .bg-white\/\[0\.06\],
+.a2-ink .bg-white\/\[0\.04\],
+.a2-ink .bg-\[\#F59E0B\]\/5,
+.a2-ink .bg-\[\#F59E0B\]\/10,
+.a2-ink .bg-\[\#F59E0B\]\/15,
+.a2-ink .bg-\[\#F59E0B\]\/20,
+.a2-ink .bg-\[\#F59E0B\]\/25,
+.a2-ink .bg-emerald-400\/10 { background-color: transparent; }
+.a2-ink .border-white\/10,
+.a2-ink .border-white\/15,
+.a2-ink .border-white\/20,
+.a2-ink .border-white\/25,
+.a2-ink .border-\[\#F59E0B\]\/30,
+.a2-ink .border-\[\#F59E0B\]\/40,
+.a2-ink .border-\[\#F59E0B\]\/50,
+.a2-ink .border-\[\#F59E0B\]\/70,
+.a2-ink .border-\[\#F59E0B\],
+.a2-ink .border-emerald-400\/40 { border-color: rgb(var(--hair) / 0.14); }
+.a2-ink .hover\:text-white:hover,
+.a2-ink .hover\:text-\[\#fde68a\]:hover,
+.a2-ink .hover\:text-\[\#fbbf24\]:hover { color: rgb(var(--c-ink)); }
+.a2-ink .hover\:text-red-300:hover { color: rgb(var(--c-risk)); }
+.a2-ink .hover\:border-\[\#F59E0B\]\/50:hover,
+.a2-ink .hover\:border-\[\#F59E0B\]\/60:hover,
+.a2-ink .hover\:border-white\/40:hover { border-color: rgb(var(--hair) / 0.3); }
+.a2-ink .hover\:bg-\[\#F59E0B\]\/20:hover,
+.a2-ink .hover\:bg-\[\#F59E0B\]\/25:hover { background-color: rgb(var(--c-ink) / 0.04); }
+
+/* State survives the remap. The rules above flatten every amber/emerald fill and
+   border to ink on a hairline, which would erase the four children's state cues;
+   these give each state back as a 2px mark (text stays ink). Attribute selectors,
+   so nothing needs escaping; declared last so they win at equal specificity. */
+/* attached / accepted → a good mark */
+.a2-ink [class~='border-emerald-400/40'] {
+  box-shadow: inset 2px 0 0 rgb(var(--c-good));
+}
+/* missing → a watch mark (the checklist's state word) */
+.a2-ink [class~='border-[#F59E0B]/40'] {
+  box-shadow: inset 2px 0 0 rgb(var(--c-watch));
+}
+/* the checklist's round state icons: a mark ring, not an inset bar */
+.a2-ink [data-testid='check-icon-attached'] {
+  box-shadow: none;
+  border-color: rgb(var(--c-good));
+}
+.a2-ink [data-testid='check-icon-missing'] {
+  box-shadow: none;
+  border-color: rgb(var(--c-watch));
+}
+/* the current rubric step (the selected amber variant) */
+.a2-ink [aria-current='true'] {
+  color: rgb(var(--c-ink));
+  border-color: rgb(var(--c-ink));
+  box-shadow: inset 2px 0 0 rgb(var(--c-module, var(--c-navy-soft)));
+}
+/* a file dragged over the documents dropzone — the .a2-drop[data-over] look */
+.a2-ink [class~='border-[#F59E0B]/70'] {
+  border-color: #2563eb;
+  background: rgb(37 99 235 / 0.04);
+}
+/* error lines: ink text on a 2px risk mark */
+.a2-ink [class~='text-red-300'] {
+  border-left: 2px solid rgb(var(--c-risk));
+  padding-left: 0.5rem;
+}

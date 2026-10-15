@@ -19,7 +19,9 @@
 //
 // The underline wears the MODULE hue rather than gold: this strip renders inside
 // <ModuleAccent moduleKey="enrollment">, where a gold rule would be the only
-// thing on the page that had not been re-hued.
+// thing on the page that had not been re-hued. Premium UI P4 (a2): the strip is
+// the shared `.tabs-ink` vocabulary (ink label + caps caption on the ground, a
+// 2px hue rule under the active door) — no card-tabs, no white tab fill.
 //
 // ── URL MODEL ───────────────────────────────────────────────────────────────
 // The view is `?view=` beside the page's existing `?tab=` — the same sub-view
@@ -31,7 +33,6 @@
 import { useCallback, useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { ENROLL_HUE } from './enrollmentAnalyticsKit.jsx'
 
 /** The doors, in reading order: the whole school, then its parts, then its people. */
 export const ENROLLMENT_VIEWS = [
@@ -123,11 +124,7 @@ export default function EnrollmentAnalyticsTabs({ view, onView }) {
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label="Enrollment analysis"
-      className="flex flex-wrap items-end gap-1 border-b border-rule/60"
-    >
+    <div role="tablist" aria-label="Enrollment analysis" className="tabs-ink flex-wrap">
       {ENROLLMENT_VIEWS.map((v, i) => {
         const active = v.key === view
         return (
@@ -144,25 +141,15 @@ export default function EnrollmentAnalyticsTabs({ view, onView }) {
             tabIndex={active ? 0 : -1}
             onClick={() => onView(v.key)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`relative flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg border-x border-t px-4 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sky-500/50 ${
-              active ? 'bg-white' : 'border-transparent hover:bg-cream/60'
-            }`}
-            style={active ? { borderColor: `${ENROLL_HUE}55` } : undefined}
+            className="tab-ink shrink-0"
           >
-            <span className={`text-[14px] font-semibold ${active ? 'text-navy' : 'text-muted'}`}>{v.label}</span>
-            <span className="text-[10.5px] uppercase tracking-wide text-muted/80">{v.caption}</span>
+            <span>{v.label}</span>
+            <span className="tab-ink-cap">{v.caption}</span>
             {active &&
               (reduce ? (
-                <span
-                  className="absolute inset-x-3 -bottom-px h-[3px] rounded-full"
-                  style={{ background: ENROLL_HUE }}
-                />
+                <span className="tab-ink-rule" aria-hidden="true" />
               ) : (
-                <motion.span
-                  layoutId="enr-analytics-underline"
-                  className="absolute inset-x-3 -bottom-px h-[3px] rounded-full"
-                  style={{ background: ENROLL_HUE }}
-                />
+                <motion.span layoutId="enr-analytics-underline" className="tab-ink-rule" aria-hidden="true" />
               ))}
           </button>
         )

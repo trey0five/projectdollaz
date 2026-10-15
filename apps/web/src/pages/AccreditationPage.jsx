@@ -13,8 +13,9 @@
 //
 // The expand-to-evidence interaction is PRESERVED: each standard row expands to
 // the lazy EvidencePanel (list evidence + "Add evidence" form + "Attach from
-// operations" SourcePicker). The evidence panel, source picker, and the standard
-// create/edit form modal remain dark navy/gold overlays over the light page.
+// operations" SourcePicker). Premium UI P4 (a2): the evidence drawer and the
+// source picker are light float Panels now (hairline, one radius, --sh-float);
+// the standard create/edit form rides the shared EntityFormModal.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -46,6 +47,7 @@ import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../co
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { Panel, Button, Pill } from '../components/ui/surface/index.js'
 import useDtOverflow from '../components/ui/surface/useDtOverflow.js'
+import '../styles/pending/a2-carry.css'
 import DomainResolvePanel from '../components/accreditation/DomainResolvePanel.jsx'
 import StandardImprovePanel from '../components/accreditation/StandardImprovePanel.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -477,28 +479,21 @@ const attachKey = (src) => `${src.sourceType}:${src.sourceRef ?? ''}`
  *  rendering rubric pips on them would be a dead control — instead we mirror the
  *  hero assurances strip's satisfied/unmet gate state. `satisfied` mirrors
  *  computeAssurances: any attached evidence satisfies the gate. */
-function AssuranceGateChip({ satisfied, dark = false }) {
+function AssuranceGateChip({ satisfied }) {
   const Icon = satisfied ? Check : ShieldAlert
   return (
-    <span
+    <Pill
+      variant="status"
+      tone={satisfied ? 'good' : 'watch'}
       title={
         satisfied
           ? 'Assurance satisfied — evidence attached'
           : 'Assurance gate — attach evidence to satisfy it'
       }
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold ${
-        satisfied
-          ? dark
-            ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
-            : 'border-emerald-600/30 bg-emerald-50 text-emerald-700'
-          : dark
-            ? 'border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#fde68a]'
-            : 'border-[#F59E0B]/40 bg-amber-50 text-amber-700'
-      }`}
     >
-      <Icon size={12} aria-hidden />
+      <Icon size={11} aria-hidden />
       {satisfied ? 'Assurance met' : 'Assurance unmet'}
-    </span>
+    </Pill>
   )
 }
 
@@ -512,16 +507,16 @@ function AssuranceGateChip({ satisfied, dark = false }) {
  */
 function PortalAssertionField({ checked, onChange }) {
   return (
-    <label className="col-span-2 flex items-start gap-2 text-[12.5px] leading-snug text-white/70">
+    <label className="col-span-2 flex items-start gap-2 text-[13px] leading-snug text-ink">
       <input
         type="checkbox"
         checked={!!checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-[#F59E0B]"
+        className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-[#2563eb]"
       />
       <span>
         This also lives in our accreditor&apos;s portal
-        <span className="ml-1 text-white/40">
+        <span className="ml-1 text-ink2">
           — leave it unchecked if you haven&apos;t checked; we&apos;ll print &ldquo;—&rdquo;, never
           &ldquo;No&rdquo;.
         </span>
@@ -530,8 +525,10 @@ function PortalAssertionField({ checked, onChange }) {
   )
 }
 
-/** The lazy-loaded evidence sub-list for one expanded standard row (dark overlay
- *  panel — deliberately kept dark against the light table). Phase 3 adds the
+/** The lazy-loaded evidence sub-list for one expanded standard row. Premium UI P4
+ *  (a2): light — the drawer that hosts it is a float Panel, evidence rows are
+ *  ruled rows on white, fields are plain, actions are flat Buttons; `.a2-ink`
+ *  translates the four still-navy children it hosts (see a2-carry.css). Phase 3 adds the
  *  rubric pips + strategy link header, the deterministic suggestions strip, and
  *  the document upload/list section (all additive — the evidence list, add form,
  *  and source picker are unchanged). */
@@ -788,18 +785,17 @@ export function EvidencePanel({
     : null
 
   return (
-    <div className="border-t border-white/10 bg-navy/40 px-6 py-4">
+    <div className="a2-ink px-5 py-4 sm:px-6">
       {/* ── Phase 3 header strip: rubric self-score + strategy link ─────────── */}
       {standard && (standard.isLeaf !== false || linkStrategy) ? (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           {standard.isLeaf !== false ? (
             standard.isAssurance ? (
               // Assurance leaves are binary evidence gates — no rubric pips.
-              <AssuranceGateChip dark satisfied={(standard.evidenceCount ?? 0) > 0} />
+              <AssuranceGateChip satisfied={(standard.evidenceCount ?? 0) > 0} />
             ) : (
               <>
                 <RubricPicker
-                  dark
                   showLabel
                   value={standard.rubricScore ?? null}
                   labels={rubricLabels}
@@ -815,7 +811,7 @@ export function EvidencePanel({
                     keeps the score and drops the name; the chip degrades to the
                     date. Older scores predate the stamp → no chip, no guess.) */}
                 {standard.rubricScore != null && standard.rubricScoredAt ? (
-                  <span className="inline-flex items-center rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/60">
+                  <Pill>
                     {standard.scoreProvenance === 'peer_reviewed'
                       ? 'Peer-reviewed'
                       : standard.scoreProvenance === 'externally_validated'
@@ -823,7 +819,7 @@ export function EvidencePanel({
                         : 'Self-scored'}
                     {standard.rubricScoredBy ? ` · ${standard.rubricScoredBy}` : ''}
                     {` · ${standard.rubricScoredAt}`}
-                  </span>
+                  </Pill>
                 ) : null}
               </>
             )
@@ -844,28 +840,28 @@ export function EvidencePanel({
       {signalPanel}
 
       {loading || items === null ? (
-        <p className="text-[13px] text-white/50">Loading evidence…</p>
+        <p className="text-small text-ink2">Loading evidence…</p>
       ) : items.length === 0 ? (
-        <p className="text-[13px] text-white/55">No evidence attached yet.</p>
+        <p className="border-y border-hair py-3 text-small text-ink2">No evidence attached yet.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="a2-rows a2-rows-tight">
           {items.map((ev) => {
             const Icon = KIND_ICON[ev.kind] ?? FileText
             if (canEdit && editingId === ev.id) {
               return (
-                <li key={ev.id} className="rounded-lg border border-gold/30 bg-navy/60 px-3 py-2">
+                <li key={ev.id}>
                   <form onSubmit={submitEdit} className="grid grid-cols-2 gap-2">
                     <input
                       value={editForm.title}
                       onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                       maxLength={200}
                       placeholder="Evidence title"
-                      className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                      className="a2-field col-span-2"
                     />
                     <select
                       value={editForm.kind}
                       onChange={(e) => setEditForm((f) => ({ ...f, kind: e.target.value }))}
-                      className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                      className="a2-field"
                     >
                       {EVIDENCE_KINDS.map((k) => (
                         <option key={k} value={k}>
@@ -876,14 +872,14 @@ export function EvidencePanel({
                     <DatePicker
                       value={editForm.capturedAt}
                       onChange={(v) => setEditForm((f) => ({ ...f, capturedAt: v }))}
-                      className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                      className="a2-field"
                     />
                     <input
                       value={editForm.reference}
                       onChange={(e) => setEditForm((f) => ({ ...f, reference: e.target.value }))}
                       maxLength={2000}
                       placeholder="Reference (URL / doc path / citation)"
-                      className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                      className="a2-field col-span-2"
                     />
                     {/* Phase C — editable afterward, and clearable back to blank. */}
                     <EvidenceDateField
@@ -897,19 +893,12 @@ export function EvidencePanel({
                       onChange={(v) => setEditForm((f) => ({ ...f, alsoInPortal: v }))}
                     />
                     <div className="col-span-2 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(null)}
-                        className="rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-                      >
+                      <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>
                         Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="rounded-lg border-2 border-gold/60 bg-gold/15 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/25"
-                      >
+                      </Button>
+                      <Button size="sm" variant="primary" type="submit">
                         Save
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 </li>
@@ -918,15 +907,15 @@ export function EvidencePanel({
             return (
               <li
                 key={ev.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2"
+                className="flex items-center justify-between gap-3"
               >
                 <div className="flex min-w-0 items-center gap-2">
-                  <Icon size={15} className="shrink-0 text-gold-light" />
-                  <span className="truncate text-[13px] text-white/85">{ev.title}</span>
+                  <Icon size={15} className="shrink-0 text-ink2" aria-hidden />
+                  <span className="truncate text-small font-semibold text-ink">{ev.title}</span>
                   {ev.sourceType && ev.sourceType !== 'manual' && ev.sourceLink ? (
                     <Link
                       to={ev.sourceLink}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold text-gold-light hover:bg-gold/20"
+                      className="pill shrink-0 hover:border-hair/30"
                       title={`Attached from ${ev.sourceLabel}`}
                     >
                       from {ev.sourceLabel}
@@ -937,23 +926,20 @@ export function EvidencePanel({
                       href={ev.reference}
                       target="_blank"
                       rel="noreferrer"
-                      className="truncate text-[12px] text-gold-light underline"
+                      className="dt-link truncate text-[12px] underline underline-offset-2"
                     >
                       link
                     </a>
                   ) : ev.reference ? (
-                    <span className="truncate text-[12px] text-white/45">{ev.reference}</span>
+                    <span className="truncate text-[12px] text-ink2">{ev.reference}</span>
                   ) : null}
                   {/* Phase C: the period this artifact covers, when the school told
                       us. Absent → nothing is shown; we never print an upload date
                       here to fill the space. */}
                   {ev.effectiveDate ? (
-                    <span
-                      title="Which period this covers"
-                      className="shrink-0 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-white/60"
-                    >
+                    <Pill title="Which period this covers" className="shrink-0">
                       covers {formatShortDate(String(ev.effectiveDate).slice(0, 10))}
-                    </span>
+                    </Pill>
                   ) : null}
                 </div>
                 {canEdit ? (
@@ -962,7 +948,7 @@ export function EvidencePanel({
                       type="button"
                       onClick={() => startEdit(ev)}
                       aria-label={`Edit evidence ${ev.title}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
+                      className="a2-icon-btn"
                     >
                       <Pencil size={14} />
                     </button>
@@ -970,7 +956,8 @@ export function EvidencePanel({
                       type="button"
                       onClick={() => onDelete(ev)}
                       aria-label={`Delete evidence ${ev.title}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
+                      data-tone="risk"
+                      className="a2-icon-btn"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -990,12 +977,12 @@ export function EvidencePanel({
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               maxLength={200}
               placeholder="Evidence title"
-              className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+              className="a2-field col-span-2"
             />
             <select
               value={form.kind}
               onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
-              className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+              className="a2-field"
             >
               {EVIDENCE_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -1006,14 +993,14 @@ export function EvidencePanel({
             <DatePicker
               value={form.capturedAt}
               onChange={(v) => setForm((f) => ({ ...f, capturedAt: v }))}
-              className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+              className="a2-field"
             />
             <input
               value={form.reference}
               onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
               maxLength={2000}
               placeholder="Reference (URL / doc path / citation)"
-              className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+              className="a2-field col-span-2"
             />
             {/* Phase C — THE ONE FIELD, asked at attach time. Optional by design:
                 blank is an explicitly safe answer that reads "date unknown", and a
@@ -1028,39 +1015,28 @@ export function EvidencePanel({
               checked={form.alsoInPortal}
               onChange={(v) => setForm((f) => ({ ...f, alsoInPortal: v }))}
             />
-            {err ? <p className="col-span-2 text-[12px] text-red-300">{err}</p> : null}
+            {err ? (
+              <p className="a2-note col-span-2" data-tone="risk">
+                {err}
+              </p>
+            ) : null}
             <div className="col-span-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAdding(false)}
-                className="rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-              >
+              <Button size="sm" variant="secondary" onClick={() => setAdding(false)}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg border-2 border-gold/60 bg-gold/15 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/25"
-              >
+              </Button>
+              <Button size="sm" variant="primary" type="submit">
                 Add evidence
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-gold/60 hover:text-gold-light"
-            >
-              <Plus size={14} /> Add evidence
-            </button>
-            <button
-              type="button"
-              onClick={openPicker}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/20"
-            >
-              <Landmark size={14} /> Attach from operations
-            </button>
+            <Button size="sm" variant="secondary" onClick={() => setAdding(true)} icon={<Plus size={14} />}>
+              Add evidence
+            </Button>
+            <Button size="sm" variant="secondary" onClick={openPicker} icon={<Landmark size={14} />}>
+              Attach from operations
+            </Button>
           </div>
         )
       ) : null}
@@ -1079,7 +1055,7 @@ export function EvidencePanel({
 
       {/* ── Phase 3: file evidence via the CORE knowledge store ──────────────── */}
       {schoolId ? (
-        <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="a2-block">
           <StandardDocuments
             schoolId={schoolId}
             standardId={standardId}
@@ -1115,6 +1091,23 @@ export function EvidencePanel({
  *  attach contract; the existing policies/boardReports rows pass through as-is. */
 function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
   const loading = sources === undefined
+  // A modal dialog owns focus: it takes it on open (the Close button), Escape
+  // closes it, and focus goes back to the trigger when it unmounts.
+  const closeBtnRef = useRef(null)
+  useEffect(() => {
+    const opener = typeof document !== 'undefined' ? document.activeElement : null
+    closeBtnRef.current?.focus()
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+    }
+  }, [])
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   const groups = [
     { key: 'policies', label: 'Governance policies', empty: 'No policies yet' },
     { key: 'boardReports', label: 'Board reports', empty: 'No board reports yet' },
@@ -1150,33 +1143,38 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
       ]
     : []
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Attach from operations"
         initial={reduce ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
+        className="a2-dialog max-h-[80vh] w-full max-w-lg overflow-y-auto"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
+        <div className="flex items-center justify-between gap-3 border-b border-hair px-5 py-4">
+          <h2 className="font-serif text-[22px] font-medium leading-7 text-ink">
             Attach from operations
           </h2>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+            className="a2-icon-btn"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
-        <p className="mb-4 text-[13px] text-white/60">
+        <div className="px-5 pb-5 pt-4">
+        <p className="mb-4 text-small text-ink2">
           Link an existing policy or board report as evidence for this standard — one click, a
           live deep link.
         </p>
         {loading ? (
-          <p className="text-[13px] text-white/50">Loading your artifacts…</p>
+          <p className="text-small text-ink2">Loading your artifacts…</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {groups.map((g) => {
               // Normalize {id,…} rows from the new sibling groups to the
               // {sourceType,sourceRef} attach contract; legacy rows pass through.
@@ -1190,35 +1188,33 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
               if (list.length === 0 && g.sourceType) return null
               return (
                 <div key={g.key}>
-                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                  <h3 className="sec-label mb-1.5">
                     {g.label}
                   </h3>
                   {list.length === 0 ? (
-                    <p className="text-[13px] text-white/40">{g.empty}</p>
+                    <p className="border-y border-hair py-2 text-small text-ink2">{g.empty}</p>
                   ) : (
-                    <ul className="space-y-1.5">
+                    <ul className="a2-rows">
                       {list.map((src) => (
                         <li key={attachKey(src)}>
                           <button
                             type="button"
                             disabled={attaching !== null}
                             onClick={() => onAttach(src)}
-                            className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2 text-left hover:border-gold/50 hover:bg-navy/70 disabled:opacity-50"
+                            className="group flex w-full items-center justify-between gap-3 rounded-[var(--r-ctl)] px-1 py-1 text-left transition hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563eb]/50 disabled:opacity-50"
                           >
                             <span className="min-w-0">
-                              <span className="block truncate text-[13px] text-white/85">
+                              <span className="block truncate text-small font-semibold text-ink">
                                 {src.label}
                                 {src.fiveYear ? (
-                                  <span className="ml-1.5 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-gold-light">
-                                    5-year
-                                  </span>
+                                  <span className="pill ml-1.5">5-year</span>
                                 ) : null}
                               </span>
                               {src.date ? (
-                                <span className="block text-[11px] text-white/45">{src.date}</span>
+                                <span className="block text-[12px] text-ink2">{src.date}</span>
                               ) : null}
                             </span>
-                            <span className="shrink-0 text-[12px] font-semibold text-gold-light">
+                            <span className="btn btn-secondary btn-sm shrink-0 group-hover:border-hair/30">
                               {attaching === attachKey(src) ? 'Attaching…' : 'Attach'}
                             </span>
                           </button>
@@ -1233,24 +1229,24 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
             {/* The live governance report — one click, no sourceRef (virtual). */}
             {governanceRows.length ? (
               <div>
-                <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                <h3 className="sec-label mb-1.5">
                   Governance report
                 </h3>
-                <ul className="space-y-1.5">
+                <ul className="a2-rows">
                   {governanceRows.map((src) => (
                     <li key={attachKey(src)}>
                       <button
                         type="button"
                         disabled={attaching !== null}
                         onClick={() => onAttach(src)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2 text-left hover:border-gold/50 hover:bg-navy/70 disabled:opacity-50"
+                        className="group flex w-full items-center justify-between gap-3 rounded-[var(--r-ctl)] px-1 py-1 text-left transition hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563eb]/50 disabled:opacity-50"
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] text-white/85">
+                          <span className="block truncate text-small font-semibold text-ink">
                             {src.label}
                           </span>
                         </span>
-                        <span className="shrink-0 text-[12px] font-semibold text-gold-light">
+                        <span className="btn btn-secondary btn-sm shrink-0 group-hover:border-hair/30">
                           {attaching === attachKey(src) ? 'Attaching…' : 'Attach'}
                         </span>
                       </button>
@@ -1261,7 +1257,12 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
             ) : null}
           </div>
         )}
-        {err ? <p className="mt-4 text-[13px] text-red-300">{err}</p> : null}
+        {err ? (
+          <p className="a2-note mt-4" data-tone="risk">
+            {err}
+          </p>
+        ) : null}
+        </div>
       </motion.div>
     </div>
   )
@@ -2951,10 +2952,9 @@ function AccreditationWorkspace() {
         loading={twin.loading}
       />
 
-      {/* The Phase-B panel, hoisted to the whole-school view. It is a dark surface
-          by design (it also lives inside the navy standard drawer), so it is given
-          a navy card here rather than being restyled into a second variant. */}
-      <div className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy-gradient p-3 shadow-navy-glow">
+      {/* The Phase-B panel, hoisted to the whole-school view — the same light
+          ledger block the standard drawer renders, on the ground (no card). */}
+      <div>
         <SignalPanel
           rows={signals.signals}
           boundKeys={signals.signals.map((s) => s.key)}
@@ -3164,7 +3164,9 @@ function AccreditationWorkspace() {
         // in this product, hosted wherever the instruction to attach appears.
         evidenceSlot={
           improveStandard ? (
-            <div className="overflow-hidden rounded-xl border-2 border-gold/20 bg-navy-gradient px-4 py-1">
+            // A ruled section of the drawer, flush with the step's own text:
+            // the panel's register-row inset is dropped here.
+            <div className="a2-block [&>.a2-ink]:!px-0 [&>.a2-ink]:!pt-0">
               <EvidencePanel
                 key={improveStandard.id}
                 standardId={improveStandard.id}
@@ -3207,27 +3209,21 @@ function AccreditationWorkspace() {
             layout={!reduce}
             initial={reduce ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy-gradient shadow-navy-glow"
+            className="a2-drawer"
           >
-            <div className="flex items-center justify-between gap-3 px-6 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] font-semibold text-white/70">
-                  {expandedStandard.code}
-                </span>
-                <span className="truncate text-[14px] font-semibold text-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hair px-5 py-3 sm:px-6">
+              <div className="flex min-w-0 flex-1 basis-[20rem] items-start gap-2">
+                <span className="a2-code mt-px shrink-0">{expandedStandard.code}</span>
+                <span className="min-w-0 text-[15px] font-semibold leading-snug text-ink">
                   {expandedStandard.title}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 {/* F3 — the two-tab FLIP: Evidence | What this means. The
                     explainer exists only for catalog-linked standards (there is
                     no authored layer behind a hand-made row). */}
                 {expandedStandard.catalogStandardId ? (
-                  <div
-                    role="tablist"
-                    aria-label="Evidence or explanation"
-                    className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 p-0.5"
-                  >
+                  <div role="tablist" aria-label="Evidence or explanation" className="seg">
                     {[
                       { key: 'evidence', label: 'Evidence', Icon: FileText },
                       { key: 'explain', label: 'What this means', Icon: BookOpen },
@@ -3241,11 +3237,7 @@ function AccreditationWorkspace() {
                           aria-selected={on}
                           data-testid={`expanded-flip-${key}`}
                           onClick={() => setExpandedView(key)}
-                          className={
-                            on
-                              ? 'inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/25 px-3 py-1 text-[12px] font-semibold text-[#fde68a]'
-                              : 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold text-white/55 transition hover:text-white'
-                          }
+                          className="seg-btn"
                         >
                           <TabIcon size={12} aria-hidden /> {label}
                         </button>
@@ -3257,14 +3249,14 @@ function AccreditationWorkspace() {
                   type="button"
                   onClick={() => setExpanded(null)}
                   aria-label="Close evidence panel"
-                  className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+                  className="a2-icon-btn"
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
             {expandedView === 'explain' && expandedStandard.catalogStandardId ? (
-              <div className="border-t border-white/10 bg-navy/40 px-6 py-4">
+              <div className="a2-ink px-5 py-4 sm:px-6">
                 <ExplainerDrawer
                   key={expandedStandard.id}
                   standardId={expandedStandard.id}

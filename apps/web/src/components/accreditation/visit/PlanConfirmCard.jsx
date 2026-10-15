@@ -40,13 +40,20 @@
 // role, not a job title, so the suggested owner is shown as a hint and the picker
 // still opens Unassigned. An empty roster (a viewer 403s on the members endpoint)
 // simply omits the picker rather than rendering a dead control.
+//
+// PREMIUM UI P4 (a2): the card is a Panel — the one raised surface, because it
+// is the one place on the visit page that writes. Rows are ruled, the per-row
+// outcome is a ledger Pill with a semantic mark, fields are plain, actions flat.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useMemo, useState } from 'react'
 import { AlertTriangle, Check, CircleCheck, Loader2, X } from 'lucide-react'
 import DatePicker from '../../ui/DatePicker.jsx'
+import { Select, fieldInput } from '../../ui/EntityFormModal.jsx'
 import { OWNER_ROLE_LABELS } from '../../improvement/improvementMeta.js'
 import { planItemId } from './ActPlan.jsx'
 import { memberLabel } from '../../../lib/memberLabels.js'
+import { Button, Panel, Pill } from '../../ui/surface/index.js'
+import '../../../styles/pending/a2-carry.css'
 
 /** The three per-row outcomes. Frozen: 200 and 201 never share a word. */
 export const ROW_COPY = Object.freeze({
@@ -63,25 +70,17 @@ function RowStatus({ state }) {
   if (!state) return null
   if (state === 'running') {
     return (
-      <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-muted">
+      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink2">
         <Loader2 size={12} className="motion-safe:animate-spin" aria-hidden /> Working…
       </span>
     )
   }
-  const tone =
-    state === 'created'
-      ? 'border-emerald-300/70 bg-emerald-50 text-emerald-700'
-      : state === 'existing'
-        ? 'border-navy/20 bg-navy/5 text-navy'
-        : 'border-danger/30 bg-danger/10 text-danger'
+  const tone = state === 'created' ? 'good' : state === 'existing' ? 'neutral' : 'risk'
   const Icon = state === 'failed' ? AlertTriangle : state === 'created' ? Check : CircleCheck
   return (
-    <span
-      data-testid={`row-${state}`}
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11.5px] font-semibold ${tone}`}
-    >
+    <Pill variant="status" tone={tone} data-testid={`row-${state}`}>
       <Icon size={11} aria-hidden /> {ROW_COPY[state]}
-    </span>
+    </Pill>
   )
 }
 
@@ -161,51 +160,43 @@ export default function PlanConfirmCard({
   if (rows.length === 0) return null
 
   return (
-    <div
-      className="rounded-2xl border-2 border-navy/20 bg-white p-4 shadow-sm"
-      data-testid="plan-confirm"
-    >
+    <Panel data-testid="plan-confirm">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-serif text-[17px] font-semibold text-navy">
+        <h3 className="font-serif text-[22px] font-medium leading-7 text-ink">
           {/* The count, and nothing else. */}
           {rows.length === 1
             ? 'This will create 1 initiative'
             : `This will create ${rows.length} initiatives`}
         </h3>
         <span className="flex-1" />
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center gap-1 rounded-full border border-rule/70 bg-white px-3 py-1 text-[12.5px] font-semibold text-navy transition hover:border-navy/40"
-        >
-          <X size={12} aria-hidden /> Cancel
-        </button>
+        <Button variant="quiet" size="sm" onClick={onCancel} icon={<X size={12} />}>
+          Cancel
+        </Button>
       </div>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{RERUN_SAFE_NOTE}</p>
+      <p className="mt-1 text-small leading-relaxed text-ink2">{RERUN_SAFE_NOTE}</p>
 
-      <ul className="mt-3 space-y-2">
+      <ul className="a2-rows mt-4">
         {rows.map((item) => {
           const id = planItemId(item)
           return (
-            <li key={id} className="rounded-xl border border-rule/50 bg-cream/30 p-3" data-testid="confirm-row">
+            <li key={id} data-testid="confirm-row">
               <div className="flex flex-wrap items-start gap-2">
                 <div className="min-w-0 flex-1">
                   {/* The server's sentences. Verbatim, both of them. */}
-                  <p className="text-[13.5px] font-semibold leading-snug text-navy">{item?.title}</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{item?.rationale}</p>
+                  <p className="text-[14px] font-semibold leading-snug text-ink">{item?.title}</p>
+                  <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink2">{item?.rationale}</p>
                 </div>
                 <RowStatus state={states[id]} />
               </div>
 
-              <div className="mt-2 flex flex-wrap items-end gap-2.5">
+              <div className="mt-2.5 flex flex-wrap items-end gap-3">
                 {members.length > 0 ? (
-                  <label className="flex flex-col gap-1 text-[11.5px] font-semibold text-muted">
-                    Owner
-                    <select
+                  <label className="flex w-56 max-w-full flex-col">
+                    <span className="a2-label">Owner</span>
+                    <Select
                       value={owners[id] ?? ''}
                       onChange={(e) => setOwner(id, e.target.value)}
                       disabled={running || ran}
-                      className="rounded-lg border border-rule/70 bg-white px-2 py-1 text-[12.5px] font-normal text-navy"
                     >
                       <option value="">Unassigned</option>
                       {members.map((m) => (
@@ -213,20 +204,21 @@ export default function PlanConfirmCard({
                           {memberLabel(m)}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                 ) : null}
-                <label className="flex flex-col gap-1 text-[11.5px] font-semibold text-muted">
-                  Due date
+                <label className="flex w-48 max-w-full flex-col">
+                  <span className="a2-label">Due date</span>
                   <DatePicker
                     value={dueDates[id] ?? ''}
                     onChange={(v) => setDue(id, v)}
                     disabled={running || ran}
                     aria-label={`Due date for ${item?.title ?? 'this item'}`}
+                    className={fieldInput}
                   />
                 </label>
                 {item?.suggestedOwnerRole ? (
-                  <span className="pb-1 text-[11.5px] text-muted">
+                  <span className="pb-2.5 text-[12px] text-ink2">
                     Suggested:{' '}
                     {OWNER_ROLE_LABELS[item.suggestedOwnerRole] ?? item.suggestedOwnerRole}
                   </span>
@@ -237,18 +229,17 @@ export default function PlanConfirmCard({
         })}
       </ul>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
           onClick={run}
           disabled={running}
-          className="inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[13.5px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+          icon={running ? <Loader2 size={14} className="motion-safe:animate-spin" /> : null}
         >
-          {running ? <Loader2 size={14} className="motion-safe:animate-spin" aria-hidden /> : null}
           {ran ? 'Run again' : 'Create these initiatives'}
-        </button>
+        </Button>
         {tally ? (
-          <p className="text-[12.5px] font-semibold text-navy" data-testid="run-tally">
+          <p className="text-small font-semibold tabular-nums text-ink" data-testid="run-tally">
             {/* Counts only. "created" is spoken ONLY of rows that were created. */}
             {[
               tally.created > 0 ? `${tally.created} created` : null,
@@ -260,6 +251,6 @@ export default function PlanConfirmCard({
           </p>
         ) : null}
       </div>
-    </div>
+    </Panel>
   )
 }

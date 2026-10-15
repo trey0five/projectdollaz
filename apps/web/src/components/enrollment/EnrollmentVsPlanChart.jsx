@@ -22,11 +22,19 @@
 // red grade — it is a grade with a red gap. Painting the whole column red would
 // mark the children in it as a problem.
 //
+// PREMIUM UI P4 (a2): the gap is a ledger Pill — ink figure, a 2px semantic mark
+// (the school row on the registry's enrollment_vs_plan bands; elsewhere under
+// plan → watch, over → good, on plan → neutral) — and the in-chart cap is
+// ink on the chart's neutral band. No red/green tinted text, no amber wash.
+//
 // Columns are zero-based by construction (ColumnChart keeps a zero baseline
 // for counts), so no grade's shortfall can be exaggerated by a truncated axis.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
+import { bandsFor, healthStatus } from '@finrep/analytics'
 import ColumnChart from '../analytics/charts/ColumnChart.jsx'
+import Pill from '../ui/surface/Pill.jsx'
+import '../../styles/pending/a2-carry.css'
 import {
   CELL_MASKED,
   CardEmpty,
@@ -42,22 +50,26 @@ import {
   signedShare,
 } from './enrollmentAnalyticsKit.jsx'
 
-function GapReadout({ gap, gapPct }) {
+/**
+ * The gap as a ledger Pill. `tone` — when the caller can judge the gap against
+ * the registry bands (the whole-school row: `enrollment_vs_plan`) — wins, so this
+ * row's mark always agrees with the vitals strip above it. Without one (a single
+ * grade has no registry band) the sign alone speaks, and under plan reads WATCH,
+ * never risk: one child short in a grade is not a critical finding.
+ */
+function GapReadout({ gap, gapPct, tone = null }) {
   if (cellState(gap) === CELL_MASKED) {
-    return <span className="text-[11px] font-semibold text-amber-700">withheld</span>
+    return <span className="text-[11px] font-semibold text-ink2">withheld</span>
   }
-  if (!hasValue(gap)) return <span className="text-[11px] text-muted">—</span>
+  if (!hasValue(gap)) return <span className="text-[11px] text-ink2">—</span>
   const under = gap.value < 0
   const even = gap.value === 0
+  const signTone = even ? 'neutral' : under ? 'watch' : 'good'
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-        even ? 'bg-slate-100 text-slate-500' : under ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-700'
-      }`}
-    >
+    <Pill variant="status" tone={tone ?? signTone} className="tabular-nums">
       {signedCount(gap.value)}
-      {hasValue(gapPct) ? <span className="font-semibold opacity-70">{signedShare(gapPct.value)}</span> : null}
-    </span>
+      {hasValue(gapPct) ? <span className="font-medium text-ink2">{signedShare(gapPct.value)}</span> : null}
+    </Pill>
   )
 }
 
@@ -82,14 +94,19 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
   }
 
   const totals = vsPlan.totals
+  // The whole-school gap is judged on the SAME registry bands VsPlanKpi and
+  // EnrollmentHero use, so −2.3% reads watch here exactly as it does above.
+  const totalsBand =
+    totals && Number.isFinite(Number(totals.gapPct))
+      ? healthStatus(Number(totals.gapPct), bandsFor('enrollment_vs_plan'), true)
+      : null
+  const totalsTone = totalsBand && ['good', 'watch', 'risk'].includes(totalsBand) ? totalsBand : null
 
   return (
     <div>
       <ColumnChart
         rows={rows.map((r) => {
           const masked = cellState(r.actual) === CELL_MASKED
-          const under = hasValue(r.gap) && r.gap.value < 0
-          const even = hasValue(r.gap) && r.gap.value === 0
           return {
             id: String(r.grade),
             label: gradeLabelOf(r.grade),
@@ -104,13 +121,13 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
                 value: masked ? 'withheld' : hasValue(r.gap) ? `${signedCount(r.gap.value)}${hasValue(r.gapPct) ? ` · ${signedShare(r.gapPct.value)}` : ''}` : '—',
               },
             ],
-            // COLOUR SITS ON THE GAP READOUT, NOT ON THE COLUMN.
+            // THE GAP READOUT, NOT THE COLUMN — and in ink: the sign carries the
+            // direction, the readout below carries the semantic mark.
             capLabel:
               !masked && hasValue(r.gap)
                 ? {
                     text: `${signedCount(r.gap.value)}${hasValue(r.gapPct) ? ` · ${signedShare(r.gapPct.value)}` : ''}`,
-                    color: even ? '#64748B' : under ? '#DC2626' : '#047857',
-                    bg: even ? 'rgba(100,116,139,0.12)' : under ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.12)',
+                    color: '#101C3D',
                   }
                 : undefined,
           }
@@ -130,19 +147,20 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
           be read against. */}
       {totals ? (
         <div
-          className="mt-2 grid items-center gap-x-3 rounded-lg bg-navy/[0.035] px-2 py-2"
+          className="mt-2 grid items-center gap-x-3 border-y border-hair px-1 py-2"
           style={{ gridTemplateColumns: 'minmax(64px, 84px) 1fr minmax(96px, auto)' }}
         >
-          <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted">School</span>
-          <span className="text-[11px] text-muted">
+          <span className="text-micro font-semibold uppercase text-ink2">School</span>
+          <span className="text-[12px] text-ink2">
             {fmtCount(totals.actual)} counted against a plan of {fmtCount(totals.plan)}
           </span>
           <span className="flex items-center justify-end gap-2">
-            <span className="text-[12.5px] font-bold tabular-nums text-navy">{fmtCount(totals.actual)}</span>
-            <span className="text-[11px] tabular-nums text-muted">/ {fmtCount(totals.plan)}</span>
+            <span className="text-small font-semibold tabular-nums text-ink">{fmtCount(totals.actual)}</span>
+            <span className="text-[12px] tabular-nums text-ink2">/ {fmtCount(totals.plan)}</span>
             <GapReadout
               gap={{ value: totals.gap, suppressed: false }}
               gapPct={{ value: totals.gapPct, suppressed: false }}
+              tone={totalsTone}
             />
           </span>
         </div>
@@ -152,7 +170,7 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="inline-block h-2.5 w-5 rounded-[2px]" style={{ background: ENROLL_HUE }} />
-          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-muted">
+          <span className="text-micro font-semibold uppercase text-ink2">
             Actual — counted
           </span>
         </span>
@@ -162,7 +180,7 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
             className="inline-block h-2.5 w-5 rounded-[2px] border border-dashed"
             style={{ borderColor: PLAN_INK, background: `${PLAN_INK}0F` }}
           />
-          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-muted">
+          <span className="text-micro font-semibold uppercase text-ink2">
             Plan — intended, never counted
           </span>
         </span>
@@ -171,7 +189,7 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
       {/* When the table and the tile quote different observations, say so HERE
           too — the reader comparing this total to the hero tile is owed it. */}
       {totals && totals.agreesWithTile === false ? (
-        <p className="mt-2.5 rounded-lg bg-amber-500/[0.08] px-3 py-2 text-[11.5px] leading-snug text-amber-800 ring-1 ring-amber-500/20">
+        <p className="a2-note mt-3" data-tone="watch">
           This table is drawn from the reading on screen, while the headline tile quotes the headcount promoted to the
           fiscal year — and right now those are two different observations, so the two percentages differ. Re-sync your
           roster to bring them back together.

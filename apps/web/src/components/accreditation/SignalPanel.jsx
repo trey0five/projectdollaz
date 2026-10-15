@@ -28,140 +28,180 @@
 // Phase B ships lineage as the inline "Where this comes from" disclosure below;
 // Phase H may promote it to a shared drawer.
 //
-// Dark surface: this renders inside the navy evidence panel, so it is styled
-// white/amber on navy (StatusChip's light chip vocabulary is unreadable there —
-// the status pill below is the same semantics in the dark palette this page
-// already uses for assurance gates).
+// PREMIUM UI P4 (a2): light, on the ground. The panel is a ledger block — an
+// 11px-caps label on a hairline with the period and the "N of M live" count as
+// its aside (said once, not per row), then fixed-track ruled rows — Signal |
+// Value | Status | Change | source chevron — so stacked figures share one right
+// edge. Fixed tracks, not auto table layout: the same panel renders in the
+// narrow evidence drawer, where a container query folds status and change under
+// the figure. No navy shell, no amber figures.
 // ─────────────────────────────────────────────────────────────────────────────
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, ExternalLink } from 'lucide-react'
-import DeltaChip from '../analytics/DeltaChip.jsx'
-import { formatMetricValue, metricFormat, STATUS_LABELS } from '../../lib/metricMeta.js'
+import { Activity, ArrowDownRight, ArrowUpRight, ChevronDown, ExternalLink } from 'lucide-react'
+import Pill from '../ui/surface/Pill.jsx'
+import { DELTA_TONE } from '../analytics/v2/statusStyle.js'
+import {
+  deltaTone,
+  formatDelta,
+  formatMetricValue,
+  metricFormat,
+  STATUS_LABELS,
+} from '../../lib/metricMeta.js'
 import { formatDate } from '../../lib/format.js'
+import '../../styles/pending/a2-carry.css'
 
-// The dark status vocabulary already in use on this page (assurance gates):
-// emerald = on track, amber = watch, red = at risk, white/40 = contextual.
-const DARK_STATUS = {
-  good: { dot: '#34d399', cls: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-300' },
-  watch: { dot: '#fbbf24', cls: 'border-[#F59E0B]/40 bg-[#F59E0B]/12 text-[#fde68a]' },
-  risk: { dot: '#f87171', cls: 'border-red-400/35 bg-red-400/10 text-red-300' },
-  neutral: { dot: '#94a3b8', cls: 'border-white/15 bg-white/5 text-white/55' },
-}
+/** Registry status → Pill tone (contextual reads neutral). */
+const STATUS_TONE = { good: 'good', watch: 'watch', risk: 'risk' }
 
 function SignalStatus({ status }) {
-  const meta = DARK_STATUS[status] ?? DARK_STATUS.neutral
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${meta.cls}`}
-    >
-      <span
-        aria-hidden
-        className="inline-block h-[6px] w-[6px] rounded-full"
-        style={{ backgroundColor: meta.dot }}
-      />
+    <Pill variant="status" tone={STATUS_TONE[status] ?? 'neutral'}>
       {STATUS_LABELS[status] ?? STATUS_LABELS.neutral}
-    </span>
+    </Pill>
+  )
+}
+
+function SignalDelta({ delta, format, goodDirection }) {
+  const text = formatDelta(delta, format)
+  if (text == null) return null
+  const tone = deltaTone(delta, goodDirection)
+  const Arrow = Number(delta) > 0 ? ArrowUpRight : Number(delta) < 0 ? ArrowDownRight : null
+  return (
+    <Pill
+      variant="status"
+      tone={DELTA_TONE[tone] ?? 'neutral'}
+      title="Change vs the prior period"
+      aria-label={`Change vs prior period ${text}`}
+    >
+      {Arrow ? <Arrow size={10} aria-hidden className="shrink-0 text-ink2" /> : null}
+      <span className="tabular-nums">{text}</span>
+    </Pill>
   )
 }
 
 function Shell({ children, aside = null }) {
   return (
-    <div className="mb-3 rounded-xl border border-white/10 bg-navy/50 px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50">
-            <Activity size={12} aria-hidden />
-            Operational signals
-          </p>
-          <p className="mt-0.5 text-[12px] text-white/40">
-            You didn&apos;t enter these for accreditation.
-          </p>
-        </div>
-        {aside}
+    <div className="a2-sig mb-4" data-testid="signal-panel">
+      <div className="sec-head !mb-1">
+        <h3 className="sec-label inline-flex items-center gap-1.5">
+          <Activity size={12} aria-hidden />
+          Operational signals
+        </h3>
+        <span className="sec-rule" aria-hidden="true" />
+        {aside ? <div className="sec-aside inline-flex items-center gap-2">{aside}</div> : null}
       </div>
+      <p className="text-[12px] text-ink2">You didn&apos;t enter these for accreditation.</p>
       {children}
     </div>
   )
 }
 
-/** The "Where this comes from" disclosure — formula, description, lineage. */
-function Provenance({ signal }) {
+/** The "Where this comes from" block — formula, description, lineage. Opened
+ *  from the row's chevron; spans the whole row under the figures. */
+function hasProvenance(signal) {
+  return Boolean(signal.formula || signal.description || signal.lineage)
+}
+
+function Provenance({ signal, id }) {
   const { formula, description, lineage } = signal
-  if (!formula && !description && !lineage) return null
   return (
-    <details className="mt-1.5">
-      <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-white/45 transition hover:text-[#fde68a]">
-        Where this comes from
-      </summary>
-      <div className="mt-1.5 space-y-1 border-l-2 border-white/10 pl-2.5">
-        {formula ? (
-          <p className="text-[11.5px] leading-relaxed text-white/55">
-            <span className="font-semibold text-white/70">Formula:</span> {formula}
-          </p>
-        ) : null}
-        {description ? (
-          <p className="text-[11.5px] leading-relaxed text-white/45">{description}</p>
-        ) : null}
-        {lineage ? (
-          <p className="text-[11.5px] leading-relaxed text-white/45">
-            Saved statements for {lineage.periodLabel} (period ending {lineage.periodEndDate}) · data
-            as of {formatDate(String(lineage.dataAsOf).slice(0, 10))}
-          </p>
-        ) : null}
-      </div>
-    </details>
+    <div id={id} className="a2-sig-src space-y-1 border-l-2 border-hair pl-2.5">
+      {formula ? (
+        <p className="text-[12px] leading-relaxed text-ink2">
+          <span className="font-semibold text-ink">Formula:</span> {formula}
+        </p>
+      ) : null}
+      {description ? (
+        <p className="text-[12px] leading-relaxed text-ink2">{description}</p>
+      ) : null}
+      {lineage ? (
+        <p className="text-[12px] leading-relaxed text-ink2">
+          Saved statements for {lineage.periodLabel} (period ending {lineage.periodEndDate}) · data
+          as of {formatDate(String(lineage.dataAsOf).slice(0, 10))}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
-function SignalRow({ signal, periodLabel }) {
+/** The ledger's column heads — one row, the same tracks as every signal row. */
+function SignalHead() {
+  return (
+    <div className="a2-sig-row a2-sig-head" aria-hidden="true">
+      <span>Signal</span>
+      <span className="a2-sig-num">Value</span>
+      <span>Status</span>
+      <span>Change</span>
+      <span />
+    </div>
+  )
+}
+
+const DASH = <span className="font-sans text-[13px] font-normal text-ink2">—</span>
+
+function SignalRow({ signal }) {
   const fmt = metricFormat(signal.key, signal.unit)
   const live = signal.available === true && signal.value != null
   const un = signal.unavailable ?? null
+  const [open, setOpen] = useState(false)
+  const srcId = useId()
+  const withSrc = hasProvenance(signal)
 
   return (
-    <li className="border-t border-white/10 py-2.5 first:border-t-0 first:pt-1.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="min-w-0 text-[12.5px] font-semibold text-white/75">{signal.label}</span>
-        {live ? (
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-serif text-[22px] font-semibold leading-none text-[#fbbf24]">
-              {formatMetricValue(signal.value, fmt)}
-            </span>
-            <SignalStatus status={signal.status} />
-            {signal.periodOverPeriodDelta != null ? (
-              <DeltaChip
-                delta={signal.periodOverPeriodDelta}
-                format={fmt}
-                goodDirection={signal.goodDirection}
-                onDark
-              />
-            ) : null}
-            {periodLabel ? (
-              <span className="text-[11.5px] text-white/40">as of {periodLabel}</span>
+    <li className="a2-sig-row" data-live={live ? 'true' : 'false'}>
+      <span className="a2-sig-label min-w-0">
+        <span className="block text-[13px] font-semibold text-ink">{signal.label}</span>
+        {/* No value → the server's reason, verbatim. No number, no band, no chip. */}
+        {!live && un ? (
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] leading-relaxed text-ink2">
+            <span>{un.message}</span>
+            {un.reason === 'module_not_licensed' ? (
+              <Link to="/settings/billing#modules" className="dt-link">
+                Modules <ExternalLink size={11} aria-hidden />
+              </Link>
             ) : null}
           </span>
         ) : null}
-      </div>
-
-      {/* No value → the server's reason, verbatim. No number, no band, no chip. */}
-      {!live && un ? (
-        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] leading-relaxed text-white/45">
-          <span>{un.message}</span>
-          {un.reason === 'module_not_licensed' ? (
-            <Link
-              to="/settings/billing#modules"
-              className="inline-flex items-center gap-1 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#fde68a] hover:bg-[#F59E0B]/20"
-            >
-              Modules <ExternalLink size={11} aria-hidden />
-            </Link>
-          ) : null}
-        </p>
-      ) : null}
-      {!live && !un ? (
-        <p className="mt-0.5 text-[12px] text-white/40">No value for this period yet.</p>
-      ) : null}
-
-      <Provenance signal={signal} />
+        {!live && !un ? (
+          <span className="mt-0.5 block text-[12px] text-ink2">No value for this period yet.</span>
+        ) : null}
+      </span>
+      <span className="a2-sig-num font-serif text-[20px] font-medium leading-none tabular-nums text-ink">
+        {live ? formatMetricValue(signal.value, fmt) : DASH}
+      </span>
+      <span className="a2-sig-cell">{live ? <SignalStatus status={signal.status} /> : DASH}</span>
+      <span className="a2-sig-cell">
+        {live && signal.periodOverPeriodDelta != null ? (
+          <SignalDelta
+            delta={signal.periodOverPeriodDelta}
+            format={fmt}
+            goodDirection={signal.goodDirection}
+          />
+        ) : (
+          DASH
+        )}
+      </span>
+      <span className="a2-sig-cell">
+        {withSrc ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={srcId}
+            aria-label={`Where ${signal.label} comes from`}
+            title="Where this comes from"
+            className="a2-sig-toggle"
+          >
+            <ChevronDown
+              size={14}
+              aria-hidden
+              className={`transition-transform ${open ? 'rotate-180' : ''}`}
+            />
+          </button>
+        ) : null}
+      </span>
+      {withSrc && open ? <Provenance signal={signal} id={srcId} /> : null}
     </li>
   )
 }
@@ -191,7 +231,7 @@ export default function SignalPanel({
   if (bound === 0 && !loading) {
     return (
       <Shell>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-white/45">
+        <p className="mt-2 text-[13px] leading-relaxed text-ink2">
           {scope === 'school'
             ? 'No operating signal is bound to any of your standards yet — they are judged on your rubric scores and your evidence.'
             : "No operating signal is bound to this standard — it's judged on your rubric score and your evidence."}
@@ -203,7 +243,7 @@ export default function SignalPanel({
   if (loading && rows.length === 0) {
     return (
       <Shell>
-        <div className="mt-2 h-[34px] rounded-lg bg-white/5 motion-safe:animate-pulse" aria-hidden />
+        <div className="mt-2 h-[34px] rounded-lg bg-ink/[0.04] motion-safe:animate-pulse" aria-hidden />
       </Shell>
     )
   }
@@ -212,7 +252,7 @@ export default function SignalPanel({
   if (notLicensed || (error && rows.length === 0)) {
     return (
       <Shell>
-        <p className="mt-2 text-[12.5px] text-white/45">
+        <p className="mt-2 text-[13px] text-ink2">
           Operating signals are unavailable right now.
         </p>
       </Shell>
@@ -224,21 +264,32 @@ export default function SignalPanel({
   return (
     <Shell
       aside={
-        <span className="shrink-0 rounded-full border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#fde68a]">
-          {live} of {bound} live
-        </span>
+        <>
+          {/* The period, said ONCE for every figure below it. */}
+          {period?.label ? (
+            <span className="text-[12px] font-medium normal-case tracking-normal text-ink2">
+              as of {period.label}
+            </span>
+          ) : null}
+          <Pill variant="count">
+            {live} of {bound} live
+          </Pill>
+        </>
       }
     >
       {rows.length === 0 ? (
-        <p className="mt-2 text-[12.5px] text-white/45">
+        <p className="mt-2 text-[13px] text-ink2">
           {bound} signal{bound === 1 ? '' : 's'} bound · values unavailable right now.
         </p>
       ) : (
-        <ul className="mt-2">
-          {rows.map((s) => (
-            <SignalRow key={s.key} signal={s} periodLabel={period?.label ?? null} />
-          ))}
-        </ul>
+        <div className="mt-2">
+          <SignalHead />
+          <ul className="a2-rows a2-rows-tight a2-rows-open">
+            {rows.map((s) => (
+              <SignalRow key={s.key} signal={s} />
+            ))}
+          </ul>
+        </div>
       )}
     </Shell>
   )

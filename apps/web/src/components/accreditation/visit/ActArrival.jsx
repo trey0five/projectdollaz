@@ -37,55 +37,49 @@
 // through to the neutral fallback. A colour map that silently never fires is worse
 // than none: it reads, in a diff, as though the band were being toned by severity.
 // Nothing on this pill infers good or bad from an accreditor's own wording.
+//
+// PREMIUM UI P4 (a2): the pair and the index are a StatStrip (vertical rules,
+// figures count up once; a null is the Stat's em dash, never a zero), the chips
+// are ledger Pills, and the server's sentences are ruled notes with a 2px mark
+// instead of amber washes.
 // ─────────────────────────────────────────────────────────────────────────────
 import { CalendarDays, Gauge, ScanSearch } from 'lucide-react'
+import { Pill, Stat, StatStrip } from '../../ui/surface/index.js'
+import '../../../styles/pending/a2-carry.css'
 
 /** Frozen. The qualifier that keeps a projection from reading as an outcome. */
 export const BAND_QUALIFIER = 'Projected band'
 
 /**
- * One half of the pair. `value` is a percentage the SERVER computed; it is
- * rendered, never derived, and a null renders an em dash rather than a 0.
+ * A server figure for a Stat: integers count up, anything else (a decimal index,
+ * null) is handed over as-is — a null becomes the Stat's em dash, never a zero,
+ * and a decimal is never rounded by the count-up.
  */
-function Half({ label, value, meaning }) {
-  return (
-    <div className="min-w-[9rem] flex-1 rounded-2xl border border-rule/60 bg-cream/40 px-3.5 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
-      <p className="mt-0.5 font-serif text-[26px] font-semibold leading-none text-navy">
-        {typeof value === 'number' ? `${value}%` : '—'}
-      </p>
-      <p className="mt-1 text-[11.5px] leading-snug text-muted">{meaning}</p>
-    </div>
-  )
+function figure(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null
+  return Number.isInteger(v) ? v : String(v)
 }
 
 export default function ActArrival({ arrival = null, demoData = false }) {
   if (!arrival) return null
 
   const band = typeof arrival.band === 'string' ? arrival.band : null
+  const documented = figure(arrival.documented)
+  const defensible = figure(arrival.defensible)
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-[12.5px] font-semibold text-navy">
-          {arrival.frameworkLabel}
-        </span>
+        <Pill>{arrival.frameworkLabel}</Pill>
         {band ? (
-          <span
-            data-testid="arrival-band"
-            className="rounded-full border border-rule/60 bg-section px-3 py-1 text-[12.5px] font-semibold text-muted"
-          >
+          <Pill data-testid="arrival-band">
             {/* The qualifier is ours; the label is the framework's, verbatim — no
                 `capitalize`, which would re-case "Accredited with Merit" into
                 "Accredited With Merit" and quietly re-write an accreditor's term. */}
-            {BAND_QUALIFIER} · <span className="text-navy">{band}</span>
-          </span>
+            <span className="font-medium text-ink2">{BAND_QUALIFIER} ·</span> {band}
+          </Pill>
         ) : null}
-        {demoData ? (
-          <span className="rounded-full border border-rule/60 bg-section px-3 py-1 text-[12px] font-semibold text-muted">
-            demonstration data
-          </span>
-        ) : null}
+        {demoData ? <Pill className="text-ink2">demonstration data</Pill> : null}
       </div>
 
       {/* SCOPED, AND SAYING SO. A mock visit reads exactly ONE framework; a school
@@ -93,10 +87,7 @@ export default function ActArrival({ arrival = null, demoData = false }) {
           that half its register was outside the read. The sentence is composed
           server-side beside the framework it qualifies, never here. */}
       {arrival.alsoHoldsLine ? (
-        <p
-          data-testid="arrival-also-holds"
-          className="rounded-xl border border-navy/15 bg-navy/[0.04] px-3 py-2 text-[12.5px] leading-relaxed text-muted"
-        >
+        <p data-testid="arrival-also-holds" className="a2-note">
           {arrival.alsoHoldsLine}
         </p>
       ) : null}
@@ -107,10 +98,7 @@ export default function ActArrival({ arrival = null, demoData = false }) {
           the hero's risk chip names, printed verbatim in the opening frame —
           null (zero/unmeasurable) renders nothing, suppressed is not zero. */}
       {arrival.unbackedRiskLine ? (
-        <p
-          data-testid="arrival-unbacked-risk"
-          className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.06] px-3 py-2 text-[12.5px] leading-relaxed text-muted"
-        >
+        <p data-testid="arrival-unbacked-risk" className="a2-note" data-tone="watch">
           {arrival.unbackedRiskLine}
         </p>
       ) : null}
@@ -118,56 +106,49 @@ export default function ActArrival({ arrival = null, demoData = false }) {
       {/* The readiness read FAILED. Its own frozen sentence, verbatim — never an
           em dash pretending to be "nothing scored yet". */}
       {arrival.unavailableReason ? (
-        <p
-          data-testid="arrival-unavailable"
-          className="rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-900"
-        >
+        <p data-testid="arrival-unavailable" className="a2-note" data-tone="watch">
           {arrival.unavailableReason}
         </p>
       ) : null}
 
       {/* The pair. Always both, always labelled, never one alone. */}
-      <div className="flex flex-wrap gap-2.5">
-        <Half
+      <StatStrip cols={3} className="border-t border-hair">
+        <Stat
           label="Documented"
-          value={arrival.documented}
-          meaning="What the school has scored itself against the rubric."
+          value={documented}
+          unit={documented != null ? '%' : undefined}
+          note="What the school has scored itself against the rubric."
         />
-        <Half
+        <Stat
           label="Defensible"
-          value={arrival.defensible}
-          meaning="What current evidence would stand behind on the day."
+          value={defensible}
+          unit={defensible != null ? '%' : undefined}
+          note="What current evidence would stand behind on the day."
         />
-        <div className="min-w-[9rem] flex-1 rounded-2xl border border-rule/60 bg-cream/40 px-3.5 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Projected index
-          </p>
-          <p className="mt-0.5 font-serif text-[26px] font-semibold leading-none text-navy">
-            {typeof arrival.projectedIndex === 'number' ? arrival.projectedIndex : '—'}
-          </p>
-          <p className="mt-1 text-[11.5px] leading-snug text-muted">
-            The mean rubric score, on the framework&apos;s own scale.
-          </p>
-        </div>
-      </div>
+        <Stat
+          label="Projected index"
+          value={figure(arrival.projectedIndex)}
+          note="The mean rubric score, on the framework's own scale."
+        />
+      </StatStrip>
 
       {/* Both sentences arrive composed. Printed verbatim, never re-worded. */}
       <div className="space-y-1.5">
         {arrival.asOfLine ? (
-          <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
-            <CalendarDays size={14} className="mt-[2px] shrink-0 text-navy/60" aria-hidden />
+          <p className="flex items-start gap-2 text-small leading-relaxed text-ink2">
+            <CalendarDays size={14} className="mt-[2px] shrink-0" aria-hidden />
             <span>{arrival.asOfLine}</span>
           </p>
         ) : null}
         {arrival.evaluableLine ? (
-          <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
-            <ScanSearch size={14} className="mt-[2px] shrink-0 text-[#F59E0B]" aria-hidden />
+          <p className="flex items-start gap-2 text-small leading-relaxed text-ink2">
+            <ScanSearch size={14} className="mt-[2px] shrink-0" aria-hidden />
             <span>{arrival.evaluableLine}</span>
           </p>
         ) : null}
         {arrival.confidence?.caveat ? (
-          <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
-            <Gauge size={14} className="mt-[2px] shrink-0 text-[#F59E0B]" aria-hidden />
+          <p className="flex items-start gap-2 text-small leading-relaxed text-ink2">
+            <Gauge size={14} className="mt-[2px] shrink-0" aria-hidden />
             <span>{arrival.confidence.caveat}</span>
           </p>
         ) : null}

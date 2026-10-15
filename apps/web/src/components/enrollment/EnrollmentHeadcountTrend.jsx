@@ -33,7 +33,6 @@ import {
   CardEmpty,
   EASE,
   ENROLL_HUE,
-  PLAN_INK,
   fmtCount,
   fmtDate,
   fmtDateShort,
@@ -41,6 +40,10 @@ import {
   separateLabels,
   zeroBasedDomain,
 } from './enrollmentAnalyticsKit.jsx'
+
+// A plan is a reference line, not a status: ink-2 (EnrollmentTrend's AXIS_INK),
+// never the kit's PLAN_INK amber, which is the semantic WATCH colour.
+const PLAN_STROKE = '#44506E'
 
 const VB = { w: 680, h: 210 }
 const PAD = { l: 54, r: 62, t: 16, b: 34 }
@@ -73,16 +76,15 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
     // — or a flat rule across the card — would assert a stability nobody
     // observed.
     return (
-      <div className="flex items-center gap-4 rounded-xl bg-navy/[0.03] px-4 py-6 ring-1 ring-navy/[0.06]">
-        <span
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-full font-serif text-[19px] font-bold text-white tabular-nums"
-          style={{ background: ENROLL_HUE }}
-        >
+      // Premium UI P4 (a2): the one figure on the ground between hairlines, in
+      // display type with a 2px module-hue rule — no tinted box, no hue-filled disc.
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hair px-1 py-5">
+        <span className="shrink-0 border-b-2 pb-1 font-serif text-[30px] font-medium leading-9 tabular-nums text-ink" style={{ borderColor: ENROLL_HUE }}>
           {fmtCount(latest.total)}
         </span>
-        <p className="text-[13.5px] leading-relaxed text-muted">
-          One reading so far — <span className="font-bold text-navy">{fmtCount(latest.total)} students</span> on{' '}
-          <span className="font-semibold text-navy">{fmtDate(latest.observedOn)}</span>. The trend starts with your next
+        <p className="min-w-0 flex-1 text-small leading-relaxed text-ink2">
+          One reading so far — <span className="font-semibold text-ink">{fmtCount(latest.total)} students</span> on{' '}
+          <span className="font-semibold text-ink">{fmtDate(latest.observedOn)}</span>. The trend starts with your next
           reading.
         </p>
       </div>
@@ -149,7 +151,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
         rows: [
           { color: ENROLL_HUE, label: 'Students', value: fmtCount(p.total) },
           ...(p.provider ? [{ color: '#CBD5E1', label: 'Source', value: providerLabel(p.provider) }] : []),
-          ...(planTotal != null ? [{ color: PLAN_INK, label: 'Plan', value: fmtCount(planTotal) }] : []),
+          ...(planTotal != null ? [{ color: PLAN_STROKE, label: 'Plan', value: fmtCount(planTotal) }] : []),
         ],
       },
       ev.clientX,
@@ -213,7 +215,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
               x2={VB.w - PAD.r}
               y1={Y(planTotal)}
               y2={Y(planTotal)}
-              stroke={PLAN_INK}
+              stroke={PLAN_STROKE}
               strokeWidth="1.5"
               strokeDasharray="6 4"
             />
@@ -225,7 +227,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
                     y1={Y(planTotal)}
                     x2={VB.w - PAD.r + 4}
                     y2={yPlanLabel}
-                    stroke={PLAN_INK}
+                    stroke={PLAN_STROKE}
                     strokeWidth="1"
                     opacity="0.55"
                   />
@@ -235,7 +237,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
                   y={yPlanLabel + 3.5}
                   fontSize="10"
                   fontWeight="700"
-                  fill={PLAN_INK}
+                  fill={PLAN_STROKE}
                   className="tabular-nums"
                 >
                   {planText}
@@ -247,7 +249,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
                 y={Y(planTotal) - 5}
                 fontSize="10"
                 fontWeight="700"
-                fill={PLAN_INK}
+                fill={PLAN_STROKE}
                 className="tabular-nums"
               >
                 {planText}

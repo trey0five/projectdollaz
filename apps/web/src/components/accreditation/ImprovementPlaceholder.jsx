@@ -19,6 +19,10 @@
 //     an initiative is created on /improvement);
 //   · no percentage of any kind.
 //
+// PREMIUM UI P4 (a2): a lead line + one flat Button on the ground, then the
+// candidates as a DataTable (2px severity mark · standard tags · the finding · a
+// quiet "Work this gap" link) under a Section rule. No cards, no amber chips.
+//
 // The component NAME is deliberately unchanged: it is imported by
 // AccreditationPage and named in the honesty spec, and renaming a file to
 // celebrate a behaviour change costs a reviewer a rename-vs-rewrite diff for
@@ -26,8 +30,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom'
 import { ArrowRight, TrendingUp } from 'lucide-react'
-
-const AMBER = '#F59E0B'
+import { Button, DataTable, Section } from '../ui/surface/index.js'
+import '../../styles/pending/a2-carry.css'
 
 /**
  * The deep link the Improvement page consumes (?rec=…&recTitle=…).
@@ -58,72 +62,79 @@ export default function ImprovementPlaceholder({ findings = [], loading = false 
     (f) => !f.initiativeId && f.severity !== 'info' && !f.findingCleared,
   )
 
+  const heading =
+    loading && candidates.length === 0
+      ? 'Reading your open findings…'
+      : `${candidates.length} finding${candidates.length === 1 ? '' : 's'} ${
+          candidates.length === 1 ? 'is a candidate' : 'are candidates'
+        } for an improvement initiative`
+
+  const columns = [
+    {
+      key: 'tags',
+      header: 'Standard',
+      width: '10.5rem',
+      render: (f) =>
+        (f.standardTags ?? []).length ? (
+          <span className="flex flex-wrap gap-1 py-1.5">
+            {(f.standardTags ?? []).slice(0, 2).map((t) => (
+              <span key={t} className="a2-code">
+                {t}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-ink2">—</span>
+        ),
+    },
+    {
+      key: 'title',
+      header: 'Finding',
+      render: (f) => <span className="block py-2 font-semibold text-ink">{f.title}</span>,
+    },
+    {
+      key: 'act',
+      header: <span className="sr-only">Action</span>,
+      headerClassName: 'text-right',
+      className: 'text-right',
+      render: (f) => (
+        <Link to={workThisGapHref(f)} className="dt-link whitespace-nowrap">
+          Work this gap <ArrowRight size={12} aria-hidden />
+        </Link>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-rule/50 bg-cream/40 p-4">
-        <p className="max-w-2xl text-[13.5px] leading-relaxed text-navy">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-hair pb-4">
+        <p className="max-w-2xl text-[14px] leading-relaxed text-ink">
           Turning a finding into owned, dated work — with a milestone plan and progress computed
           from your own numbers — happens in the Continuous Improvement Manager.
         </p>
-        <Link
-          to="/improvement"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-        >
-          <TrendingUp size={14} aria-hidden /> Open Improvement
+        <Button to="/improvement" variant="primary" icon={<TrendingUp size={14} />}>
+          Open Improvement
           <ArrowRight size={13} aria-hidden />
-        </Link>
+        </Button>
       </div>
 
-      <section className="rounded-2xl border border-rule/50 bg-white p-4">
-        <h3 className="font-serif text-[16px] font-semibold text-navy">
-          {loading && candidates.length === 0
-            ? 'Reading your open findings…'
-            : `${candidates.length} finding${candidates.length === 1 ? '' : 's'} ${
-                candidates.length === 1 ? 'is a candidate' : 'are candidates'
-              } for an improvement initiative`}
-        </h3>
-        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
-          Open, not informational, and not yet attached to any plan.
-        </p>
-
+      <Section label="Candidates" aside={<span>Open, not informational, not yet on a plan</span>}>
+        <h3 className="sec-title">{heading}</h3>
         {candidates.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-8 text-center">
-            <p className="text-[13px] font-semibold text-navy">Nothing is waiting on a plan.</p>
-            <p className="mt-1 text-[12.5px] text-muted">
-              Either no rule is firing, or every open finding is already informational.
-            </p>
+          <div className="a2-empty">
+            <p className="a2-empty-title">Nothing is waiting on a plan.</p>
+            <p>Either no rule is firing, or every open finding is already informational.</p>
           </div>
         ) : (
-          <ul className="mt-3 divide-y divide-rule/40 rounded-xl border border-rule/50">
-            {candidates.map((f, i) => (
-              <li key={f.findingKey ?? f.factKey ?? `candidate-${i}`} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-                <span
-                  aria-hidden
-                  className="inline-block h-[7px] w-[7px] shrink-0 rounded-full"
-                  style={{ backgroundColor: f.severity === 'critical' ? '#DC2626' : AMBER }}
-                />
-                {(f.standardTags ?? []).slice(0, 2).map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-md border border-[#F59E0B]/35 bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700"
-                  >
-                    {t}
-                  </span>
-                ))}
-                <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-navy">
-                  {f.title}
-                </span>
-                <Link
-                  to={workThisGapHref(f)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rule/70 bg-white px-2.5 py-1 text-[12px] font-semibold text-navy transition hover:border-gold/60 hover:text-gold"
-                >
-                  Work this gap <ArrowRight size={12} aria-hidden />
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <DataTable
+            columns={columns}
+            rows={candidates}
+            rowKey={(f, i) => f.findingKey ?? f.factKey ?? `candidate-${i}`}
+            markOf={(f) => (f.severity === 'critical' ? 'risk' : 'watch')}
+            caption="Findings that are candidates for an improvement initiative"
+          />
         )}
-      </section>
+      </Section>
     </div>
   )
 }

@@ -12,14 +12,25 @@
 // matcher (and the same learned aliases) the enrollment import uses, and the
 // preview shows every decision before a single row is written — including the
 // ones it refused to make.
+//
+// PREMIUM UI P4 (a2): the org academics page mounts this bare, so it IS the
+// Panel (an upload is actionable). Inside it:
+// the dropzone is a dashed hairline on the ground at the panel radius
+// (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
+// is ink over a 2px module-hue rule, the preview is a hairline-ruled block of
+// key/value facts, notes carry a 2px semantic mark, and actions are flat Buttons.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileUp, Loader2, MinusCircle } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
+import Button from '../ui/surface/Button.jsx'
+import Panel from '../ui/surface/Panel.jsx'
+import '../../styles/pending/a2-carry.css'
 import { testTypeLabel } from '../../lib/academicsVocab.js'
 
-const HUE = '#0D9488'
+/** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
+const HUE_VAR = { '--c-module': '13 148 136' }
 
 export default function OrgAssessmentUpload({ orgId, onDone }) {
   const inputRef = useRef(null)
@@ -68,27 +79,26 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
   const unmatched = matches.filter((m) => !m.schoolId)
 
   return (
-    <div className="panel panel-body">
-      <p className="text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
+    <Panel style={HUE_VAR}>
+      <p className="a2-eyebrow">
         One file, every school
       </p>
-      <h3 className="mt-0.5 font-serif text-[19px] font-semibold text-navy">Upload the network&rsquo;s results</h3>
-      <p className="mt-1 text-[12.5px] text-muted">
+      <h3 className="a2-title">Upload the network&rsquo;s results</h3>
+      <p className="mt-1 max-w-[70ch] text-small text-ink2">
         The publisher&rsquo;s export, exactly as it arrives. School names are matched against your records — including
         the spellings you have already corrected once — and you see every match before anything is saved.
       </p>
 
       <label
-        className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed px-4 py-4 transition-colors"
-        style={{ borderColor: `${HUE}55`, background: `${HUE}08` }}
+        className="a2-drop mt-4 cursor-pointer items-center gap-3 px-4 py-4"
       >
-        <FileUp size={20} style={{ color: HUE }} />
-        <span className="flex-1 text-[13px] text-navy">{file ? file.name : 'Choose a CSV file…'}</span>
+        <FileUp size={20} aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-small text-ink">{file ? file.name : 'Choose a CSV file…'}</span>
         <input
           ref={inputRef}
           type="file"
           accept=".csv,text/csv,text/plain"
-          className="hidden"
+          className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (!f) return
@@ -96,7 +106,7 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
             run(f, false)
           }}
         />
-        {busy ? <Loader2 size={16} className="animate-spin" style={{ color: HUE }} /> : null}
+        {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
       </label>
 
       <AnimatePresence>
@@ -105,81 +115,84 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mt-4 rounded-xl border border-navy/10 bg-section p-4"
+            className="a2-block"
           >
-            <div className="flex flex-wrap gap-2">
+            <div className="a2-facts">
               {[
                 ['Test', testTypeLabel(preview.testType)],
                 ['Years', (preview.years ?? []).join(', ') || '—'],
                 ['Rows', preview.rows ?? 0],
                 ['Schools matched', matches.length - unmatched.length],
               ].map(([k, v]) => (
-                <span key={k} className="rounded-lg bg-white px-2.5 py-1 text-[11.5px] ring-1 ring-navy/10">
-                  <b className="text-[9px] uppercase tracking-wider text-muted">{k}</b>{' '}
-                  <span className="font-semibold text-navy">{v}</span>
+                <span key={k} className="a2-fact">
+                  <b>{k}</b>
+                  <span>{v}</span>
                 </span>
               ))}
             </div>
 
             {matches.length > 0 ? (
-              <div className="mt-3 space-y-1">
+              <ul className="a2-rows a2-rows-tight mt-3">
                 {matches.map((m) => (
-                  <div key={m.sourceName} className="flex items-center gap-2 text-[12px]">
+                  <li key={m.sourceName} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-small">
+                    <i
+                      aria-hidden="true"
+                      className={`mark ${m.schoolId ? 'tone-good' : 'tone-watch'}`}
+                    />
                     {m.schoolId ? (
-                      <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                      <CheckCircle2 size={13} className="shrink-0 text-ink2" aria-label="Matched" />
                     ) : (
-                      <MinusCircle size={13} className="shrink-0 text-amber-600" />
+                      <MinusCircle size={13} className="shrink-0 text-ink2" aria-label="Not matched" />
                     )}
-                    <span className="text-navy">{m.sourceName}</span>
-                    <span className="text-[10.5px] text-muted">{m.rows} row{m.rows === 1 ? '' : 's'}</span>
+                    <span className="font-semibold text-ink">{m.sourceName}</span>
+                    <span className="text-[12px] tabular-nums text-ink2">{m.rows} row{m.rows === 1 ? '' : 's'}</span>
                     {m.schoolId ? (
-                      <span className="text-muted">→ {m.matchedName ?? 'matched'}</span>
+                      <span className="text-ink2">→ {m.matchedName ?? 'matched'}</span>
                     ) : (
-                      <span className="text-amber-700">
+                      <span className="text-ink">
                         {m.decision === 'not-permitted'
                           ? 'you cannot write to this school'
                           : 'no confident match — these rows are skipped'}
                       </span>
                     )}
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : null}
 
             {(preview.warnings ?? []).map((w) => (
-              <p key={w} className="mt-2 flex items-start gap-1.5 text-[12px] text-amber-700">
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" /> {w}
+              <p key={w} className="a2-note mt-2" data-tone="watch">
+                <AlertTriangle size={13} aria-hidden /> {w}
               </p>
             ))}
 
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => file && run(file, true)}
-                disabled={busy}
-                className="btn btn-primary"
-              >
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="primary" onClick={() => file && run(file, true)} disabled={busy}>
                 Save to {matches.length - unmatched.length} school
                 {matches.length - unmatched.length === 1 ? '' : 's'}
-              </button>
-              <button type="button" onClick={reset} className="btn btn-secondary">
+              </Button>
+              <Button variant="secondary" onClick={reset}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
       {done ? (
-        <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-emerald-700">
-          <CheckCircle2 size={14} /> Saved — {done.aggregatesUpserted ?? 0} rows across {done.schoolsTouched ?? 0} school
+        <p className="a2-note mt-3" data-tone="good">
+          <CheckCircle2 size={14} aria-hidden /> Saved — {done.aggregatesUpserted ?? 0} rows across {done.schoolsTouched ?? 0} school
           {done.schoolsTouched === 1 ? '' : 's'}
           {done.skipped > 0
             ? `. ${done.skipped} row${done.skipped === 1 ? '' : 's'} skipped: ${(done.unresolvedSchools ?? []).join(', ')}.`
             : '.'}
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-[12.5px] text-danger">{error}</p> : null}
-    </div>
+      {error ? (
+        <p className="a2-note mt-3" data-tone="risk">
+          {error}
+        </p>
+      ) : null}
+    </Panel>
   )
 }

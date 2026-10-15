@@ -6,14 +6,24 @@
 // The preview shows exactly what the parser understood — shape, year, subjects,
 // row count, warnings, and a sample — BEFORE anything is written, so nobody
 // discovers a mis-parse by finding wrong numbers on a board slide.
+//
+// PREMIUM UI P4 (a2): it renders inside the add-data wizard's work Panel, so it
+// adds no box of its own;
+// the dropzone is a dashed hairline on the ground at the panel radius
+// (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
+// is ink over a 2px module-hue rule, the preview is a hairline-ruled block of
+// key/value facts, notes carry a 2px semantic mark, and actions are flat Buttons.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from 'lucide-react'
 import { TEST_TYPE_KEYS, TEST_TYPE_LABELS } from '../../lib/academicsVocab.js'
 import { academicsApi } from '../../lib/api.js'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/a2-carry.css'
 
-const HUE = '#0D9488'
+/** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
+const HUE_VAR = { '--c-module': '13 148 136' }
 
 export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   const inputRef = useRef(null)
@@ -82,29 +92,28 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   if (!canEdit) return null
 
   return (
-    <div className="rounded-2xl border border-navy/10 bg-white p-5">
-      <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
+    <div style={HUE_VAR}>
+      <p className="a2-eyebrow">
         Assessment scores
       </p>
-      <h3 className="mt-0.5 font-serif text-[19px] font-semibold text-navy">Upload a results file</h3>
-      <p className="mt-1 text-[12.5px] text-muted">
+      <h3 className="a2-title">Upload a results file</h3>
+      <p className="mt-1 max-w-[70ch] text-small text-ink2">
         A diocesan summary, a publisher export, or a student-level file. Title rows and odd column names are handled —
         you will see exactly what was read before anything is saved.
       </p>
 
       <label
-        className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed px-4 py-4 transition-colors"
-        style={{ borderColor: `${HUE}55`, background: `${HUE}08` }}
+        className="a2-drop mt-4 cursor-pointer items-center gap-3 px-4 py-4"
       >
-        <FileUp size={20} style={{ color: HUE }} />
-        <span className="flex-1 text-[13px] text-navy">
+        <FileUp size={20} aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-small text-ink">
           {file ? file.name : 'Choose a CSV file…'}
         </span>
         <input
           ref={inputRef}
           type="file"
           accept=".csv,text/csv,text/plain"
-          className="hidden"
+          className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (!f) return
@@ -112,7 +121,7 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
             doPreview(f)
           }}
         />
-        {busy ? <Loader2 size={16} className="animate-spin" style={{ color: HUE }} /> : null}
+        {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
       </label>
 
       <AnimatePresence>
@@ -121,9 +130,9 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mt-4 rounded-xl border border-navy/10 bg-section p-4"
+            className="a2-block"
           >
-            <div className="flex flex-wrap gap-2">
+            <div className="a2-facts">
               {[
                 ['Shape', preview.scope === 'student' ? 'Student-level' : 'School summary'],
                 ['Test', (preview.testType ?? '').toUpperCase()],
@@ -132,61 +141,55 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
                 ['Rows', preview.rows],
                 ['Subjects', (preview.subjects ?? []).length],
               ].map(([k, v]) => (
-                <span key={k} className="rounded-lg bg-white px-2.5 py-1 text-[11.5px] ring-1 ring-navy/10">
-                  <b className="font-mono text-[9px] uppercase tracking-wider text-muted">{k}</b>{' '}
-                  <span className="font-semibold text-navy">{v}</span>
+                <span key={k} className="a2-fact">
+                  <b>{k}</b>
+                  <span>{v}</span>
                 </span>
               ))}
             </div>
 
             {preview.match ? (
-              <p className="mt-2.5 text-[12px] text-muted">
-                Roster match: <b className="text-navy">{preview.match.matched}</b> matched,{' '}
+              <p className="mt-3 text-small text-ink2">
+                Roster match: <b className="tabular-nums text-ink">{preview.match.matched}</b> matched,{' '}
                 {preview.match.unmatched} unmatched
                 {preview.match.ambiguous > 0 ? ` (${preview.match.ambiguous} ambiguous — left unattached on purpose)` : ''}.
               </p>
             ) : null}
 
             {(preview.warnings ?? []).map((w) => (
-              <p key={w} className="mt-2 flex items-start gap-1.5 text-[12px] text-amber-700">
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" /> {w}
+              <p key={w} className="a2-note mt-2" data-tone="watch">
+                <AlertTriangle size={13} aria-hidden /> {w}
               </p>
             ))}
 
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={doCommit}
-                disabled={busy}
-                className="rounded-xl px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-white disabled:opacity-50"
-                style={{ background: HUE }}
-              >
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="primary" onClick={doCommit} disabled={busy}>
                 Save these results
-              </button>
-              <button type="button" onClick={reset} className="rounded-xl border border-navy/15 px-4 py-2 text-[12px] text-navy">
+              </Button>
+              <Button variant="secondary" onClick={reset}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
       {done ? (
-        <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-emerald-700">
-          <CheckCircle2 size={14} /> Saved — {done.resultsCreated ?? 0} student rows, {done.aggregatesUpserted ?? 0} summary rows.
+        <p className="a2-note mt-3" data-tone="good">
+          <CheckCircle2 size={14} aria-hidden /> Saved — {done.resultsCreated ?? 0} student rows, {done.aggregatesUpserted ?? 0} summary rows.
         </p>
       ) : null}
       {needsType && file ? (
-        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
-          <p className="text-[12.5px] text-navy">
+        <div className="a2-block">
+          <p className="a2-note" data-tone="watch">
             Nothing in this file names the test. Choose it and we will read the file again.
           </p>
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <select
               aria-label="Test type"
               value={chosenType}
               onChange={(e) => setChosenType(e.target.value)}
-              className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+              className="a2-field" style={{ width: "auto", minWidth: "14rem", maxWidth: "100%" }}
             >
               <option value="">Choose a test…</option>
               {TEST_TYPE_KEYS.map((k) => (
@@ -195,20 +198,18 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              disabled={!chosenType || busy}
-              onClick={() => doPreview(file, chosenType)}
-              className="rounded-xl px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-white disabled:opacity-40"
-              style={{ background: HUE }}
-            >
+            <Button variant="primary" disabled={!chosenType || busy} onClick={() => doPreview(file, chosenType)}>
               Read it again
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-[12.5px] text-danger">{error}</p> : null}
+      {error ? (
+        <p className="a2-note mt-3" data-tone="risk">
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -30,11 +30,15 @@
 // (acceptance 2). A `display` that legitimately contains a percent sign — an
 // operating margin, say — is the server's own rendering of a measured value and
 // is not this file adding one.
+//
+// PREMIUM UI P4 (a2): ruled rows on the ground (no cream boxes); the figure is
+// tabular ink, the date ink-2, the link a quiet in-row link.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, AlertOctagon } from 'lucide-react'
 import { basisHref, basisIsRouted } from '../basisLinks.js'
 import { fmtDay } from '../visitDates.js'
+import '../../../styles/pending/a2-carry.css'
 
 /** Frozen. An undated reading says so; it is never given today's date. */
 export const NO_DATE_NOTE = 'no date recorded'
@@ -47,19 +51,19 @@ function BasisRow({ entry }) {
   const href = basisHref(entry)
   const routed = basisIsRouted(entry)
   return (
-    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-rule/50 bg-cream/40 px-2.5 py-1.5">
-      <span className="text-[12px] font-semibold text-navy">{entry?.label}</span>
-      <span className="font-mono text-[12.5px] text-navy" data-testid="basis-display">
+    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <span className="text-[12.5px] text-ink2">{entry?.label}</span>
+      <span className="text-[13px] font-semibold tabular-nums text-ink" data-testid="basis-display">
         {entry?.display}
       </span>
-      <span className="text-[11.5px] text-muted" data-testid="basis-asof">
+      <span className="text-[12px] text-ink2" data-testid="basis-asof">
         {entry?.asOf ? fmtDay(entry.asOf) : NO_DATE_NOTE}
       </span>
       <span className="flex-1" />
       <Link
         to={href}
         data-testid="basis-link"
-        className="inline-flex items-center gap-1 rounded-md border border-rule/60 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-navy transition hover:border-navy/40"
+        className="dt-link text-[12px]"
       >
         {routed ? 'Open the register' : 'Where we looked'}
         <ArrowUpRight size={11} aria-hidden />
@@ -72,17 +76,14 @@ export default function FindingBasisChain({ basis = [] }) {
   const rows = Array.isArray(basis) ? basis : []
   if (rows.length === 0) {
     return (
-      <p
-        data-testid="basis-missing"
-        className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-2.5 py-2 text-[12px] leading-relaxed text-danger"
-      >
-        <AlertOctagon size={14} className="mt-[1px] shrink-0" aria-hidden />
+      <p data-testid="basis-missing" className="a2-note" data-tone="risk">
+        <AlertOctagon size={14} aria-hidden />
         <span>{MISSING_BASIS_NOTE}</span>
       </p>
     )
   }
   return (
-    <ul className="space-y-1.5" data-testid="basis-chain">
+    <ul className="a2-rows a2-rows-tight ml-4" data-testid="basis-chain">
       {rows.map((entry, i) => (
         <BasisRow key={entry?.key ? `${entry.key}-${i}` : `basis-${i}`} entry={entry} />
       ))}

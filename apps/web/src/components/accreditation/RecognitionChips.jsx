@@ -5,10 +5,12 @@
 // the tooltip/aria-label. Empty or absent → NOTHING renders (most frameworks,
 // Cognia included, carry no recognition rows — an empty badge would be an
 // invented endorsement).
+// One variant: the ledger `pill` (Premium UI P4 — the navy adopt modal that
+// needed a dark chip is light now; callers still passing `light` are harmless).
 // ─────────────────────────────────────────────────────────────────────────────
 import { BadgeCheck } from 'lucide-react'
 
-export default function RecognitionChips({ recognitions, light = false }) {
+export default function RecognitionChips({ recognitions }) {
   const rows = recognitions ?? []
   if (!rows.length) return null
   return (
@@ -18,11 +20,7 @@ export default function RecognitionChips({ recognitions, light = false }) {
           key={r.code}
           title={r.line ?? r.name}
           aria-label={r.line ?? r.name}
-          className={
-            light
-              ? 'pill'
-              : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-1.5 py-0.5 text-[10.5px] font-semibold text-white/60'
-          }
+          className="pill"
         >
           <BadgeCheck size={10.5} aria-hidden />
           {r.name}

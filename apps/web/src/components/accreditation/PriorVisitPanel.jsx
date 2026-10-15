@@ -26,19 +26,14 @@
 //  4. It will not close anything on the school's behalf. Status is a human's
 //     answer; when a human sets it to closed with no date the SERVER stamps the
 //     date, so there is no client-side clock on this path at all.
+//
+// PREMIUM UI P4 (a2): a Section on the ground — the counts as a StatStrip, the
+// citations as DataTables (status as a Pill with a 2px mark, row actions that
+// fade in on hover), the unmatched set under its own ruled note. One flat
+// Button adds a finding; the add/edit form rides the shared EntityFormModal.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import {
-  History,
-  Pencil,
-  Trash2,
-  Plus,
-  TriangleAlert,
-  Link2Off,
-  CircleCheck,
-  CircleDot,
-} from 'lucide-react'
+import { History, Pencil, Trash2, Plus, TriangleAlert, Link2Off } from 'lucide-react'
 import EntityFormModal, {
   Field,
   Select,
@@ -48,20 +43,14 @@ import EntityFormModal, {
 import DatePicker from '../ui/DatePicker.jsx'
 import { accreditationApi, isModuleNotLicensed, isPaymentRequired } from '../../lib/api.js'
 import { formatShortDate } from '../../lib/format.js'
+import { Button, DataTable, Pill, Section, Stat, StatStrip } from '../ui/surface/index.js'
+import '../../styles/pending/a2-carry.css'
 
 const PRIOR_VISIT_STATUSES = ['open', 'closed']
 
 const STATUS_BADGE = {
-  open: {
-    label: 'Still open',
-    cls: 'border-danger/30 bg-danger/10 text-danger',
-    Icon: CircleDot,
-  },
-  closed: {
-    label: 'Closed',
-    cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700',
-    Icon: CircleCheck,
-  },
+  open: { label: 'Still open', tone: 'risk' },
+  closed: { label: 'Closed', tone: 'good' },
 }
 
 /** 'yyyy-mm-dd' slice of an ISO DateTime, for a DatePicker value. */
@@ -239,7 +228,7 @@ export function PriorVisitFormModal({ open, schoolId, initial, onClose, onSave, 
             </option>
           ))}
         </Select>
-        <span className="mt-1 block text-[11.5px] text-white/50">
+        <span className="mt-1 block text-[12px] text-ink2">
           You may hold a report from an accreditor you have not adopted here.
         </span>
       </Field>
@@ -258,7 +247,7 @@ export function PriorVisitFormModal({ open, schoolId, initial, onClose, onSave, 
           placeholder="e.g. COG-A3"
           className={fieldInput}
         />
-        <span className="mt-1 block text-[11.5px] text-white/60">
+        <span className="mt-1 block text-[12px] text-ink2">
           Type it exactly as it appears in their report. We store it verbatim, and if it does not
           match a standard in your register we will show it as unmatched rather than guess which
           standard they meant.
@@ -289,7 +278,7 @@ export function PriorVisitFormModal({ open, schoolId, initial, onClose, onSave, 
           onChange={(v) => set('closedDate')({ target: { value: v } })}
           className={fieldInput}
         />
-        <span className="mt-1 block text-[11.5px] text-white/50">
+        <span className="mt-1 block text-[12px] text-ink2">
           Leave blank when closing and we date it today.
         </span>
       </Field>
@@ -301,7 +290,7 @@ export function PriorVisitFormModal({ open, schoolId, initial, onClose, onSave, 
           placeholder="e.g. Board minutes, 14 May 2024 — policy 4.2 adopted"
           className={fieldInput}
         />
-        <span className="mt-1 block text-[11.5px] text-white/50">
+        <span className="mt-1 block text-[12px] text-ink2">
           A note for your own team. We do not resolve it or verify it, and we never imply we did.
         </span>
       </Field>
@@ -311,142 +300,126 @@ export function PriorVisitFormModal({ open, schoolId, initial, onClose, onSave, 
 
 // ═══════════════════════════ THE PANEL ═══════════════════════════════════════
 
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
 function StatusPill({ status }) {
   const def = STATUS_BADGE[status]
   if (!def) return null
-  const Icon = def.Icon
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
-    >
-      <Icon size={11} />
+    <Pill variant="status" tone={def.tone}>
       {def.label}
-    </span>
+    </Pill>
   )
 }
 
-function Stat({ label, value, sub }) {
-  return (
-    <div className="rounded-xl border border-rule/60 bg-white px-3 py-2">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
-      <p className="mt-0.5 font-serif text-[19px] font-semibold leading-none text-navy">{value}</p>
-      {sub ? <p className="mt-1 text-[11.5px] leading-snug text-muted">{sub}</p> : null}
-    </div>
-  )
-}
-
-function FindingRows({ rows, canEdit, reduce, onEdit, onDelete, onOpenStandard, showMatch }) {
-  return (
-    <AnimatePresence initial={false}>
-      {rows.map((f) => (
-        <motion.tr
-          key={f.id}
-          layout={!reduce}
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={reduce ? undefined : { opacity: 0 }}
-          className="group border-t border-rule/50 align-top"
-        >
-          <td className="px-4 py-3">
-            {showMatch ? (
-              <button
-                type="button"
-                onClick={
-                  f.matchedStandardId && onOpenStandard
-                    ? () => onOpenStandard(f.matchedStandardId)
-                    : undefined
-                }
-                disabled={!f.matchedStandardId || !onOpenStandard}
-                className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-navy transition enabled:hover:border-gold/60 disabled:cursor-default"
-              >
-                {/* The MATCHED standard's own code, as it appears in the register. */}
-                {f.matchedStandardCode ?? '—'}
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 text-[12px] font-semibold text-[#7a5e00]">
-                <Link2Off size={11} />
-                Unmatched
-              </span>
-            )}
-            {/* ALWAYS shown, matched or not: what the team actually wrote. When it
-                differs from the register's code, the reader can see both. */}
-            <p className="mt-1 text-[11.5px] text-muted">
-              Cited as “{f.citedStandardCode}”
-            </p>
-          </td>
-          <td className="px-4 py-3 text-muted">{formatShortDate(isoDay(f.visitDate))}</td>
-          <td className="px-4 py-3">
-            <p className="max-w-xl whitespace-pre-line text-[13.5px] leading-relaxed text-navy">
-              {f.text}
-            </p>
-            {f.evidenceRef ? (
-              <p className="mt-1 text-[12px] text-muted">How it was closed: {f.evidenceRef}</p>
-            ) : null}
-          </td>
-          <td className="px-4 py-3">
-            <StatusPill status={f.status} />
-            {f.status === 'closed' && f.closedDate ? (
-              <p className="mt-1 text-[11.5px] text-muted">{formatShortDate(isoDay(f.closedDate))}</p>
-            ) : null}
-          </td>
-          {canEdit ? (
-            <td className="px-4 py-3">
-              <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                <button
-                  type="button"
-                  onClick={() => onEdit(f)}
-                  aria-label={`Edit the finding cited as ${f.citedStandardCode}`}
-                  title="Edit"
-                  className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-gold/60 hover:text-navy"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(f)}
-                  aria-label={`Delete the finding cited as ${f.citedStandardCode}`}
-                  title="Delete"
-                  className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-danger/50 hover:text-danger"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </td>
+/** The columns of a citation table. `showMatch` = the matched register. */
+function findingColumns({ canEdit, onEdit, onDelete, onOpenStandard, showMatch, firstCol }) {
+  const cols = [
+    {
+      key: 'match',
+      header: firstCol,
+      width: '11rem',
+      render: (f) => (
+        <div className="py-2">
+          {showMatch ? (
+            <button
+              type="button"
+              onClick={
+                f.matchedStandardId && onOpenStandard
+                  ? () => onOpenStandard(f.matchedStandardId)
+                  : undefined
+              }
+              disabled={!f.matchedStandardId || !onOpenStandard}
+              className="a2-code transition enabled:hover:border-hair/40 enabled:hover:text-ink disabled:cursor-default"
+            >
+              {/* The MATCHED standard's own code, as it appears in the register. */}
+              {f.matchedStandardCode ?? '—'}
+            </button>
+          ) : (
+            <Pill variant="status" tone="watch">
+              <Link2Off size={11} aria-hidden />
+              Unmatched
+            </Pill>
+          )}
+          {/* ALWAYS shown, matched or not: what the team actually wrote. When it
+              differs from the register's code, the reader can see both. */}
+          <span className="dt-sub mt-1">Cited as “{f.citedStandardCode}”</span>
+        </div>
+      ),
+    },
+    {
+      key: 'visit',
+      header: 'Visit',
+      width: '7.5rem',
+      className: 'whitespace-nowrap text-ink2',
+      render: (f) => formatShortDate(isoDay(f.visitDate)),
+    },
+    {
+      key: 'text',
+      header: 'What the team wrote',
+      render: (f) => (
+        <div className="py-2">
+          <p className="max-w-xl whitespace-pre-line text-small leading-relaxed text-ink">{f.text}</p>
+          {f.evidenceRef ? (
+            <span className="dt-sub mt-1">How it was closed: {f.evidenceRef}</span>
           ) : null}
-        </motion.tr>
-      ))}
-    </AnimatePresence>
-  )
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '8rem',
+      render: (f) => (
+        <div className="py-2">
+          <StatusPill status={f.status} />
+          {f.status === 'closed' && f.closedDate ? (
+            <span className="dt-sub mt-1">{formatShortDate(isoDay(f.closedDate))}</span>
+          ) : null}
+        </div>
+      ),
+    },
+  ]
+  if (canEdit) {
+    cols.push({
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      width: '5.5rem',
+      render: (f) => (
+        <div className="dt-actions flex justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => onEdit(f)}
+            aria-label={`Edit the finding cited as ${f.citedStandardCode}`}
+            title="Edit"
+            className="a2-icon-btn"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(f)}
+            aria-label={`Delete the finding cited as ${f.citedStandardCode}`}
+            title="Delete"
+            data-tone="risk"
+            className="a2-icon-btn"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ),
+    })
+  }
+  return cols
 }
 
-function Table({ children, canEdit, firstCol }) {
+function FindingTable({ rows, firstCol, showMatch, ...handlers }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>
-            <Th>{firstCol}</Th>
-            <Th>Visit</Th>
-            <Th>What the team wrote</Th>
-            <Th>Status</Th>
-            {canEdit ? <Th right>Actions</Th> : null}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={findingColumns({ ...handlers, showMatch, firstCol })}
+      rows={rows}
+      rowKey="id"
+      markOf={(f) => (f.status === 'open' ? 'risk' : f.status === 'closed' ? 'good' : null)}
+      caption={showMatch ? 'Prior-visit findings matched to your register' : 'Prior-visit findings we could not match'}
+    />
   )
 }
 
@@ -500,60 +473,30 @@ export default function PriorVisitPanel({ schoolId, canEdit, reduce, onOpenStand
     await afterWrite()
   }
 
-  const header = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
-          <History size={18} />
-        </span>
-        <div>
-          <h3 className="font-serif text-[17px] font-semibold text-navy">
-            Findings from your last visit
-          </h3>
-          <p className="mt-0.5 max-w-2xl text-[12.5px] leading-relaxed text-muted">
-            What a real visiting team wrote, and whether you have closed it. A team reads its
-            predecessor&apos;s report before it reads yours.
-          </p>
-        </div>
-      </div>
-      {canEdit ? (
-        <button
-          type="button"
-          onClick={openAdd}
-          className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-        >
-          <Plus size={15} /> Add finding
-        </button>
-      ) : null}
-    </div>
-  )
+  const addButton = canEdit ? (
+    <Button variant="primary" size="sm" onClick={openAdd} icon={<Plus size={14} />}>
+      Add finding
+    </Button>
+  ) : null
+
+  const handlers = { canEdit, onEdit: openEdit, onDelete, onOpenStandard }
 
   let body
   if (notLicensed) {
-    body = (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center text-[13.5px] text-muted">
-        Prior-visit findings are part of the Accreditation module.
-      </div>
-    )
+    body = <p className="a2-empty">Prior-visit findings are part of the Accreditation module.</p>
   } else if (loading) {
-    body = (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center text-[14px] text-muted">
-        Loading prior visiting-team findings…
-      </div>
-    )
+    body = <p className="a2-empty">Loading prior visiting-team findings…</p>
   } else if (error) {
     body = (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center text-[14px] text-danger">
+      <p className="a2-note" data-tone="risk">
         {error}
-      </div>
+      </p>
     )
   } else if (rows.length === 0) {
     body = (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center">
-        <p className="font-serif text-[16px] italic text-muted">
-          No prior visiting-team findings recorded.
-        </p>
-        <p className="mx-auto mt-1 max-w-xl text-[13px] text-muted">
+      <div className="a2-empty">
+        <p className="a2-empty-title">No prior visiting-team findings recorded.</p>
+        <p className="max-w-xl">
           Type in what your last team actually wrote. It is the only outside verdict on this school
           we will ever have, and it is the one thing your next team is certain to read.
         </p>
@@ -561,63 +504,45 @@ export default function PriorVisitPanel({ schoolId, canEdit, reduce, onOpenStand
     )
   } else {
     body = (
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
-          <Stat label="Recorded" value={rows.length} sub="citations on file" />
+      <div className="space-y-5">
+        <StatStrip cols={3} className="border-t border-hair">
+          <Stat label="Recorded" value={rows.length} note="citations on file" />
           <Stat
             label="Still open"
             value={openCount}
-            sub={openCount > 0 ? 'by your own register' : 'nothing outstanding'}
+            status={openCount > 0 ? 'risk' : undefined}
+            note={openCount > 0 ? 'by your own register' : 'nothing outstanding'}
           />
           <Stat
             label="Unmatched"
             value={unmatched.length}
-            sub={unmatched.length > 0 ? 'no standard of that code' : 'all matched'}
+            status={unmatched.length > 0 ? 'watch' : undefined}
+            note={unmatched.length > 0 ? 'no standard of that code' : 'all matched'}
           />
-        </div>
+        </StatStrip>
 
         {matched.length > 0 ? (
-          <Table canEdit={canEdit} firstCol="Standard">
-            <FindingRows
-              rows={matched}
-              canEdit={canEdit}
-              reduce={reduce}
-              onEdit={openEdit}
-              onDelete={onDelete}
-              onOpenStandard={onOpenStandard}
-              showMatch
-            />
-          </Table>
+          <FindingTable rows={matched} firstCol="Standard" showMatch {...handlers} />
         ) : null}
 
         {/* ── The unmatched section. Its heading is fixed, the note is the
             SERVER's and is printed verbatim, and every row is shown in full. ── */}
         {unmatched.length > 0 ? (
-          <div className="space-y-2 rounded-xl border border-gold/30 bg-gold/[0.04] p-3">
-            <div className="flex items-start gap-2">
-              <TriangleAlert size={15} className="mt-0.5 shrink-0 text-[#7a5e00]" />
+          <div className="space-y-2">
+            <div className="a2-note" data-tone="watch">
+              <TriangleAlert size={14} aria-hidden />
               <div>
-                <h4 className="text-[13.5px] font-semibold text-navy">
+                <h4 className="text-[14px] font-semibold text-ink">
                   Cited standards we could not match to your register
                 </h4>
                 {unmatchedNote ? (
-                  <p className="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-muted">
+                  <p className="mt-1 max-w-3xl text-small leading-relaxed text-ink2">
                     {unmatchedNote}
                   </p>
                 ) : null}
               </div>
             </div>
-            <Table canEdit={canEdit} firstCol="Match">
-              <FindingRows
-                rows={unmatched}
-                canEdit={canEdit}
-                reduce={reduce}
-                onEdit={openEdit}
-                onDelete={onDelete}
-                onOpenStandard={onOpenStandard}
-                showMatch={false}
-              />
-            </Table>
+            <FindingTable rows={unmatched} firstCol="Match" showMatch={false} {...handlers} />
           </div>
         ) : null}
       </div>
@@ -625,8 +550,20 @@ export default function PriorVisitPanel({ schoolId, canEdit, reduce, onOpenStand
   }
 
   return (
-    <section className="space-y-3 rounded-2xl border border-rule/60 bg-white p-4 sm:p-5">
-      {header}
+    <Section
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <History size={13} aria-hidden />
+          Prior visit
+        </span>
+      }
+      aside={addButton}
+    >
+      <h3 className="sec-title !mb-1">Findings from your last visit</h3>
+      <p className="mb-4 max-w-2xl text-small leading-relaxed text-ink2">
+        What a real visiting team wrote, and whether you have closed it. A team reads its
+        predecessor&apos;s report before it reads yours.
+      </p>
       {body}
       <PriorVisitFormModal
         key={editing ? editing.id : 'new'}
@@ -637,6 +574,6 @@ export default function PriorVisitPanel({ schoolId, canEdit, reduce, onOpenStand
         onSave={onSave}
         reduce={reduce}
       />
-    </section>
+    </Section>
   )
 }

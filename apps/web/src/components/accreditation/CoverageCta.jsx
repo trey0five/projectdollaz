@@ -20,11 +20,13 @@
 //
 // BOTH VARIANTS RENDER NOTHING WHEN THERE IS NOTHING TO SAY. A CTA that fires on
 // an empty list is how an upsell becomes noise.
+//
+// PREMIUM UI P4 (a2): no amber card. Each ask is a ruled block on the ground — a
+// hairline above, a Garamond line, the rule ids as code tags, a flat Button.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Link } from 'react-router-dom'
 import { CalendarPlus, Sparkles } from 'lucide-react'
-
-const AMBER = '#F59E0B'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/a2-carry.css'
 
 /** moduleKey → the display name used elsewhere in the app's chrome. */
 const MODULE_LABEL = {
@@ -44,9 +46,7 @@ function moduleLabel(key) {
 }
 
 function Card({ children }) {
-  return (
-    <div className="rounded-2xl border border-[#F59E0B]/35 bg-amber-50/60 p-4">{children}</div>
-  )
+  return <div className="min-w-0 border-t border-hair pt-4">{children}</div>
 }
 
 /**
@@ -70,23 +70,20 @@ export function YearsCta({ unlockableByYears = null }) {
 
   return (
     <Card>
-      <p className="flex items-center gap-1.5 font-serif text-[16px] font-semibold text-navy">
-        <Sparkles size={15} style={{ color: AMBER }} aria-hidden />
+      <p className="flex items-start gap-1.5 font-serif text-[19px] font-medium leading-6 text-ink">
+        <Sparkles size={15} className="mt-1 shrink-0 text-ink2" aria-hidden />
         {ruleIds.length} more rule{ruleIds.length === 1 ? '' : 's'} unlock
         {ruleIds.length === 1 ? 's' : ''}
         {/* The server's labels, verbatim — no client-side fiscal-year arithmetic. */}
         {years ? ` when you add ${years}` : ' when you add your prior years'}
       </p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+      <p className="mt-1 text-small leading-relaxed text-ink2">
         Rules that need five annual readings can only say &ldquo;directional&rdquo; with what you
         have. Adding your prior years is one upload.
       </p>
       <ul className="mt-2 flex flex-wrap gap-1.5">
         {ruleIds.map((id) => (
-          <li
-            key={id}
-            className="rounded-md border border-rule/60 bg-white px-1.5 py-0.5 font-mono text-[10.5px] text-muted"
-          >
+          <li key={id} className="a2-code">
             {id}
           </li>
         ))}
@@ -96,12 +93,15 @@ export function YearsCta({ unlockableByYears = null }) {
           and the redirect drops the query string — so the old link landed on a
           generic add-data screen with no uploader open. `add=tb` picks the trial-
           balance option and `intake=bulk` opens its multi-year tab. */}
-      <Link
+      <Button
         to="/finance?tab=add&add=tb&intake=bulk"
-        className="mt-3 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
+        variant="primary"
+        size="sm"
+        className="mt-3"
+        icon={<CalendarPlus size={14} />}
       >
-        <CalendarPlus size={14} aria-hidden /> Add years
-      </Link>
+        Add years
+      </Button>
     </Card>
   )
 }
@@ -117,30 +117,27 @@ export function ModulesCta({ blockedByModule = null }) {
 
   return (
     <Card>
-      <p className="font-serif text-[16px] font-semibold text-navy">
+      <p className="font-serif text-[19px] font-medium leading-6 text-ink">
         Rules waiting on a module you haven&apos;t licensed
       </p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+      <p className="mt-1 text-small leading-relaxed text-ink2">
         These lower what we can evaluate — they never lower your score, and they never produce a
         finding against you.
       </p>
       <ul className="mt-2 space-y-1.5">
         {entries.map(([moduleKey, ids]) => (
-          <li key={moduleKey} className="text-[13px] text-navy">
+          <li key={moduleKey} className="text-small text-ink">
             <span className="font-semibold">
               {ids.length} rule{ids.length === 1 ? '' : 's'} {ids.length === 1 ? 'is' : 'are'}{' '}
               waiting on the {moduleLabel(moduleKey)} module
             </span>
-            <span className="ml-1.5 font-mono text-[10.5px] text-muted">{ids.join(' · ')}</span>
+            <span className="ml-1.5 text-[11px] tabular-nums text-ink2">{ids.join(' · ')}</span>
           </li>
         ))}
       </ul>
-      <Link
-        to="/settings/billing#modules"
-        className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]"
-      >
+      <Button to="/settings/billing#modules" variant="secondary" size="sm" className="mt-3">
         See modules
-      </Link>
+      </Button>
     </Card>
   )
 }
@@ -154,7 +151,7 @@ export default function CoverageCta({ coverage = null }) {
   if (!hasYears && !hasModules) return null
 
   return (
-    <div className={`grid gap-4 ${hasYears && hasModules ? 'lg:grid-cols-2' : ''}`}>
+    <div className={`grid gap-x-10 gap-y-4 ${hasYears && hasModules ? 'lg:grid-cols-2' : ''}`}>
       <YearsCta unlockableByYears={years} />
       <ModulesCta blockedByModule={modules} />
     </div>

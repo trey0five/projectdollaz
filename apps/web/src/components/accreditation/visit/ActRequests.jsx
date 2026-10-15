@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useNavigate } from 'react-router-dom'
 import EvidenceReadinessTable from '../EvidenceReadinessTable.jsx'
+import '../../../styles/pending/a2-carry.css'
 
 /** The Evidence Index page, which already exists. Used when the payload omits it. */
 export const EVIDENCE_INDEX_ROUTE = '/accreditation/evidence/print'
@@ -43,10 +44,7 @@ export default function ActRequests({ requests = null, framework = null, onOpenS
   // empty requirement list, which would read as "a team would ask for nothing".
   if (requests?.unavailableReason) {
     return (
-      <p
-        data-testid="requests-unavailable"
-        className="rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-900"
-      >
+      <p data-testid="requests-unavailable" className="a2-note" data-tone="watch">
         {requests.unavailableReason}
       </p>
     )

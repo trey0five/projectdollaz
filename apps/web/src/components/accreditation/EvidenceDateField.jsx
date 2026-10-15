@@ -17,25 +17,20 @@
 // which is excluded from the health denominator entirely — the school reaches no
 // number and one honest sentence, never a flattering one.
 //
-// On-theme DatePicker, never a native <input type="date"> (house rule). Renders on
-// the dark evidence panel by default, which is where it is asked at attach time;
-// `dark={false}` gives the light-surface variant for any light host.
+// On-theme DatePicker, never a native <input type="date"> (house rule). Light only
+// (Premium UI P4, a2): the evidence drawer it lives in is light now, so the navy
+// variant is gone; the field is the drawer's compact plain field.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useId } from 'react'
 import { CalendarRange } from 'lucide-react'
 import DatePicker from '../ui/DatePicker.jsx'
 import { EFFECTIVE_DATE_HELP, EFFECTIVE_DATE_LABEL } from './evidenceMeta.js'
-
-const DARK_INPUT =
-  'w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-[#F59E0B]/60'
-const LIGHT_INPUT =
-  'w-full rounded-lg border border-rule/70 bg-white px-3 py-1.5 text-[13px] text-navy outline-none focus:border-[#F59E0B]/60'
+import '../../styles/pending/a2-carry.css'
 
 export default function EvidenceDateField({
   /** ISO 'yyyy-mm-dd' or '' — the drop-in DatePicker contract. */
   value = '',
   onChange,
-  dark = true,
   disabled = false,
   /** Hide the helper line where space is tight (the label still carries it via title). */
   showHelp = true,
@@ -47,11 +42,9 @@ export default function EvidenceDateField({
       <label
         htmlFor={id}
         title={EFFECTIVE_DATE_HELP}
-        className={`mb-1 flex items-center gap-1.5 text-[12px] font-semibold ${
-          dark ? 'text-white/70' : 'text-navy'
-        }`}
+        className="a2-label mb-1 flex items-center gap-1.5"
       >
-        <CalendarRange size={13} aria-hidden className={dark ? 'text-[#fde68a]' : 'text-[#F59E0B]'} />
+        <CalendarRange size={13} aria-hidden />
         {EFFECTIVE_DATE_LABEL}
       </label>
       <DatePicker
@@ -61,12 +54,10 @@ export default function EvidenceDateField({
         disabled={disabled}
         aria-label={EFFECTIVE_DATE_LABEL}
         placeholder="Leave blank if unsure"
-        className={dark ? DARK_INPUT : LIGHT_INPUT}
+        className="a2-field"
       />
       {showHelp ? (
-        <p
-          className={`mt-1 text-[11.5px] leading-relaxed ${dark ? 'text-white/45' : 'text-muted'}`}
-        >
+        <p className="mt-1 text-[12px] leading-relaxed text-ink2">
           {EFFECTIVE_DATE_HELP}
         </p>
       ) : null}

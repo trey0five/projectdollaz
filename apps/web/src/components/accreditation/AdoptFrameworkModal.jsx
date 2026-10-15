@@ -25,23 +25,30 @@
 //   · steers: the SUCCESSOR's card hides its plain Adopt radio for a school
 //     holding the predecessor, pointing at Upgrade instead — adopting both
 //     editions side-by-side is the one state that blocks the one-click path.
+//
+// PREMIUM UI P4 (a2): light only. Frameworks are hairline choice rows (a 2px
+// primary mark when selected, no amber flood), status words are ledger Pills,
+// the remove / upgrade confirmations are ruled notes with a semantic mark, and
+// every action is a flat Button — the gold-gradient upgrade button and the navy
+// v1 branch are gone (the shared modal shell has no dark variant any more).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { Compass, Check, AlertTriangle, ArrowUpCircle } from 'lucide-react'
-import EntityFormModal from '../ui/EntityFormModal.jsx'
+import { Compass, Check, AlertTriangle, ArrowUpCircle, Trash2 } from 'lucide-react'
+import EntityFormModal, { Field, fieldInput } from '../ui/EntityFormModal.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
 import RecognitionChips from './RecognitionChips.jsx'
-import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import Button from '../ui/surface/Button.jsx'
+import Pill from '../ui/surface/Pill.jsx'
 import { removalLines, isCostless } from '../../lib/frameworkRemoval.js'
 import { upgradeLines, upgradeBlockers } from '../../lib/frameworkUpgrade.js'
+import '../../styles/pending/a2-carry.css'
 
-const AMBER = '#F59E0B'
-
-function FrameworkCard({ fw, selected, onSelect, onRemove, onUpgrade, steerToUpgrade, v2 }) {
+function FrameworkCard({ fw, selected, onSelect, onRemove, onUpgrade, steerToUpgrade }) {
   // A predecessor-holder is steered to Upgrade: the successor card renders as a
   // signpost, not a radio — selecting it would land the school in the dual-hold
   // state that 409-blocks its own one-click upgrade.
   const selectable = !steerToUpgrade
+  const hasFootActions = fw.adopted && ((fw.supersededBy && fw.upgrade?.available && onUpgrade) || onRemove)
   return (
     // The Remove control is a SIBLING of the radio, never nested inside it — a
     // button inside a button is invalid HTML and, worse here, one mis-aimed
@@ -53,139 +60,87 @@ function FrameworkCard({ fw, selected, onSelect, onRemove, onUpgrade, steerToUpg
       aria-checked={selectable ? selected : undefined}
       disabled={!selectable}
       onClick={selectable ? () => onSelect(fw.code) : undefined}
-      className={`w-full rounded-xl border-2 px-4 py-3 text-left transition ${
-        selected
-          ? 'border-[#F59E0B] bg-[#F59E0B]/10'
-          : v2
-            ? 'border-rule/80 bg-white hover:border-[#F59E0B]/60'
-            : 'border-white/15 bg-white/5 hover:border-[#F59E0B]/50'
-      } ${selectable ? '' : 'cursor-default'}`}
+      className={`a2-choice px-4 py-3 ${hasFootActions ? 'pb-10' : ''} ${selectable ? '' : 'cursor-default'}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p
-            className={`flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] ${
-              v2 ? 'text-[#b45309]' : 'text-[#fbbf24]/90'
-            }`}
-          >
+          <p className="flex flex-wrap items-center gap-1.5 text-micro font-semibold uppercase text-ink2">
             {fw.accreditor} · {fw.version}
             {/* Accreditor-recognition badges (NCPSA / ICAISA) — quiet chips,
                 nothing at all for the (many) frameworks with none. */}
-            <RecognitionChips recognitions={fw.recognitions} light={v2} />
+            <RecognitionChips recognitions={fw.recognitions} />
           </p>
-          <p
-            className={`mt-0.5 truncate text-[14.5px] font-semibold ${
-              v2 ? 'text-navy' : 'text-white'
-            }`}
-          >
-            {fw.name}
-          </p>
-          <p className={`mt-1 text-[12.5px] ${v2 ? 'text-muted' : 'text-white/60'}`}>
+          <p className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{fw.name}</p>
+          <p className="mt-1 text-small tabular-nums text-ink2">
             {fw.standardCount} standards
             {fw.assuranceCount ? ` · ${fw.assuranceCount} assurances` : ''}
             {fw.indexMax ? ` · index ${fw.indexMin}–${fw.indexMax}` : ''}
           </p>
+          {fw.adopted ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <Pill variant="status" tone="good" className="tabular-nums">
+                {`Adopted · ${fw.adoptedCount}`}
+              </Pill>
+              {/* WS2 — quiet, never blocking: the register keeps working exactly as
+                  it always did; this is an offer, not a nag. */}
+              {fw.supersededBy ? (
+                <Pill variant="status" tone="watch" data-testid="superseded-badge">
+                  Superseded — rev. {fw.supersededBy.version ?? fw.supersededBy.code} available
+                </Pill>
+              ) : null}
+            </div>
+          ) : null}
           {Array.isArray(fw.rubricLabels) && fw.rubricLabels.length ? (
-            <p className={`mt-1.5 text-[12px] ${v2 ? 'text-muted/80' : 'text-white/45'}`}>
-              Rubric: {fw.rubricLabels.join(' → ')}
-            </p>
+            <p className="mt-1.5 text-[12px] text-ink2">Rubric: {fw.rubricLabels.join(' → ')}</p>
           ) : null}
           {/* WS1 — aliases as a DISCOVERY affordance: the same framework under
               every name a school might know it by. */}
           {Array.isArray(fw.aliases) && fw.aliases.length ? (
-            <p
-              data-testid="framework-aliases"
-              className={`mt-1.5 text-[11.5px] ${v2 ? 'text-muted/70' : 'text-white/40'}`}
-            >
+            <p data-testid="framework-aliases" className="mt-1.5 text-[12px] text-ink2">
               Also known as: {fw.aliases.join(' · ')}
             </p>
           ) : null}
           {/* The accreditor's own portal, when it has one (FCC → Accreditrac):
               the server's sentence verbatim — it says KYRO does not submit. */}
           {fw.evidencePlatform?.name ? (
-            <p
-              data-testid="framework-evidence-platform"
-              className={`mt-1.5 text-[11.5px] ${v2 ? 'text-muted/80' : 'text-white/45'}`}
-            >
+            <p data-testid="framework-evidence-platform" className="mt-1.5 text-[12px] text-ink2">
               Evidence platform: {fw.evidencePlatform.name}
               {fw.evidencePlatform.line ? ` — ${fw.evidencePlatform.line}` : ''}
             </p>
           ) : null}
           {steerToUpgrade ? (
-            <p className={`mt-2 text-[12.5px] font-medium ${v2 ? 'text-[#b45309]' : 'text-[#fde68a]'}`}>
+            <p className="a2-note mt-2" data-tone="watch">
               You hold the {steerToUpgrade.version} register — use Upgrade on it to move here with
               your scores and evidence carried over.
             </p>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {selectable ? (
-            <span
-              aria-hidden
-              className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                selected ? 'border-[#F59E0B]' : v2 ? 'border-rule' : 'border-white/25'
-              }`}
-              style={selected ? { backgroundColor: AMBER } : undefined}
-            >
-              {selected ? <Check size={12} className="text-navy" strokeWidth={3} /> : null}
-            </span>
-          ) : null}
-          {fw.adopted ? (
-            <span
-              className={
-                v2
-                  ? 'rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700'
-                  : 'rounded-md border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-300'
-              }
-            >
-              Adopted · {fw.adoptedCount}
-            </span>
-          ) : null}
-          {/* WS2 — quiet, never blocking: the register keeps working exactly as
-              it always did; this is an offer, not a nag. */}
-          {fw.adopted && fw.supersededBy ? (
-            <span
-              data-testid="superseded-badge"
-              className={
-                v2
-                  ? 'rounded-md border border-[#F59E0B]/50 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700'
-                  : 'rounded-md border border-[#F59E0B]/50 bg-[#F59E0B]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#fde68a]'
-              }
-            >
-              Superseded — rev. {fw.supersededBy.version ?? fw.supersededBy.code} available
-            </span>
-          ) : null}
-        </div>
+        {selectable ? (
+          <span aria-hidden className="a2-radio mt-0.5 shrink-0">
+            {selected ? <Check size={11} strokeWidth={3} /> : null}
+          </span>
+        ) : null}
       </div>
     </button>
-    <div className="absolute bottom-2.5 right-3 flex items-center gap-2.5">
+    <div className="absolute bottom-2 right-3 flex items-center gap-1">
       {/* The one-click path to the current edition — preflight first, always. */}
       {fw.adopted && fw.supersededBy && fw.upgrade?.available && onUpgrade ? (
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="quiet"
           data-testid={`framework-upgrade-${fw.code}`}
           onClick={() => onUpgrade(fw)}
-          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-semibold transition ${
-            v2
-              ? 'text-[#b45309] hover:text-amber-800 hover:underline underline-offset-2'
-              : 'text-[#fde68a] hover:text-[#fbbf24] hover:underline underline-offset-2'
-          }`}
+          icon={<ArrowUpCircle size={13} />}
         >
-          <ArrowUpCircle size={13} aria-hidden /> Upgrade
-        </button>
+          Upgrade
+        </Button>
       ) : null}
       {/* Only for a framework you actually hold, and deliberately understated:
           this is the least-used control on the screen and the most destructive. */}
       {fw.adopted && onRemove ? (
-        <button
-          type="button"
-          onClick={() => onRemove(fw)}
-          className={`rounded-md px-2 py-0.5 text-[12px] font-semibold underline-offset-2 transition hover:underline ${
-            v2 ? 'text-muted hover:text-red-700' : 'text-white/50 hover:text-red-300'
-          }`}
-        >
+        <Button size="sm" variant="quiet" onClick={() => onRemove(fw)}>
           Remove
-        </button>
+        </Button>
       ) : null}
     </div>
     </div>
@@ -198,32 +153,26 @@ function FrameworkCard({ fw, selected, onSelect, onRemove, onUpgrade, steerToUpg
  * that disagrees with the delete it authorises is the worst bug this screen
  * could have. While the count is loading it says so rather than guessing.
  */
-function RemovePanel({ fw, impact, loading, error, busy, onCancel, onConfirm, v2 }) {
+function RemovePanel({ fw, impact, loading, error, busy, onCancel, onConfirm }) {
   const { losses, survives } = removalLines(impact)
   const costless = isCostless(impact)
   return (
     <div
       data-testid="framework-remove-confirm"
-      className={`rounded-xl border-2 px-4 py-3.5 sm:col-span-2 ${
-        v2 ? 'border-red-300 bg-red-50' : 'border-red-400/40 bg-red-400/10'
-      }`}
+      className="panel panel-attention px-4 py-3.5 sm:col-span-2"
     >
       <div className="flex items-start gap-2.5">
-        <AlertTriangle size={17} className={v2 ? 'mt-0.5 text-red-600' : 'mt-0.5 text-red-300'} />
+        <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className={`text-[14px] font-semibold ${v2 ? 'text-navy' : 'text-white'}`}>
-            Remove {fw.name}?
-          </p>
+          <p className="text-[15px] font-semibold text-ink">Remove {fw.name}?</p>
 
           {loading ? (
-            <p className={`mt-1.5 text-[13px] ${v2 ? 'text-muted' : 'text-white/60'}`}>
-              Counting what this would remove…
-            </p>
+            <p className="mt-1.5 text-small text-ink2">Counting what this would remove…</p>
           ) : error ? (
-            <p className={`mt-1.5 text-[13px] ${v2 ? 'text-red-700' : 'text-red-200'}`}>{error}</p>
+            <p className="a2-note mt-1.5" data-tone="risk">{error}</p>
           ) : (
             <>
-              <ul className={`mt-1.5 space-y-0.5 text-[13px] ${v2 ? 'text-navy/80' : 'text-white/75'}`}>
+              <ul className="mt-1.5 space-y-0.5 text-small tabular-nums text-ink">
                 {losses.map((l) => (
                   <li key={l}>· {l}</li>
                 ))}
@@ -231,15 +180,12 @@ function RemovePanel({ fw, impact, loading, error, busy, onCancel, onConfirm, v2
               {/* An untouched framework is a tidy-up, not a loss — say so rather
                   than alarming somebody who adopted it by accident a minute ago. */}
               {costless ? (
-                <p className={`mt-1.5 text-[12.5px] ${v2 ? 'text-muted' : 'text-white/55'}`}>
+                <p className="mt-1.5 text-small text-ink2">
                   You haven’t scored or evidenced anything against this framework yet.
                 </p>
               ) : null}
               {survives.map((line) => (
-                <p
-                  key={line}
-                  className={`mt-1.5 text-[12.5px] ${v2 ? 'text-muted' : 'text-white/55'}`}
-                >
+                <p key={line} className="mt-1.5 text-small text-ink2">
                   {line}
                 </p>
               ))}
@@ -247,27 +193,19 @@ function RemovePanel({ fw, impact, loading, error, busy, onCancel, onConfirm, v2
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={busy}
-              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition disabled:opacity-50 ${
-                v2
-                  ? 'border-rule bg-white text-navy hover:border-navy/40'
-                  : 'border-white/20 bg-white/5 text-white hover:border-white/40'
-              }`}
-            >
+            <Button variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
               Keep it
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               data-testid="framework-remove-confirm-btn"
               onClick={onConfirm}
               disabled={busy || loading || !!error}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+              icon={<Trash2 size={13} />}
             >
               {busy ? 'Removing…' : 'Remove framework'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -281,85 +219,60 @@ function RemovePanel({ fw, impact, loading, error, busy, onCancel, onConfirm, v2
  * figure server-counted, nothing while loading, blockers disable the confirm)
  * and only then runs the one-transaction re-point.
  */
-function UpgradePanel({ fw, impact, loading, error, busy, onCancel, onConfirm, v2 }) {
+function UpgradePanel({ fw, impact, loading, error, busy, onCancel, onConfirm }) {
   const { carried, notes } = upgradeLines(impact)
   const blockers = upgradeBlockers(impact)
   const toName = impact?.to?.name ?? fw.supersededBy?.name ?? 'the newer edition'
   return (
     <div
       data-testid="framework-upgrade-confirm"
-      className={`rounded-xl border-2 px-4 py-3.5 sm:col-span-2 ${
-        v2 ? 'border-[#F59E0B]/60 bg-amber-50' : 'border-[#F59E0B]/50 bg-[#F59E0B]/10'
-      }`}
+      className="panel panel-attention panel-watch px-4 py-3.5 sm:col-span-2"
     >
       <div className="flex items-start gap-2.5">
-        <ArrowUpCircle
-          size={17}
-          className={v2 ? 'mt-0.5 text-[#b45309]' : 'mt-0.5 text-[#fde68a]'}
-        />
+        <ArrowUpCircle size={16} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className={`text-[14px] font-semibold ${v2 ? 'text-navy' : 'text-white'}`}>
+          <p className="text-[15px] font-semibold text-ink">
             Upgrade {fw.name} to {toName}?
           </p>
 
           {loading ? (
-            <p className={`mt-1.5 text-[13px] ${v2 ? 'text-muted' : 'text-white/60'}`}>
-              Counting what carries over…
-            </p>
+            <p className="mt-1.5 text-small text-ink2">Counting what carries over…</p>
           ) : error ? (
-            <p className={`mt-1.5 text-[13px] ${v2 ? 'text-red-700' : 'text-red-200'}`}>{error}</p>
+            <p className="a2-note mt-1.5" data-tone="risk">{error}</p>
           ) : (
             <>
-              <ul className={`mt-1.5 space-y-0.5 text-[13px] ${v2 ? 'text-navy/80' : 'text-white/80'}`}>
+              <ul className="mt-1.5 space-y-0.5 text-small tabular-nums text-ink">
                 {carried.map((l) => (
                   <li key={l}>· {l}</li>
                 ))}
               </ul>
               {notes.map((line) => (
-                <p
-                  key={line}
-                  className={`mt-1.5 text-[12.5px] ${v2 ? 'text-muted' : 'text-white/60'}`}
-                >
+                <p key={line} className="mt-1.5 text-small text-ink2">
                   {line}
                 </p>
               ))}
               {blockers.map((line) => (
-                <p
-                  key={line}
-                  className={`mt-2 flex items-start gap-1.5 text-[12.5px] font-medium ${
-                    v2 ? 'text-red-700' : 'text-red-200'
-                  }`}
-                >
-                  <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden />
-                  {line}
+                <p key={line} className="a2-note mt-2" data-tone="risk">
+                  <AlertTriangle size={13} aria-hidden />
+                  <span>{line}</span>
                 </p>
               ))}
             </>
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={busy}
-              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition disabled:opacity-50 ${
-                v2
-                  ? 'border-rule bg-white text-navy hover:border-navy/40'
-                  : 'border-white/20 bg-white/5 text-white hover:border-white/40'
-              }`}
-            >
+            <Button variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
               Not now
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               data-testid="framework-upgrade-confirm-btn"
               onClick={onConfirm}
               disabled={busy || loading || !!error || blockers.length > 0}
-              className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:brightness-110 disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #fde68a 0%, #fbbf24 55%, #f59e0b 100%)' }}
             >
               {busy ? 'Upgrading…' : 'Upgrade — everything carries over'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -382,7 +295,6 @@ export default function AdoptFrameworkModal({
   onSaveCycleDate = null,
   reduce,
 }) {
-  const v2 = useUiV2()
   const [selected, setSelected] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -533,11 +445,11 @@ export default function AdoptFrameworkModal({
       wide
     >
       {loading ? (
-        <p className={`text-[13px] sm:col-span-2 ${v2 ? 'text-muted' : 'text-white/55'}`}>
+        <p className="text-small text-ink2 sm:col-span-2">
           Loading frameworks…
         </p>
       ) : list.length === 0 ? (
-        <p className={`text-[13px] sm:col-span-2 ${v2 ? 'text-muted' : 'text-white/55'}`}>
+        <p className="text-small text-ink2 sm:col-span-2">
           No frameworks are available yet — the catalog may still be seeding.
         </p>
       ) : (
@@ -556,7 +468,6 @@ export default function AdoptFrameworkModal({
                 busy={removeBusy}
                 onCancel={cancelRemove}
                 onConfirm={confirmRemove}
-                v2={v2}
               />
             ) : upgrading?.code === fw.code ? (
               <UpgradePanel
@@ -568,7 +479,6 @@ export default function AdoptFrameworkModal({
                 busy={upBusy}
                 onCancel={cancelUpgrade}
                 onConfirm={confirmUpgrade}
-                v2={v2}
               />
             ) : (
               <FrameworkCard
@@ -579,7 +489,6 @@ export default function AdoptFrameworkModal({
                 onRemove={onRemove && onRemovalImpact ? startRemove : null}
                 onUpgrade={onUpgrade && onUpgradeImpact ? startUpgrade : null}
                 steerToUpgrade={!fw.adopted ? predecessorOf(fw) : null}
-                v2={v2}
               />
             ),
           )}
@@ -591,25 +500,19 @@ export default function AdoptFrameworkModal({
           when a school is thinking about its accreditor. Skippable forever —
           the Journey tab's setup card asks the same question later. */}
       {!loading && list.length > 0 ? (
-        <label className="block sm:col-span-2">
-          <span
-            className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${
-              v2 ? 'text-gold' : 'text-gold-light/80'
-            }`}
-          >
-            Last review date (if you have one)
-          </span>
+        <Field
+          label="Last review date (if you have one)"
+          span={2}
+          reduce={reduce}
+          hint="Optional — anchors your accreditation journey (cycle countdown, milestones). You can set it any time on the Journey tab."
+        >
           <DatePicker
             value={lastReviewDate}
             onChange={setLastReviewDate}
             aria-label="Last review date (optional)"
-            className="field-lux mt-1"
+            className={fieldInput}
           />
-          <span className={`mt-1 block text-[12px] leading-snug ${v2 ? 'text-muted' : 'text-white/40'}`}>
-            Optional — anchors your accreditation journey (cycle countdown, milestones). You can set
-            it any time on the Journey tab.
-          </span>
-        </label>
+        </Field>
       ) : null}
     </EntityFormModal>
   )

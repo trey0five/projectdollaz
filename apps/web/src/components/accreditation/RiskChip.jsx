@@ -19,37 +19,49 @@
 //
 // A standard the engine did not score at all (absent from perStandardRisk)
 // renders NOTHING — sparseness holds and the row looks exactly as it did before.
+//
+// PREMIUM UI P4 (a2): one shape for every band — the ledger Pill, ink text and a
+// 2px semantic mark (clear → good · watch/elevated → watch · high/critical →
+// risk). The tinted chip vocabulary stays on RISK_BAND_META (`chip`/`dot`) only
+// for the consumers outside this slice that still read it.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ShieldAlert } from 'lucide-react'
+import { ChevronDown, ShieldAlert } from 'lucide-react'
+import Pill from '../ui/surface/Pill.jsx'
 
 /**
  * The five ordinal bands, plus the "not scored" case. One vocabulary, shared with
  * DomainBandStrip so a domain and a standard can never speak two dialects of the
- * same word.
+ * same word. `tone` is the ledger Pill / mark tone; `chip`/`dot` are the legacy
+ * tinted tokens a few out-of-slice consumers still read.
  */
 export const RISK_BAND_META = Object.freeze({
   clear: {
     label: 'Clear',
+    tone: 'good',
     chip: 'border-emerald-300/70 bg-emerald-50 text-emerald-700',
     dot: '#059669',
   },
   watch: {
     label: 'Watch',
+    tone: 'watch',
     chip: 'border-[#F59E0B]/40 bg-amber-50 text-amber-700',
     dot: '#F59E0B',
   },
   elevated: {
     label: 'Elevated',
+    tone: 'watch',
     chip: 'border-orange-300/70 bg-orange-50 text-orange-700',
     dot: '#EA580C',
   },
   high: {
     label: 'High',
+    tone: 'risk',
     chip: 'border-danger/30 bg-danger/10 text-danger',
     dot: '#DC2626',
   },
   critical: {
     label: 'Critical',
+    tone: 'risk',
     chip: 'border-danger/50 bg-danger/15 text-danger',
     dot: '#B91C1C',
   },
@@ -60,6 +72,7 @@ export function riskBandMeta(band) {
   return (
     RISK_BAND_META[band] ?? {
       label: 'Not scored',
+      tone: 'neutral',
       chip: 'border-rule/60 bg-section text-muted',
       dot: '#94a3b8',
     }
@@ -77,63 +90,69 @@ function driverTitle(entry) {
  * @param {object|null} entry — the TwinStandardRisk row for this standard, or null
  *                              when the engine returned none (renders nothing).
  */
-export default function RiskChip({ entry = null, size = 'md' }) {
+export default function RiskChip({ entry = null }) {
   if (!entry) return null
-  const small = size === 'sm'
-  const pad = small ? 'px-2 py-0.5 text-[11.5px]' : 'px-2.5 py-1 text-[12px]'
   const title = driverTitle(entry)
 
   // The assurance bypass — a standing critical, with its own glyph so it never
   // reads as "the formula said 100".
   if (entry.bypass === 'unmet_assurance') {
     return (
-      <span
-        title={title}
-        className={`inline-flex items-center gap-1.5 rounded-md border border-danger/50 bg-danger/15 font-semibold text-danger ${pad}`}
-      >
-        <ShieldAlert size={12} aria-hidden />
+      <Pill variant="status" tone="risk" title={title}>
+        <ShieldAlert size={11} aria-hidden />
         Assurance unmet
-      </span>
+      </Pill>
     )
   }
 
-  // Not scored — and the reason REACHES A READER WITHOUT A HOVER. `title` is a
-  // mouse affordance: on a touch device, and for anyone on a keyboard or a screen
-  // reader, a tooltip-only reason is no reason at all — and "not scored" vs
-  // "scored zero" is precisely the distinction this chip exists to make. So the
-  // reason is also the accessible name, and it is printed beside the chip.
+  // Not scored — and the reason STILL REACHES A READER WITHOUT A HOVER, but no
+  // longer as a paragraph printed into the register (it made every row of the
+  // eight-column standards table ~230px tall). It is the chip's accessible name
+  // and tooltip, AND a native disclosure: the Pill is the <summary>, so a tap or
+  // Enter opens the server's reason under it. "Not scored" vs "scored zero" is
+  // precisely the distinction this chip exists to make, and it stays one
+  // keystroke away for touch, keyboard and screen reader alike.
   if (entry.risk === null || entry.risk === undefined) {
-    return (
-      <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <span
-          title={title}
-          aria-label={entry.reason ? `Not scored — ${entry.reason}` : 'Not scored'}
-          className={`inline-flex items-center rounded-md border border-rule/60 bg-section font-semibold text-muted ${pad}`}
-        >
+    const label = entry.reason ? `Not scored — ${entry.reason}` : 'Not scored'
+    if (!entry.reason) {
+      return (
+        <Pill variant="status" tone="neutral" title={title} aria-label={label}>
           Not scored
-        </span>
-        {entry.reason ? (
-          <span className="max-w-[22rem] text-[11.5px] leading-snug text-muted">{entry.reason}</span>
-        ) : null}
-      </span>
+        </Pill>
+      )
+    }
+    return (
+      <details className="group inline-block max-w-[16rem] align-middle">
+        <summary
+          title={title}
+          aria-label={label}
+          className="inline-flex cursor-pointer list-none items-center rounded-[var(--r-ctl)] outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 [&::-webkit-details-marker]:hidden"
+        >
+          <Pill variant="status" tone="neutral">
+            Not scored
+            <ChevronDown
+              size={10}
+              aria-hidden
+              className="text-ink2 transition-transform group-open:rotate-180"
+            />
+          </Pill>
+        </summary>
+        <p className="mt-1 text-[11.5px] leading-snug text-ink2">{entry.reason}</p>
+      </details>
     )
   }
 
   const meta = riskBandMeta(entry.band)
   return (
-    <span
+    <Pill
+      variant="status"
+      tone={meta.tone}
       title={title}
       // The drivers are the basis of the band. Tooltip for the mouse, accessible
       // name for everyone else — never mouse-only.
       aria-label={title ? `${meta.label} — ${title.replace(/\n/g, ' ')}` : meta.label}
-      className={`inline-flex items-center gap-1.5 rounded-md border font-semibold ${meta.chip} ${pad}`}
     >
-      <span
-        aria-hidden
-        className="inline-block h-[6px] w-[6px] rounded-full"
-        style={{ backgroundColor: meta.dot }}
-      />
       {meta.label}
-    </span>
+    </Pill>
   )
 }

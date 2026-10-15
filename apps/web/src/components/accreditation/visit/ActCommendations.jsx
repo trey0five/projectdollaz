@@ -16,6 +16,7 @@
 // "No favourable figure: 31" cannot read as a verdict on the school.
 // ─────────────────────────────────────────────────────────────────────────────
 import CommendationsPanel from '../CommendationsPanel.jsx'
+import '../../../styles/pending/a2-carry.css'
 
 export default function ActCommendations({ commendations = null }) {
   // The read FAILED — a different fact from "there are none", and it gets its own
@@ -23,16 +24,14 @@ export default function ActCommendations({ commendations = null }) {
   // a verdict on the school.
   if (commendations?.unavailableReason) {
     return (
-      <p
-        data-testid="commendations-unavailable"
-        className="rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-900"
-      >
+      <p data-testid="commendations-unavailable" className="a2-note" data-tone="watch">
         {commendations.unavailableReason}
       </p>
     )
   }
   return (
     <CommendationsPanel
+      bare
       commendations={commendations?.commendations ?? []}
       exclusions={commendations?.exclusions ?? null}
       caveat={commendations?.caveat ?? ''}

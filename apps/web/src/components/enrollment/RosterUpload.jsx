@@ -24,9 +24,14 @@
 // produces no claim at all.
 //
 // React 19 idioms: no sync setState in effects, loading/error/empty on the call.
+//
+// PREMIUM UI P4 (a2): this renders INSIDE a host Panel (the add-data wizard's work
+// panel, the SIS connect panel), so it adds no box of its own: a dashed dropzone
+// on the ground at the panel radius, the confirm step and each outcome as
+// hairline-ruled blocks, notes with a 2px mark instead of gold washes, and flat
+// Buttons for every action.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   UploadCloud,
@@ -43,9 +48,10 @@ import { FormError, FormSuccess } from '../auth/fields.jsx'
 import ByGradeChart from './ByGradeChart.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
 import { summarizeRosterUpload } from './rosterUploadSummary.js'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/a2-carry.css'
 
-const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+const inputCls = 'a2-field'
 
 const MODES = [
   ['merge', 'Merge', 'Update students already on file, add the rest'],
@@ -160,8 +166,8 @@ export default function RosterUpload({
 
   return (
     <div>
-      <p className="mb-3 text-[14.5px] leading-relaxed text-muted">
-        Upload a <span className="font-semibold text-navy">OneRoster export</span> (a ZIP of the
+      <p className="mb-4 max-w-[70ch] text-[14px] leading-relaxed text-ink2">
+        Upload a <span className="font-semibold text-ink">OneRoster export</span> (a ZIP of the
         standard CSVs) or a single roster CSV. We save a student record for every row it names, and
         count active students by grade — never a per-class over-count — to set this period&apos;s
         enrollment. One step, both outcomes.
@@ -175,22 +181,23 @@ export default function RosterUpload({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
-          dragOver ? 'border-gold bg-gold/[0.06]' : 'border-border bg-section/40'
-        } ${canEdit ? '' : 'opacity-60'}`}
+        data-over={dragOver ? 'true' : undefined}
+        className={`a2-drop flex-col items-center justify-center px-6 py-8 text-center ${canEdit ? '' : 'opacity-60'}`}
       >
-        <UploadCloud size={26} className="mb-2 text-gold" />
-        <p className="text-[15px] font-semibold text-navy">
+        <UploadCloud size={24} className="mb-2" aria-hidden />
+        <p className="text-[15px] font-semibold text-ink">
           Drop a roster file here{canEdit ? ', or' : ''}
         </p>
         {canEdit && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-2"
             onClick={() => inputRef.current?.click()}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/50 bg-gold/10 px-4 py-2 text-[14px] font-semibold text-navy transition-all hover:border-gold hover:bg-gold/20"
+            icon={<FileText size={14} />}
           >
-            <FileText size={15} /> Choose file
-          </button>
+            Choose file
+          </Button>
         )}
         <input
           ref={inputRef}
@@ -199,7 +206,7 @@ export default function RosterUpload({
           className="hidden"
           onChange={(e) => pickFile(e.target.files?.[0])}
         />
-        <p className="mt-2 text-[12.5px] text-muted">OneRoster ZIP or CSV · up to a few MB</p>
+        <p className="mt-2 text-[12px] text-ink2">OneRoster ZIP or CSV · up to a few MB</p>
       </div>
 
       {/* Selected-file confirm bar (confirm-then-apply). */}
@@ -207,19 +214,20 @@ export default function RosterUpload({
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 rounded-lg border-2 border-gold/40 bg-gold/[0.06] px-4 py-3.5"
+          className="a2-block"
         >
-          <p className="flex items-center gap-2 text-[15px] font-semibold text-navy">
-            <FileText size={16} className="shrink-0 text-gold" />
-            {file.name}
-            <span className="text-[13px] font-normal text-muted">
+          <p className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+            <FileText size={16} className="shrink-0 text-ink2" aria-hidden />
+            <span className="min-w-0 truncate">{file.name}</span>
+            <span className="shrink-0 text-[13px] font-normal tabular-nums text-ink2">
               ({Math.max(1, Math.round(file.size / 1024))} KB)
             </span>
             <button
               type="button"
               onClick={() => pickFile(null)}
               aria-label="Clear selected file"
-              className="ml-auto rounded p-1 text-muted hover:text-danger"
+              data-tone="risk"
+              className="a2-icon-btn ml-auto shrink-0"
             >
               <X size={15} />
             </button>
@@ -237,11 +245,11 @@ export default function RosterUpload({
                   value={value}
                   checked={mode === value}
                   onChange={() => setMode(value)}
-                  className="mt-0.5 h-4 w-4 accent-gold"
+                  className="mt-0.5 h-4 w-4 accent-[#2563eb]"
                 />
                 <span>
-                  <span className="block text-[13.5px] font-semibold text-navy">{label}</span>
-                  <span className="block text-[11.5px] text-muted">{blurb}</span>
+                  <span className="block text-[14px] font-semibold text-ink">{label}</span>
+                  <span className="block text-[12px] text-ink2">{blurb}</span>
                 </span>
               </label>
             ))}
@@ -253,8 +261,8 @@ export default function RosterUpload({
               preview on this path to catch it, so the server now refuses a replace
               that would drop any row, and this says both halves. */}
           {mode === 'replace' && (
-            <p className="mt-2 flex items-start gap-1.5 text-[12.5px] font-semibold text-amber-700">
-              <AlertTriangle size={13} className="mt-[2px] shrink-0" />
+            <p className="a2-note mt-3" data-tone="watch">
+              <AlertTriangle size={13} aria-hidden />
               <span>
                 Replace deletes every current student first — only the rows we can read from this
                 file survive. If any row cannot be read, nothing is deleted and we tell you which:
@@ -263,18 +271,18 @@ export default function RosterUpload({
             </p>
           )}
 
-          <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="mt-4 flex flex-wrap items-end gap-3">
             {/* THE YEAR LEADS, because it is the decision that determines whether
                 this upload changes any finance number. Each option says whether
                 that year has a ledger, so "will this move my numbers" is answered
                 BEFORE the upload instead of explained afterwards. */}
             {periodList.length > 0 && (
-              <label className="text-[13px] font-semibold text-muted">
-                Counts for
+              <label className="block w-[280px] max-w-full">
+                <span className="a2-label">Counts for</span>
                 <select
                   value={chosenPeriodId}
                   onChange={(e) => setFiscalPeriodId(e.target.value)}
-                  className={`${inputCls} mt-1 max-w-[280px]`}
+                  className={`${inputCls} mt-1`}
                 >
                   {periodList.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -285,23 +293,22 @@ export default function RosterUpload({
                 </select>
               </label>
             )}
-            <label className="text-[13px] font-semibold text-muted">
-              As-of date (optional)
+            <label className="block w-[200px] max-w-full">
+              <span className="a2-label">As-of date (optional)</span>
               <DatePicker
                 value={observedOn}
                 onChange={(v) => setObservedOn(v)}
-                className={`${inputCls} mt-1 max-w-[200px]`}
+                className={`${inputCls} mt-1`}
               />
             </label>
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={apply}
               disabled={busy}
-              className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              icon={<UploadCloud size={15} className={busy ? 'motion-safe:animate-pulse' : ''} />}
             >
-              <UploadCloud size={15} className={busy ? 'animate-pulse' : ''} />
               {busy ? 'Reading…' : 'Confirm & apply roster'}
-            </button>
+            </Button>
           </div>
         </motion.div>
       )}
@@ -316,7 +323,7 @@ export default function RosterUpload({
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 space-y-3"
+          className="mt-4 space-y-4"
         >
           <FormSuccess>
             <span className="inline-flex items-center gap-1.5">
@@ -326,24 +333,27 @@ export default function RosterUpload({
           </FormSuccess>
 
           {/* 1 — records */}
-          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
-            <p className="flex items-start gap-2 text-[13.5px] font-semibold text-navy">
-              <GraduationCap size={15} className="mt-[1px] shrink-0 text-gold" />
+          <div className="border-t border-hair pt-3">
+            <p className="flex items-start gap-2 text-[14px] font-semibold text-ink">
+              <GraduationCap size={15} className="mt-[2px] shrink-0 text-ink2" aria-hidden />
               {summary.recordsLine}
             </p>
             {summary.records ? (
-              <Link
+              <Button
                 to="/enrollment?tab=records"
-                className="mt-2.5 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
+                variant="primary"
+                size="sm"
+                className="mt-2.5"
+                icon={<Users size={14} />}
               >
-                <Users size={14} aria-hidden /> Open Records
-              </Link>
+                Open Records
+              </Button>
             ) : (
               // The cause comes from the SERVER. This used to key on whether any
               // warning existed at all, so a counts-only file that also had an odd
               // grade code was told "the notes below say why" while the notes said
               // nothing about it — and the one true sentence was unreachable.
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              <p className="mt-1 text-small leading-relaxed text-ink2">
                 {summary.recordsNote ?? 'The notes below say why.'}
               </p>
             )}
@@ -354,12 +364,12 @@ export default function RosterUpload({
               it describes, which is not the year on screen). Once the undo runs,
               the lead line is REPLACED — appending "Restored" under "Replaced your
               entered enrollment of 430 with 436" leaves the false sentence on top. */}
-          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
-            <p className="text-[13.5px] font-semibold text-navy">
+          <div className="border-t border-hair pt-3">
+            <p className="text-[14px] font-semibold text-ink">
               {(restored && summary.enrollment.restoredLine) || summary.enrollment.line}
             </p>
             {summary.enrollment.reason && !restored && (
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              <p className="mt-1 text-small leading-relaxed text-ink2">
                 {summary.enrollment.reason}
               </p>
             )}
@@ -380,12 +390,13 @@ export default function RosterUpload({
                 next year's roster, and quietly filing it elsewhere would be the
                 same guess this product refuses to make. We say so, and name the fix. */}
             {summary.enrollment.periodHasFinancials === false ? (
-              <div className="mt-2.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2.5">
-                <p className="text-[13px] font-semibold text-[#7a5e00]">
+              <div className="a2-note mt-3" data-tone="watch">
+                <div className="min-w-0">
+                <p className="text-small font-semibold text-ink">
                   No finance metric changed
                   {summary.enrollment.periodLabel ? ` — ${summary.enrollment.periodLabel} has no financials yet` : ''}.
                 </p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-[#7a5e00]/90">
+                <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">
                   Your roster is saved and this year&apos;s enrollment is recorded. But cost
                   per pupil, net tuition per student, aid per student and the
                   student-teacher ratio all divide by the enrollment of the year their
@@ -394,41 +405,48 @@ export default function RosterUpload({
                   a year you already have financials for, upload it again with an as-of
                   date inside that year.
                 </p>
+                </div>
               </div>
             ) : null}
             {summary.enrollment.branch === 'superseded' && summary.enrollment.restorePeriodId && (
               <div className="mt-2.5">
                 {restored ? (
-                  <p className="text-[13px] font-semibold text-emerald-700">
+                  <p className="a2-note" data-tone="good">
                     Restored — your number is the one in force.
                   </p>
                 ) : (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={restore}
                     disabled={restoring}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-navy/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    icon={<Undo2 size={14} />}
                   >
-                    <Undo2 size={14} aria-hidden />
                     {restoring ? 'Restoring…' : 'Restore my number'}
-                  </button>
+                  </Button>
                 )}
-                {restoreErr && <p className="mt-1 text-[13px] text-danger">{restoreErr}</p>}
+                {restoreErr && (
+                  <p className="a2-note mt-2" data-tone="risk">
+                    {restoreErr}
+                  </p>
+                )}
               </div>
             )}
           </div>
 
           {warnings.length > 0 && (
-            <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3">
-              <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7a5e00]">
-                <AlertTriangle size={14} /> {warnings.length} warning
+            <div className="a2-note" data-tone="watch">
+              <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-small font-semibold text-ink">
+                <AlertTriangle size={14} className="text-ink2" aria-hidden /> {warnings.length} warning
                 {warnings.length === 1 ? '' : 's'} while reading the file
               </p>
-              <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-muted">
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-small text-ink2">
                 {warnings.slice(0, 6).map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
               </ul>
+              </div>
             </div>
           )}
           {snapshot && <ByGradeChart byGrade={snapshot.byGrade} />}

@@ -30,10 +30,15 @@
 // through exactly as the twin emits them — `unlockableByYears` names ONE signal,
 // EVERY year it needs and ONLY the rules that read it, and re-aggregating it here
 // is how the ask stops being true.
+//
+// PREMIUM UI P4 (a2): every list is ruled rows on the ground; the partitions are
+// 11px-caps sub-rules with their count; "what would unlock it" is a ruled note
+// with a watch mark; rule ids and signal keys are code tags. No amber washes.
 // ─────────────────────────────────────────────────────────────────────────────
 import { KeyRound, Layers, Radio, ScanSearch } from 'lucide-react'
 import CoverageCta from '../CoverageCta.jsx'
 import { fmtDay } from '../visitDates.js'
+import '../../../styles/pending/a2-carry.css'
 
 const PARTITIONS = [
   {
@@ -70,17 +75,17 @@ const PARTITIONS = [
 function SignalRow({ row }) {
   const reason = row?.reasonText ?? null
   return (
-    <li className="rounded-lg border border-rule/50 bg-white px-2.5 py-1.5" data-testid="signal-row">
+    <li data-testid="signal-row">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-[12.5px] font-semibold text-navy">{row?.label ?? row?.key}</span>
-        <span className="font-mono text-[10.5px] text-muted">{row?.key}</span>
+        <span className="text-small font-semibold text-ink">{row?.label ?? row?.key}</span>
+        <span className="a2-code font-mono !font-medium" title="Signal key">{row?.key}</span>
         <span className="flex-1" />
         {row?.observedOn ? (
-          <span className="text-[11px] text-muted">observed {fmtDay(row.observedOn)}</span>
+          <span className="text-[12px] tabular-nums text-ink2">observed {fmtDay(row.observedOn)}</span>
         ) : null}
       </div>
       {reason ? (
-        <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted" data-testid="signal-reason">
+        <p className="mt-0.5 text-[12px] leading-relaxed text-ink2" data-testid="signal-reason">
           {reason}
         </p>
       ) : null}
@@ -91,14 +96,17 @@ function SignalRow({ row }) {
 function Partition({ label, hint, rows }) {
   const list = Array.isArray(rows) ? rows : []
   return (
-    <div>
-      <h4 className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-        {label} · {list.length}
+    <div className="min-w-0">
+      <h4 className="sec-head !mb-1">
+        <span className="sec-label">
+          {label} · <span className="tabular-nums">{list.length}</span>
+        </span>
+        <span className="sec-rule" aria-hidden="true" />
       </h4>
-      <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">{hint}</p>
+      <p className="text-[12px] leading-relaxed text-ink2">{hint}</p>
       {list.length > 0 ? (
         // NO SLICE. The whole partition, every run.
-        <ul className="mt-1.5 space-y-1">
+        <ul className="a2-rows a2-rows-tight mt-2">
           {list.map((row, i) => (
             <SignalRow key={row?.key ?? `signal-${i}`} row={row} />
           ))}
@@ -110,50 +118,48 @@ function Partition({ label, hint, rows }) {
 
 function NamedHole({ hole }) {
   return (
-    <li className="rounded-xl border border-[#F59E0B]/30 bg-amber-50/70 px-3 py-2.5" data-testid="named-hole">
+    <li data-testid="named-hole">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md border border-rule/60 bg-white px-1.5 py-0.5 font-mono text-[10.5px] text-muted">
-          {hole?.ruleId}
-        </span>
-        <span className="text-[12.5px] font-semibold text-navy">{hole?.intake}</span>
+        <span className="a2-code">{hole?.ruleId}</span>
+        <span className="text-[14px] font-semibold text-ink">{hole?.intake}</span>
       </div>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{hole?.copy}</p>
+      <p className="mt-1 text-small leading-relaxed text-ink2">{hole?.copy}</p>
     </li>
   )
 }
 
 function NotEvaluatedRule({ rule }) {
   return (
-    <li className="rounded-xl border border-rule/50 bg-white px-3 py-2.5" data-testid="not-evaluated">
+    <li data-testid="not-evaluated">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md border border-rule/60 bg-cream/60 px-1.5 py-0.5 font-mono text-[10.5px] text-muted">
-          {rule?.ruleId}
-        </span>
-        <span className="min-w-0 flex-1 text-[13px] font-semibold text-navy">
+        <span className="a2-code">{rule?.ruleId}</span>
+        <span className="min-w-0 flex-1 text-[14px] font-semibold text-ink">
           {rule?.title ?? rule?.ruleId}
         </span>
       </div>
       {/* THE BLOCKING SIGNAL, NAMED. Never "insufficient data". */}
       {rule?.blockingSignalKey ? (
-        <p className="mt-1 text-[12px] leading-relaxed text-muted">
-          <span className="font-semibold text-navy">
+        <p className="mt-1 text-small leading-relaxed text-ink2">
+          <span className="font-semibold text-ink">
             {rule?.blockingSignalLabel ?? rule.blockingSignalKey}
           </span>
-          <span className="ml-1.5 font-mono text-[10.5px]">{rule.blockingSignalKey}</span>
+          <span className="a2-code ml-1.5 font-mono !font-medium align-middle" title="Signal key">{rule.blockingSignalKey}</span>
           {rule?.message ? <> — {rule.message}</> : null}
         </p>
       ) : rule?.message ? (
-        <p className="mt-1 text-[12px] leading-relaxed text-muted">{rule.message}</p>
+        <p className="mt-1 text-small leading-relaxed text-ink2">{rule.message}</p>
       ) : null}
       {rule?.unlock ? (
-        <div className="mt-1.5 rounded-lg border border-[#F59E0B]/30 bg-amber-50/70 px-2.5 py-2">
-          <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-amber-700">
+        <div className="a2-note mt-2" data-tone="watch">
+          <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-micro font-semibold uppercase text-ink2">
             <KeyRound size={11} aria-hidden /> What would unlock it
           </p>
-          <p className="mt-0.5 text-[12px] font-semibold leading-snug text-navy">
+          <p className="mt-0.5 text-small font-semibold leading-snug text-ink">
             {rule.unlock.intake}
           </p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{rule.unlock.copy}</p>
+          <p className="mt-0.5 text-small leading-relaxed text-ink2">{rule.unlock.copy}</p>
+          </div>
         </div>
       ) : null}
     </li>
@@ -163,7 +169,7 @@ function NotEvaluatedRule({ rule }) {
 export default function ActUnanswered({ unanswered = null }) {
   if (!unanswered) {
     return (
-      <p className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-6 text-center text-[13px] text-muted">
+      <p className="a2-empty">
         We could not read what we could not answer. That is itself unanswered — reload, and if it
         persists the engine is degraded, not your school.
       </p>
@@ -176,21 +182,21 @@ export default function ActUnanswered({ unanswered = null }) {
   const upsell = Array.isArray(unanswered.upsell) ? unanswered.upsell : []
 
   return (
-    <div className="space-y-4" data-testid="act-unanswered">
+    <div className="space-y-8" data-testid="act-unanswered">
       {/* The "we could value nothing at all" case, in the server's own words. */}
       {unanswered.signalsUnavailable?.message ? (
-        <p className="rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-900">
+        <p className="a2-note" data-tone="watch">
           {unanswered.signalsUnavailable.message}
         </p>
       ) : null}
 
       {namedHoles.length > 0 ? (
         <section>
-          <h3 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-navy">
-            <ScanSearch size={15} className="text-[#F59E0B]" aria-hidden />
+          <h3 className="flex items-start gap-2 text-[15px] font-semibold leading-snug text-ink">
+            <ScanSearch size={15} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
             Questions a visiting team asks that we cannot answer for any school today
           </h3>
-          <ul className="mt-2 space-y-2">
+          <ul className="a2-rows mt-2">
             {namedHoles.map((h, i) => (
               <NamedHole key={h?.ruleId ?? `hole-${i}`} hole={h} />
             ))}
@@ -200,11 +206,11 @@ export default function ActUnanswered({ unanswered = null }) {
 
       {rules.length > 0 ? (
         <section>
-          <h3 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-navy">
-            <Layers size={15} className="text-[#F59E0B]" aria-hidden />
+          <h3 className="flex items-start gap-2 text-[15px] font-semibold leading-snug text-ink">
+            <Layers size={15} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
             Rules we could not run on this register
           </h3>
-          <ul className="mt-2 space-y-2">
+          <ul className="a2-rows mt-2">
             {rules.map((r, i) => (
               <NotEvaluatedRule key={r?.ruleId ?? `rule-${i}`} rule={r} />
             ))}
@@ -213,14 +219,14 @@ export default function ActUnanswered({ unanswered = null }) {
       ) : null}
 
       <section>
-        <h3 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-navy">
-          <Radio size={15} className="text-[#F59E0B]" aria-hidden />
+        <h3 className="flex items-start gap-2 text-[15px] font-semibold leading-snug text-ink">
+          <Radio size={15} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
           Every signal we tried to read, and what happened
           {typeof unanswered.rosterCounts?.total === 'number' ? (
-            <span className="font-normal text-muted"> · {unanswered.rosterCounts.total} in all</span>
+            <span className="font-normal tabular-nums text-ink2"> · {unanswered.rosterCounts.total} in all</span>
           ) : null}
         </h3>
-        <div className="mt-2 grid gap-3 lg:grid-cols-2">
+        <div className="mt-3 grid gap-x-10 gap-y-6 lg:grid-cols-2">
           {PARTITIONS.map((p) => (
             <Partition key={p.key} label={p.label} hint={p.hint} rows={rows[p.key]} />
           ))}
