@@ -15,6 +15,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
 import { SLOT_ROLES, ROLE_META } from '../../lib/roleMeta.js'
+import { needsCheckPhrase, reviewButtonLabel } from '../../lib/reviewQueue.js'
 import { Button } from '../ui/surface/index.js'
 
 // Premium UI P3: the checkpoint is a `Panel` (the one raised surface — it asks
@@ -32,10 +33,14 @@ export default function IntakeConfirmBand({
   // is precisely how a school came to believe its books were live when every
   // number was zero.
   dataReady = true,
-  // What "Categorise my accounts" actually DOES. Without it that button was
-  // wired to onFix — the dismiss handler — so the one call to action the screen
-  // offered hid itself and changed nothing.
+  // What "Review N accounts" actually DOES (opens the review popup). Without it
+  // that button was wired to onFix — the dismiss handler — so the one call to
+  // action the screen offered hid itself and changed nothing.
   onCategorise = null,
+  // How many accounts the saved statements could not place (null = unknown).
+  // Same words as the Finance band, the Add-data callout and the file card —
+  // ONE action, ONE name.
+  reviewCount = null,
 }) {
   const reduce = useReducedMotion()
   if (!period) return null
@@ -64,7 +69,9 @@ export default function IntakeConfirmBand({
             Saved to <span className="font-semibold text-ink">{period.label}</span>.{' '}
             {dataReady
               ? 'Check the files below — then we’ll show you everywhere this data just lit up.'
-              : 'Your accounts aren’t named in a way we recognise yet, so your statements are still empty. Open a file below and confirm what each account is — we’ve suggested most of them.'}
+              : reviewCount > 0
+                ? `${needsCheckPhrase(reviewCount)} before your statements fill in.`
+                : 'Your accounts need a quick check before your statements fill in.'}
           </p>
         </div>
       </div>
@@ -118,7 +125,7 @@ export default function IntakeConfirmBand({
             }}
             className="w-full sm:w-auto"
           >
-            Categorise my accounts
+            {reviewCount > 0 ? reviewButtonLabel(reviewCount) : 'Review accounts'}
           </Button>
         )}
       </div>

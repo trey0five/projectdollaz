@@ -38,7 +38,7 @@ export default function HeroDropzone() {
       transition={{ type: 'spring', stiffness: 220, damping: 24 }}
       role="button"
       tabIndex={0}
-      aria-label="Drop trial balances here or press Enter to browse"
+      aria-label="Drop trial balances or QuickBooks reports here, or press Enter to browse"
       onClick={openDialog}
       onKeyDown={onKeyDown}
       onDrop={onDrop}
@@ -52,10 +52,11 @@ export default function HeroDropzone() {
 
       <div>
         <h2 className="font-serif text-title font-medium text-ink">
-          Start with this year’s trial balance
+          Start with this year’s trial balance or QuickBooks reports
         </h2>
         <p className="mx-auto mt-2 max-w-md text-small text-ink2">
-          Drop it here — that’s all you need to preview statements. You can add last
+          Drop it here — or the Profit &amp; Loss and Balance Sheet exported from
+          QuickBooks. That’s all you need to preview statements; you can add last
           year’s files afterward. Accepts .xlsx, .xls, and .csv.
         </p>
       </div>

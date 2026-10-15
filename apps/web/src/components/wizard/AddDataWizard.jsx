@@ -147,6 +147,23 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     setStep('confirm')
   }
 
+  // AN EMBED THAT FINISHES ITSELF (config `ownFinish: true` — Finance's trial
+  // balance). Owner, 2026-10-15: "when I select I'm done … it takes me to a
+  // redundant screen making me press done again. when I press done it gives me
+  // half the overview screen." So this skips Step 3 entirely: refresh, then the
+  // module OVERVIEW (the full page — not the Records/Workspaces tab).
+  const finishToOverview = () => {
+    fullCtx.onSaved?.()
+    setFlowResult(null)
+    flowGuardRef.current = null
+    savedRef.current = false
+    setOptionKey(null)
+    setStep('choose')
+    navigate(pathname)
+    // Land on the overview's HEADLINE, not 350–450px down where the step was.
+    scrollToTop()
+  }
+
   const addAnother = () => {
     setFlowResult(null)
     flowGuardRef.current = null
@@ -207,6 +224,14 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     // — so the guard would have been silently false and this would have sent
     // every module to its Overview, quietly failing the exact bug it fixes.
     const key = config.module
+    // A module whose numbers ARE its overview (finance: `finishTo: 'overview'`)
+    // lands there — its Records tab is only the Workspaces doors, "half the
+    // overview" in the owner's words.
+    if (config.finishTo === 'overview') {
+      navigate(pathname)
+      scrollToTop()
+      return
+    }
     navigate(key && moduleTabs(key).includes('records') ? `${pathname}?tab=records` : pathname)
   }
 
@@ -233,11 +258,14 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     step === 'work' && option?.kind === 'embed' && option.needsPeriod && !ctx.periodId
 
   // Step-aware meta line under the title (the visible twin of the live region).
+  // An option that finishes itself has no Done step (no Step 3 screen).
+  const skipDone = step === 'work' && !!option?.ownFinish
+  const stepCount = (soleOption ? 2 : 3) - (skipDone ? 1 : 0)
   const meta =
     step === 'choose'
       ? `Step 1 of 3 · Choose what to add`
       : step === 'work'
-        ? `Step ${soleOption ? 1 : 2} of ${soleOption ? 2 : 3} · ${option?.label ?? 'Add'}`
+        ? `Step ${soleOption ? 1 : 2} of ${stepCount} · ${option?.label ?? 'Add'}`
         : `Step ${soleOption ? 2 : 3} of ${soleOption ? 2 : 3} · Done`
 
   const swap = {
@@ -266,6 +294,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
           current={step}
           panelId={PANEL_ID}
           skipChoose={soleOption}
+          skipDone={skipDone}
           bare={step === 'work' && option?.kind === 'flow'}
           onGoTo={(s) => guardedLeave(() => setStep(s))}
         />
@@ -273,7 +302,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
       {/* Polite live region — announces the active step for screen readers. */}
       <p className="sr-only" aria-live="polite">
-        {`Step ${STEP_INDEX[step] + 1} of 3: ${stepName}`}
+        {`Step ${STEP_INDEX[step] + 1} of ${skipDone ? 2 : 3}: ${stepName}`}
       </p>
 
       <div
@@ -323,7 +352,9 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 <Panel
                   padded={false}
                   footer={
-                    option.kind === 'embed' && !needsPeriodBlocked ? (
+                    // An embed with its own finish (ownFinish) has no footer:
+                    // one finishing action on screen, not two.
+                    option.kind === 'embed' && !needsPeriodBlocked && !option.ownFinish ? (
                       <>
                         <Button variant="quiet" onClick={leaveWork} className="mr-auto">
                           {soleOption ? 'Back to overview' : 'Back'}
@@ -374,13 +405,13 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   ) : option.flush ? (
                     // A flush importer (config `flush: true`) brings its own
                     // horizontal padding + hairlines — no second inset around it.
-                    <WizardSlot render={option.renderEmbed} ctx={fullCtx} extra={{ goToOption }} />
+                    <WizardSlot render={option.renderEmbed} ctx={fullCtx} extra={{ goToOption, finishToOverview }} />
                   ) : (
                     <div className="panel-body">
                       <WizardSlot
                         render={option.renderEmbed}
                         ctx={fullCtx}
-                        extra={{ goToOption }}
+                        extra={{ goToOption, finishToOverview }}
                       />
                     </div>
                   )}
@@ -416,6 +447,26 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
       </div>
     </section>
   )
+}
+
+/**
+ * After a finish that changes the page under the person, start at the top —
+ * the window and the app's scrolling <main>, once now and once after the new
+ * tab has painted (the overview mounts a frame later).
+ */
+export function scrollToTop() {
+  const go = () => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    } catch {
+      /* jsdom */
+    }
+    for (const el of document.querySelectorAll('main, [data-scroll-root]')) {
+      if (el.scrollTop) el.scrollTop = 0
+    }
+  }
+  go()
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(go))
 }
 
 // The PageHeader title. A config may name its own; otherwise "numbers" wording

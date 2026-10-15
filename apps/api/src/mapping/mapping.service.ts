@@ -126,10 +126,20 @@ export class MappingService {
    * key; values must be a real SCoA category. Invalid keys/values 400 (so a bad
    * value never poisons entries and later breaks getSpreadOverrides). Never
    * deletes existing entries.
+   *
+   * `onlyNew` = FILL-ONLY: keys the school's stored entries already hold keep
+   * their category and only the missing keys are added. That is the mode for
+   * anything AUTOMATIC (the statement auto-sort, a browser preview sort): an
+   * account the school already placed — possibly by hand, in another year — is
+   * never re-pointed by a guess. A person's explicit pick (the default mode)
+   * still wins over what is stored. `merged` counts the keys whose stored
+   * category now equals the patch (in fill-only mode: the newly added ones plus
+   * any that already agreed).
    */
   async mergeEntries(
     schoolId: string,
     patch: Record<string, string>,
+    opts: { onlyNew?: boolean } = {},
   ): Promise<{ mappingVersion: string; entriesCount: number; merged: number }> {
     const validated: Record<string, string> = {}
     const badCategories: string[] = []
@@ -172,9 +182,21 @@ export class MappingService {
     // `||` is Postgres' jsonb concatenation: right-hand keys win, the read and
     // the write are the same statement, so concurrent merges cannot lose each
     // other. Prisma has no typed operator for it, hence the raw query.
-    const rows = await this.prisma.$queryRaw<{ entries: Record<string, string> }[]>`
+    //
+    // Fill-only flips the operands (patch || entries) so the STORED keys win —
+    // still one statement, so an automatic sort can't race a concurrent manual
+    // pick and overwrite it.
+    const patchJson = JSON.stringify(validated)
+    const rows = opts.onlyNew
+      ? await this.prisma.$queryRaw<{ entries: Record<string, string> }[]>`
       UPDATE mappings
-         SET entries = entries || ${JSON.stringify(validated)}::jsonb
+         SET entries = ${patchJson}::jsonb || entries
+       WHERE id = ${mapping.id}::uuid
+      RETURNING entries
+    `
+      : await this.prisma.$queryRaw<{ entries: Record<string, string> }[]>`
+      UPDATE mappings
+         SET entries = entries || ${patchJson}::jsonb
        WHERE id = ${mapping.id}::uuid
       RETURNING entries
     `
@@ -182,7 +204,9 @@ export class MappingService {
     return {
       mappingVersion: mapping.version,
       entriesCount: Object.keys(next).length,
-      merged: Object.keys(validated).length,
+      merged: opts.onlyNew
+        ? Object.keys(validated).filter((k) => next[k] === validated[k]).length
+        : Object.keys(validated).length,
     }
   }
 

@@ -96,7 +96,7 @@ function rowLooksLikeHeader(r: any[]): boolean {
 }
 
 /** Detect the first data row by scanning the top of the sheet. */
-function detectStartRow(raw: RawGrid): number {
+export function detectStartRow(raw: RawGrid): number {
   const startRow = 3 // safe default
   for (let i = 0; i < Math.min(12, raw.length); i++) {
     const r = raw[i]
@@ -128,8 +128,17 @@ function detectStartRow(raw: RawGrid): number {
  * title in A1 can never be mistaken for a column header.
  */
 export function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
+  return detectColumnsByName(raw, startRow) ?? FIXED_COLUMNS
+}
+
+/**
+ * The header row (the row just above `startRow`) with blank cells filled from
+ * up to two rows above, nearest first — lower-cased + trimmed. [] when there is
+ * no header row.
+ */
+export function stackedHeaderCells(raw: RawGrid, startRow: number): string[] {
   const headerRow = startRow > 0 ? raw[startRow - 1] : undefined
-  if (!headerRow || !Array.isArray(headerRow)) return FIXED_COLUMNS
+  if (!headerRow || !Array.isArray(headerRow)) return []
   const norm = (row: any[] | undefined): string[] =>
     (row ?? []).map((cell) => (cell ?? '').toString().trim().toLowerCase())
   const headers = norm(headerRow)
@@ -140,6 +149,31 @@ export function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
       if (h && !headers[i]) headers[i] = h
     })
   }
+  return headers
+}
+
+/**
+ * The signed-TOTAL column among (stacked, lower-cased) header cells: best
+ * preference across the WHOLE row (not first match wins), skipping budget /
+ * variance / percentage columns outright and the `exclude`d columns. -1 = none.
+ */
+export function totalColumnFromHeaders(headers: string[], exclude: readonly number[]): number {
+  for (const pat of TOTAL_HEADER_PATTERNS) {
+    const idx = headers.findIndex((h, i) => h && !exclude.includes(i) && pat.test(h) && !NEVER_TOTAL.test(h))
+    if (idx >= 0) return idx
+  }
+  return -1
+}
+
+/**
+ * Name-mapping only: the column map when the header row NAMES both the
+ * account and the description columns, else null (detectColumns then falls
+ * back to the fixed A/B/C/D/E positions). Exported for the #32 preview, which
+ * must know whether a column was recognised by name or merely by position.
+ */
+export function detectColumnsByName(raw: RawGrid, startRow: number): ColumnMap | null {
+  const headers = stackedHeaderCells(raw, startRow)
+  if (headers.length === 0) return null
   const map: ColumnMap = { acct: -1, desc: -1, debit: -1, credit: -1, total: -1 }
   headers.forEach((h, idx) => {
     if (!h) return
@@ -153,17 +187,30 @@ export function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
       map.credit = idx
     }
   })
-  // Total column: best-preference match across the WHOLE header row (not first
-  // match wins), skipping budget / variance / percentage columns outright.
-  for (const pat of TOTAL_HEADER_PATTERNS) {
-    const idx = headers.findIndex(
-      (h, i) => h && i !== map.acct && i !== map.desc && i !== map.debit && i !== map.credit && pat.test(h) && !NEVER_TOTAL.test(h),
-    )
-    if (idx >= 0) { map.total = idx; break }
-  }
+  map.total = totalColumnFromHeaders(headers, [map.acct, map.desc, map.debit, map.credit])
   // Need at least account + description recognized to trust name-mapping.
-  if (map.acct < 0 || map.desc < 0) return FIXED_COLUMNS
+  if (map.acct < 0 || map.desc < 0) return null
   return map
+}
+
+/**
+ * No balance could have been read: no amount column was recognised by name,
+ * OR every body cell of the amount column(s) in use is blank (the fixed
+ * A/B/C/D/E fallback pointing past a two-column sheet). Paired with "every
+ * total is 0" by both plain adapters — never import a chart of zeros.
+ */
+export function noAmountCells(raw: any[][], startRow: number, cols: ColumnMap): boolean {
+  if (cols.total < 0 && cols.debit < 0 && cols.credit < 0) return true
+  const used = [cols.total, cols.debit, cols.credit].filter((c) => c >= 0)
+  for (let i = startRow; i < raw.length; i++) {
+    const r = raw[i]
+    if (!r) continue
+    for (const c of used) {
+      const v = r[c]
+      if (v != null && v.toString().trim() !== '') return false
+    }
+  }
+  return true
 }
 
 /** Shared by the CSV adapter: the signed total of one row under a column map. */
@@ -216,7 +263,7 @@ function parseSheetGrid(raw: RawGrid, sheetName: string): IngestionResult | null
   // Every parsed total is zero AND no amount column was recognised → the sheet
   // has balances we could not find (e.g. an unlabeled column). Refuse rather
   // than import a chart of zeros that looks like success.
-  if (cols.total < 0 && cols.debit < 0 && cols.credit < 0 && rows.every((r) => r.total === 0)) {
+  if (rows.every((r) => r.total === 0) && noAmountCells(raw, startRow, cols)) {
     const hdr = (startRow > 0 ? raw[startRow - 1] ?? [] : []).map((c: unknown) => (c ?? '').toString().trim()).filter(Boolean)
     throw new Error(
       `Found ${rows.length} account rows but no amount column. ` +

@@ -23,6 +23,7 @@ export type {
   MetricComputeOutput,
   MetricDef,
   MetricResult,
+  MetricUnavailableReason,
   TrendPoint,
   MetricTrend,
 } from './types.js'
@@ -49,6 +50,7 @@ export { generateInsight } from './insight.js'
 // Adapter
 export {
   fromBundle,
+  missingBalanceSheet,
   REVENUE_LINE_KEYS,
   EXPENSE_LINE_KEYS,
   REVENUE_LINE_LABELS,
@@ -73,6 +75,7 @@ export {
   computeMetricsRecord,
   computeTrend,
   assembleMetricResult,
+  usesBalanceSheet,
 } from './compute.js'
 export type {
   ComputeMetricsArgs,

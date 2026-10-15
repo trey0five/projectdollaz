@@ -3,12 +3,10 @@ import { SCOA_CATEGORIES } from '@finrep/engine'
 import { fmt } from '../lib/format.js'
 
 // ─────────────────────────────────────────────────────────────
-// Per-account category picker row for the trial-balance "to review"
-// panel. Presentational + top-level only — all chart/overlay state lives
-// in AppContext (the FROZEN mapAccount / mappingAccts / activeChart API).
-// Picking a category calls onPick(acct, categoryKey); the row then exits
-// the parent's AnimatePresence list because findUnmapped(activeChart) no
-// longer flags it.
+// Per-account category picker row (the QuickBooks category review uses it;
+// the intake review popup reuses its CATEGORY_OPTIONS / labelFor). Purely
+// presentational: picking a category calls onPick(acct, categoryKey) and the
+// host decides what to save.
 // ─────────────────────────────────────────────────────────────
 
 // Friendly labels for the SCoA category keys. Anything not listed falls
@@ -99,6 +97,15 @@ const ASSET_OPTS = bsGroup('asset')
 const LIABILITY_OPTS = bsGroup('liability')
 const NET_ASSET_OPTS = bsGroup('netAssets')
 
+/** Every pickable category, by SCoA statement section (the review popup's dropdowns). */
+export const CATEGORY_OPTIONS = Object.freeze({
+  revenue: REVENUE_OPTS,
+  expense: EXPENSE_OPTS,
+  asset: ASSET_OPTS,
+  liability: LIABILITY_OPTS,
+  netAssets: NET_ASSET_OPTS,
+})
+
 /**
  * One account row: identity + dollars + a gold category select.
  *
@@ -150,9 +157,19 @@ export default function MappingCategorySelect({
         <span className="min-w-0 truncate">
           <span className="font-semibold">{row.acct}</span> — {row.desc}
           {suggested ? (
-            <span className="ml-2 whitespace-nowrap text-[11.5px] font-semibold text-ink/70">
-              looks like {suggestion.reason}
-            </span>
+            <>
+              {/* A4: a pre-filled pick is plainly marked as KYRO's suggestion —
+                  it isn't saved until somebody agrees to it. */}
+              <span
+                className="ml-2 inline-flex items-center rounded-full border border-[rgb(var(--c-watch)/0.35)] bg-[rgb(var(--c-watch)/0.08)] px-1.5 py-px align-middle text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[rgb(var(--c-watch))]"
+                data-testid="suggestion-tag"
+              >
+                Suggestion
+              </span>
+              <span className="ml-1.5 whitespace-nowrap text-[11.5px] font-semibold text-ink/70">
+                looks like {suggestion.reason}
+              </span>
+            </>
           ) : null}
         </span>
         <span className="num shrink-0">{fmt(Math.abs(row.total))}</span>

@@ -16,7 +16,8 @@
 // prior-vs-audited. The role KEYWORD (prior / audited) is therefore
 // weighted ABOVE the fiscal year; FY is only a CY-vs-PY tiebreaker.
 // ─────────────────────────────────────────────────────────────
-import type { SheetMetadata } from './types.js'
+import type { SheetMetadata, StatementMetadata } from './types.js'
+import { detectStatementType } from './statements/statementAdapter.js'
 
 export type Role = 'cy' | 'py' | 'audit' | 'ignore' | 'unknown'
 
@@ -43,6 +44,21 @@ export interface ClassifyInput {
   metadata?: SheetMetadata
   /** "Today" for the statement-export current-FY rule (tests inject it). Default: new Date(). */
   now?: Date
+}
+
+/**
+ * Plain name of a QuickBooks report for people (#40): never "PL", never a
+ * column header like "Actual", never empty. The banner title is used only when
+ * it really names a report ("Statement of Activity"); otherwise the type's
+ * standard name.
+ */
+export function statementLabel(st: StatementMetadata): string {
+  if (st.partial === 'full') return 'Profit and Loss + Balance Sheet'
+  const title = (st.title ?? '').replace(/\s+/g, ' ').trim()
+  if (title && detectStatementType(title) !== undefined) return title
+  if (st.type === 'bs' || st.partial === 'bs') return 'Balance Sheet'
+  if (st.type === 'bva') return 'Budget vs Actuals'
+  return 'Profit and Loss'
 }
 
 /** Jul–Jun fiscal year a date belongs to (FY2026 = Jul 2025 – Jun 2026). */
@@ -149,7 +165,7 @@ export function classifyRole({ fileName, metadata, now }: ClassifyInput): RoleCl
     role = 'cy'
     confidence = 0.7
     reasons.push(
-      `QuickBooks ${metadata!.statement!.title || metadata!.statement!.type.toUpperCase()} for period ending ${periodEndDate} is the current fiscal year`
+      ['QuickBooks', statementLabel(metadata!.statement!), 'for the period ending', periodEndDate, 'is the current fiscal year'].join(' ')
     )
   } else if (periodEndDate) {
     // No role keyword anywhere, but we DO have an in-sheet period-end date. The

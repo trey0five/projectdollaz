@@ -244,6 +244,10 @@ export const importsApi = {
   // Delete a stored trial balance; the API reconciles the period snapshot
   // (regenerates without it, or clears statements when no CY remains).
   delete: (schoolId, importId) => api.delete(`/schools/${schoolId}/imports/${importId}`),
+  // What KYRO remembers about this school's uploads (issues #32 / #41): the
+  // column layouts somebody picked, and the numbers it gave unnumbered QuickBooks
+  // rows. Derived server-side from stored import metadata — read-only.
+  intakeMemory: (schoolId) => api.get(`/schools/${schoolId}/intake-memory`),
 }
 
 // ── Monthly Actuals Foundation: per-period monthly trial-balance snapshots ────
@@ -292,7 +296,14 @@ export const mappingApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/mapping`),
   // Merge Resolve-unmatched picks into the school's mapping (owner/accountant).
   // `entries` is keyed by each unmatched row's `key` (echoed verbatim) → SCoA key.
-  mergeEntries: (schoolId, entries) => api.patch(`/schools/${schoolId}/mapping`, { entries }),
+  //
+  // `{ onlyNew: true }` = FILL-ONLY: an account the school's mapping already
+  // knows keeps its category (existing keys win). Every automatic or bulk
+  // "approve the suggestions" save uses it, so a pick the school made earlier —
+  // which this browser can't see (GET /mapping returns no entries) — is never
+  // silently re-pointed.
+  mergeEntries: (schoolId, entries, { onlyNew = false } = {}) =>
+    api.patch(`/schools/${schoolId}/mapping`, onlyNew ? { entries, onlyNew: true } : { entries }),
 }
 
 // ── Phase 4A: analytics & insights ───────────────────────────────────────────

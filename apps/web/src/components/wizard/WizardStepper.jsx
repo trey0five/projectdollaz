@@ -26,8 +26,12 @@ const STEPS = [
 // `bare` keeps the rule (and the tablist, for screen readers) but hides the
 // labels — used while a record flow is open, so its own labelled step rail is
 // the only labelled stepper on screen.
-export default function WizardStepper({ current, panelId, onGoTo, skipChoose = false, bare = false }) {
-  const steps = skipChoose ? STEPS.filter((s) => s.key !== 'choose') : STEPS
+//
+// `skipDone` drops the Done step for an option that finishes itself (Finance's
+// trial balance ends in one "Done — show my numbers" that opens the overview),
+// so the rail never promises a third screen that will not come.
+export default function WizardStepper({ current, panelId, onGoTo, skipChoose = false, skipDone = false, bare = false }) {
+  const steps = STEPS.filter((s) => !(skipChoose && s.key === 'choose') && !(skipDone && s.key === 'confirm'))
   const currentIdx = Math.max(0, steps.findIndex((s) => s.key === current))
   const fill = `${((currentIdx + 1) / steps.length) * 100}%`
 

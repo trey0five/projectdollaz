@@ -1040,6 +1040,12 @@ a.au-kchip-in:focus-visible {
   line-clamp: 2;
   overflow: hidden;
 }
+/* Warning tiles are sentences ("Operating reserve covers only two months of
+   expenses"): three lines, so they aren't cut mid-thought. */
+.au-tiles-warn .au-tile-title {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
 .au-tile-title {
   margin: 16px 0 6px;
   font-family: var(--font-body);

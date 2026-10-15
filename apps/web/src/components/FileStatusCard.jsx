@@ -1,91 +1,82 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowRight,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   FileSpreadsheet,
   History,
   Loader2,
   X,
 } from 'lucide-react'
-import { findUnmapped, suggestCategories, DEFAULT_CHART } from '@finrep/engine'
+import { findUnmapped, DEFAULT_CHART } from '@finrep/engine'
 import { useApp } from '../context/AppContext.jsx'
 import { formatShortDate } from '../lib/format.js'
+import { balancePill } from '../lib/statementNotes.js'
+import { reviewButtonLabel } from '../lib/reviewQueue.js'
+import { openReviewModal } from '../lib/reviewModalStore.js'
+import { AuroraLightButton } from './ui/aurora/index.js'
 import RoleChip from './RoleChip.jsx'
+import StatementNotes from './intake/StatementNotes.jsx'
 import CountUp from './CountUp.jsx'
-import MappingCategorySelect from './MappingCategorySelect.jsx'
 
-// Stable empty Set so a missing mappingAccts (e.g. the read-only
+// Stable empty Set so a missing context value (e.g. the read-only
 // ReportViewProvider mount, which does NOT expose the mapping API) never
 // throws on .has() and never churns identity between renders.
 const EMPTY_SET = new Set()
 
+// The review button's amber (the Aurora watch hue).
+const WATCH_HUE = '#d97706'
+
 /** One status card per imported file. */
 export default function FileStatusCard({ file, needsReview, onOverride }) {
-  // activeChart / mapAccount / mappingAccts come from the live AppProvider's
-  // FROZEN mapping API; default-guard them for the read-only ReportViewProvider.
+  // activeChart comes from the live AppProvider; default-guard it for the
+  // read-only ReportViewProvider.
   const {
     setFileRole,
     removeFile,
     canEdit,
-    mapAccount = () => {},
-    mapAccounts = () => {},
     activeChart = DEFAULT_CHART,
-    mappingAccts = EMPTY_SET,
+    // Accounts the saved snapshot shows the server already places (A4).
+    serverMappedAccts = EMPTY_SET,
+    // #32 / #40 actions — absent on the read-only report mount.
+    openColumnPicker = null,
+    combineFiles = null,
+    renumberAccount = null,
+    loadFilesForRole = null,
+    schoolId = null,
+    byRole = null,
   } = useApp()
+  // The slot this card actually OCCUPIES (resolveRoles), which is where its
+  // other statement half must go — never the nearest empty box.
+  const slotRole = ['cy', 'py', 'audit'].find((r) => byRole?.[r]?.id === file.id) ?? null
   const reduce = useReducedMotion()
-  const [showReview, setShowReview] = useState(false)
-  const cardRef = useRef(null)
-  // The actual accounts behind the "N to review" flag: income-statement accounts
-  // (acct ≥ 400) with a balance that aren't in the active chart yet, so they're
-  // currently left OUT of the statements until categorized. Derived from the LIVE
-  // activeChart (default chart + this session's category overlay), so a freshly
-  // categorized account drops out immediately — this no longer matches the
-  // stale parse-time file.unmappedCount.
+  // The accounts behind "Review N accounts": accounts with a balance that the
+  // active chart can't place yet, so they're currently left OUT of the
+  // statements until somebody says what they are. Derived from the LIVE
+  // activeChart (default chart + this session's picks), so a freshly sorted
+  // account drops out immediately. Accounts the saved snapshot shows the
+  // SERVER already places are not asked about again (GET /mapping returns no
+  // entries, so after a reload this browser alone would re-flag them).
   const unmapped = useMemo(
-    () => findUnmapped(file.rows || [], activeChart),
-    [file.rows, activeChart],
+    () =>
+      findUnmapped(file.rows || [], activeChart).filter(
+        (r) => !serverMappedAccts.has(String(r.acct)),
+      ),
+    [file.rows, activeChart, serverMappedAccts],
   )
   const reviewCount = unmapped.length
 
-  // NAME-BASED GUESSES for the accounts still awaiting review. Pure and derived
-  // — nothing is written from here. Recomputed off `unmapped` so a row that has
-  // just been confirmed drops out with it.
-  const suggestions = useMemo(() => suggestCategories(unmapped), [unmapped])
-  const suggestedCount = unmapped.filter((r) => suggestions[r.acct]).length
-
-  // THE "CATEGORISE MY ACCOUNTS" BUTTON HAS TO LAND SOMEWHERE.
-  //
-  // The confirm band's call to action used to be wired straight to the band's
-  // dismiss handler: it hid the band and did nothing else. A user pressed the
-  // one button the screen offered them, watched it vanish, categorised nothing,
-  // and had no data anywhere — which looked exactly like the engine bug it was
-  // meant to be the cure for. The button opens THIS panel now, on the first card
-  // that actually has something to review, and brings it into view.
-  useEffect(() => {
-    const onOpenReview = () => {
-      if (reviewCount === 0) return
-      setShowReview(true)
-      cardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-    }
-    window.addEventListener('finrep:open-review', onOpenReview)
-    return () => window.removeEventListener('finrep:open-review', onOpenReview)
-  }, [reviewCount])
-
-  // Once the last flagged account is categorized, show the all-done flourish for a
-  // beat, then auto-collapse the panel so the card returns to its normal height —
-  // otherwise the categorized card stays expanded and the slot cards go asymmetric.
-  useEffect(() => {
-    if (!showReview || reviewCount !== 0) return undefined
-    const t = window.setTimeout(() => setShowReview(false), 2600)
-    return () => window.clearTimeout(t)
-  }, [showReview, reviewCount])
+  // A5: the review happens in ONE popup (ReviewAccountsHost, mounted once in
+  // the intake) — this card, the Add-data callout and the Finance band all
+  // open the same one. Grouped, full names, suggestions pre-filled, one save.
+  const openReview = () => openReviewModal(schoolId)
 
   const { id, fileName, status } = file
   const fromHistory = !!file.fromHistory
+  const pill = balancePill(file)
   // A ruled column, not a card-in-panel: the 2px top rule carries the state
   // (risk = parse error, watch = accounts to review, hairline = fine).
   const ring =
@@ -97,7 +88,6 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
 
   return (
     <motion.div
-      ref={cardRef}
       initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
@@ -118,9 +108,16 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
               <Loader2 size={12} className="animate-spin" /> Parsing…
             </p>
           )}
-          {status === 'error' && (
-            <p className="mt-0.5 text-[12.5px] text-ink">{file.error}</p>
-          )}
+          {status === 'error' &&
+            (file.failure ? (
+              // #32: WHY in plain words, then the one question that unblocks it.
+              <p className="mt-0.5 text-[12.5px] leading-snug text-ink" data-testid="file-error">
+                {file.failure.reason}
+                {file.failure.ask && <span className="font-semibold"> {file.failure.ask}</span>}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[12.5px] text-ink">{file.error}</p>
+            ))}
         </div>
         {canEdit && !fromHistory && (
           <button
@@ -175,7 +172,25 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
               {formatShortDate(file.metadata?.periodEndDate)}
             </span>
 
-            {file.balance?.balanced ? (
+            {/* #40: half a trial balance REPLACES "Balanced" — a P&L alone nets
+                to its own surplus, so "Balanced" would be true of the arithmetic
+                and false of the books. */}
+            {pill.kind === 'half' ? (
+              <span
+                className="pill pill-status tone-watch w-full justify-center sm:w-auto"
+                data-testid="half-pill"
+              >
+                <AlertTriangle size={13} /> {pill.label}
+              </span>
+            ) : pill.kind === 'offBy' ? (
+              <span
+                className="pill pill-status tone-watch w-full justify-center sm:w-auto"
+                data-testid="offby-pill"
+                title="Debits and credits don’t match — a column (often the credits) may be missing."
+              >
+                <AlertTriangle size={13} /> {pill.label}
+              </span>
+            ) : pill.kind === 'balanced' ? (
               <motion.span
                 initial={reduce ? false : { scale: 1.35, rotate: -8, opacity: 0 }}
                 animate={{ scale: 1, rotate: 0, opacity: 1 }}
@@ -190,123 +205,48 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
               </span>
             )}
 
-            <AnimatePresence initial={false}>
-              {reviewCount > 0 && (
-                <motion.button
-                  key="review-badge"
-                  type="button"
-                  layout={!reduce}
-                  initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
-                  animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-                  exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.22, ease: [0.22, 0.8, 0.2, 1] }}
-                  onClick={() => setShowReview((s) => !s)}
-                  aria-expanded={showReview}
-                  title="Show the accounts that need review"
-                  className="pill pill-status tone-watch w-full cursor-pointer justify-center !h-auto py-1 text-[12px] hover:border-hair/[0.3] sm:w-auto sm:justify-start"
-                >
-                  <AlertTriangle size={12} />{' '}
-                  <span aria-live="polite">
-                    <CountUp value={reviewCount} />
-                    &nbsp;to review
-                  </span>
-                  <ChevronDown
-                    size={13}
-                    className={`transition-transform ${showReview ? 'rotate-180' : ''}`}
-                  />
-                </motion.button>
-              )}
-            </AnimatePresence>
           </div>
 
-          {/* Expandable "to review" detail: assign a category per unrecognized
-              account. Picking persists via context.mapAccount (PATCH /mapping)
-              AND drops the row out of the live activeChart-derived list. The
-              panel stays mounted while showReview is on so the all-done success
-              line can play even after the last row exits; it unmounts when the
-              user collapses it. */}
+          {/* A4: "N to review" is no longer a small chip — it's a clear amber
+              button that opens the review popup (A5). */}
           <AnimatePresence initial={false}>
-            {showReview && (
+            {canEdit && reviewCount > 0 && (
               <motion.div
-                initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                animate={reduce ? { opacity: 1 } : { opacity: 1, height: 'auto' }}
-                exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                className="overflow-hidden border-l-2 border-watch bg-white py-2 pl-3.5 pr-1"
+                key="review-button"
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                transition={{ duration: 0.22, ease: [0.22, 0.8, 0.2, 1] }}
               >
-                {reviewCount > 0 && (
-                  <p className="text-[13px] leading-relaxed text-ink">
-                    We don&rsquo;t know what these accounts are yet, so they&rsquo;re{' '}
-                    <span className="font-semibold">left out of your statements</span> until
-                    somebody says. Tell us once and every future upload knows:
-                  </p>
-                )}
-
-                {/* BULK CONFIRM. Thirty-odd dropdowns is the reason a school
-                    gives up on this screen — but each guess still has to be
-                    AGREED to, so this presses "use this" on all of them at
-                    once rather than applying them quietly on upload. */}
-                {canEdit && suggestedCount > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // ONE request for the whole file. Firing these per account
-                      // sent thirty-three concurrent writes that clobbered each
-                      // other and left the school with wrong numbers.
-                      const entries = {}
-                      for (const r of unmapped) {
-                        const s = suggestions[r.acct]
-                        if (s) entries[String(r.acct)] = s.category
-                      }
-                      mapAccounts(entries)
-                    }}
-                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-hair bg-ink/[0.04] px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:border-hair/[0.3] hover:bg-ink/[0.06]"
-                  >
-                    Use all {suggestedCount} suggestions
-                  </button>
-                )}
-
-                <div className="mt-1 divide-y divide-hair">
-                  <AnimatePresence initial={false}>
-                    {unmapped.map((r) => (
-                      <motion.div
-                        key={r.acct}
-                        layout={!reduce}
-                        initial={reduce ? { opacity: 0 } : { opacity: 0, x: -8 }}
-                        animate={reduce ? { opacity: 1 } : { opacity: 1, x: 0 }}
-                        exit={
-                          reduce
-                            ? { opacity: 0 }
-                            : { opacity: 0, x: 12, height: 0, transition: { duration: 0.24 } }
-                        }
-                        transition={{ duration: 0.22, ease: [0.22, 0.8, 0.2, 1] }}
-                      >
-                        <MappingCategorySelect
-                          row={r}
-                          busy={mappingAccts.has(String(r.acct))}
-                          disabled={!canEdit}
-                          onPick={mapAccount}
-                          suggestion={suggestions[r.acct] ?? null}
-                        />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-
-                {/* One-shot all-done flourish once the last row has exited. */}
-                {reviewCount === 0 && (
-                  <motion.p
-                    initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
-                    animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex items-center gap-1.5 text-[13px] font-semibold text-ink"
-                  >
-                    <CheckCircle2 size={14} className="text-ink" /> All accounts
-                    categorized — they&rsquo;re now in your statements.
-                  </motion.p>
-                )}
+                <AuroraLightButton
+                  size="sm"
+                  hue={WATCH_HUE}
+                  onClick={openReview}
+                  aria-haspopup="dialog"
+                  data-testid="review-accounts-button"
+                  title="Show the accounts that need a quick check"
+                  className="w-full justify-center sm:w-auto"
+                >
+                  <AlertTriangle size={14} aria-hidden="true" />
+                  <span aria-live="polite">{reviewButtonLabel(reviewCount)}</span>
+                  <ArrowRight size={14} aria-hidden="true" />
+                </AuroraLightButton>
               </motion.div>
             )}
           </AnimatePresence>
+
+          <StatementNotes
+            file={file}
+            canEdit={canEdit}
+            onCombine={combineFiles ? (partnerId) => combineFiles(id, partnerId) : undefined}
+            onChangeColumns={openColumnPicker ? () => openColumnPicker(id) : undefined}
+            onRenumber={renumberAccount || undefined}
+            onAddHalf={
+              loadFilesForRole && !fromHistory
+                ? (role, list) => loadFilesForRole(slotRole ?? role, list)
+                : undefined
+            }
+          />
 
           {needsReview && (
             <p className="flex items-center gap-1.5 text-[14px] font-medium text-ink">
@@ -325,15 +265,26 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
         </>
       )}
 
-      {/* error footer */}
+      {/* error footer — "Pick the columns" when KYRO could read the grid at all. */}
       {status === 'error' && (
-        <button
-          type="button"
-          onClick={() => removeFile(id)}
-          className="btn btn-secondary btn-sm self-start"
-        >
-          Remove
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {canEdit && file.failure?.canPick && file.bytes && openColumnPicker && (
+            <button
+              type="button"
+              onClick={() => openColumnPicker(id)}
+              className="btn btn-primary btn-sm"
+            >
+              Pick the columns
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => removeFile(id)}
+            className="btn btn-secondary btn-sm"
+          >
+            Remove
+          </button>
+        </div>
       )}
     </motion.div>
   )

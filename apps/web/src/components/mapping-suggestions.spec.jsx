@@ -21,6 +21,10 @@ import { suggestCategories } from '@finrep/engine'
 const read = (rel) => readFileSync(resolve(process.cwd(), 'src', rel), 'utf8')
 const picker = read('components/MappingCategorySelect.jsx')
 const card = read('components/FileStatusCard.jsx')
+// A5: the review is ONE popup — its host does the saving, the pure lib derives
+// the rows and their pre-filled suggestions.
+const host = read('components/intake/ReviewAccountsHost.jsx')
+const popupLib = read('lib/reviewPopup.js')
 
 describe('nothing is applied without a person', () => {
   it('a suggestion only ever PRE-FILLS the select — it never calls onPick', () => {
@@ -38,20 +42,85 @@ describe('nothing is applied without a person', () => {
   })
 
   it('the bulk action is also a press, not an upload side-effect', () => {
-    // "Use all N" exists because thirty dropdowns is why people abandon this
-    // screen — but it is still one explicit agreement, not silence.
-    expect(card).toMatch(/Use all \{suggestedCount\} suggestions/)
-    expect(card).toMatch(/mapAccounts\(entries\)/)
+    // The popup pre-fills every suggestion so thirty dropdowns become one
+    // review — but nothing is written until "Approve and build statements" (or
+    // "Save and finish later") is pressed: one explicit agreement, not silence.
+    expect(host).toMatch(/const onApprove = async \(\) =>/)
+    // FILL-ONLY: approving suggestions never re-points an account the
+    // school's mapping already places.
+    // (The person's own picks are "chosen" — a normal merge, never dropped.)
+    expect(host).toMatch(/const ok = await mapAccounts\(entries, \{ onlyNew: true, chosen \}\)/)
+    // The save is only ever reached from the two button handlers.
+    expect(host).not.toMatch(/useEffect\([\s\S]{0,400}(mapAccounts|save)\(/)
+    // Picks made in the popup are a DRAFT (reviewModalStore) until then.
+    expect(host).toMatch(/onPick=\{\(acct, category\) => setReviewPick\(acct, category\)\}/)
+  })
+
+  it('a REAL trial balance is never categorised on upload — only a statement export with section facts is', () => {
+    // A1 is the one, deliberate exception: a QuickBooks statement export SAYS
+    // which section each account is printed under (as reliable as the live
+    // sync's AccountType), so its clear accounts sort themselves. The gate is
+    // the section facts: a trial balance has none, and autoMapEntries returns
+    // nothing for it.
+    const ctx = read('context/AppContext.jsx')
+    expect(ctx).toMatch(/sections = statementSections\(metadata\)/)
+    expect(ctx).toMatch(/if \(Object\.keys\(sections\)\.length === 0\) return/)
+    // Only accounts the chart (and the server's snapshot) can't place yet.
+    expect(ctx).toMatch(/findUnmapped\(rows \|\| \[\], activeChart\)\.filter\(/)
   })
 
   it('the bulk action sends ONE request, not one per account', () => {
     // Live-caught: firing mapAccount per account sent 33 concurrent PATCHes
     // that read-modify-wrote the same row. Eleven picks survived. The school
     // was left with numbers that were WRONG, which is worse than absent.
-    expect(card).not.toMatch(/for \(const r of unmapped\)[\s\S]{0,200}mapAccount\(r\.acct/)
+    expect(host).not.toMatch(/mapAccount\(/)
+    expect(host).toMatch(/save\(entriesFromPicks\(items, picks\)\)/)
     const ctx = read('context/AppContext.jsx')
     expect(ctx).toMatch(/const mapAccounts = useCallback/)
-    expect(ctx).toMatch(/await mappingApi\.mergeEntries\(school\.id, entries\)/)
+    // At most two requests (suggestions fill-only, then the person's picks),
+    // one after the other — see context/mapping-writes.spec.jsx.
+    expect(ctx).toMatch(/await mappingApi\.mergeEntries\(school\.id, rest, \{ onlyNew \}\)/)
+    expect(ctx).toMatch(/await mappingApi\.mergeEntries\(school\.id, picked\)/)
+  })
+
+  it('an account the school already sorted keeps its category after an auto-sort (#1)', () => {
+    // Repro from review: FY26's 67000 re-picked to adminCost; next year's
+    // export auto-sorted it back to fixedOther via a browser PATCH that
+    // overwrote the stored pick and rebuilt every period. Now: the browser's
+    // auto-sort only fills THIS tab's preview overlay (gaps only) and never
+    // writes the mapping; the save sorts server-side, fill-only.
+    const ctx = read('context/AppContext.jsx')
+    const start = ctx.indexOf('const autoSortAccounts = useCallback(')
+    expect(start).toBeGreaterThan(-1)
+    const body = ctx.slice(start, ctx.indexOf('\n  )\n', start))
+    expect(body).not.toMatch(/mergeEntries|mapAccounts\(|mapAccount\(/)
+    // Locally a pick already in the overlay wins (fill-only).
+    expect(body).toMatch(/if \(next\[k\] == null\) next\[k\] = v/)
+    // The multi-year uploader no longer PATCHes before its save.
+    expect(read('components/BulkYearsUploader.jsx')).not.toMatch(/mergeEntries|mappingApi/)
+    // The one browser path that does write suggestions sends fill-only.
+    const api = read('lib/api.js')
+    expect(api).toMatch(/mergeEntries: \(schoolId, entries, \{ onlyNew = false \} = \{\}\) =>/)
+    expect(api).toMatch(/onlyNew \? \{ entries, onlyNew: true \} : \{ entries \}/)
+  })
+
+  it('fill-only reaches the wire: { entries, onlyNew: true }', async () => {
+    const { api, mappingApi } = await import('../lib/api.js')
+    const calls = []
+    const orig = api.patch
+    api.patch = async (url, body) => {
+      calls.push({ url, body })
+      return { data: {} }
+    }
+    try {
+      await mappingApi.mergeEntries('s1', { 67000: 'fixedOther' }, { onlyNew: true })
+      await mappingApi.mergeEntries('s1', { 4823: 'other' })
+    } finally {
+      api.patch = orig
+    }
+    expect(calls[0]).toEqual({ url: '/schools/s1/mapping', body: { entries: { 67000: 'fixedOther' }, onlyNew: true } })
+    // A person's own single pick stays a plain merge (their choice wins).
+    expect(calls[1].body).toEqual({ entries: { 4823: 'other' } })
   })
 
   it('the guess is labelled as a guess, in words', () => {
@@ -65,7 +134,11 @@ describe('an unconfirmed guess is still unmapped', () => {
     // account would disappear from review while contributing nothing to any
     // statement — the exact silent hole this feature is meant to close.
     expect(card).toMatch(/findUnmapped\(file\.rows \|\| \[\], activeChart\)/)
-    expect(card).toMatch(/const suggestions = useMemo\(\(\) => suggestCategories\(unmapped\)/)
+    expect(read('lib/reviewQueue.js')).toMatch(/const rows = findUnmapped\(file\.rows \|\| \[\], chart\)/)
+    // Suggestions are DERIVED from the unmapped rows (section-backed for a
+    // statement export, name-based for a trial balance) — never the reverse.
+    expect(popupLib).toMatch(/const rows = reviewRowsOf\(f, chart, serverMapped\)/)
+    expect(popupLib).toMatch(/reviewSuggestions\(rows, sections, suggestCategories\(rows\)\)/)
   })
 
   it('the review COUNT counts unmapped accounts, not unsuggested ones', () => {

@@ -20,6 +20,7 @@ import {
 import { ConfigService } from '@nestjs/config'
 import type { ImportRole, OrgQboConnection, OrgQboMapping, User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { clearPeriodInsights } from '../analytics/insight-cache.js'
 import { BillingService } from '../billing/billing.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
@@ -456,6 +457,9 @@ export class OrgQboCompanyService {
         await this.prisma.statementSnapshot.deleteMany({
           where: { schoolId, fiscalPeriodId: periodId },
         })
+        // Statements gone → the saved insight about them goes too (school-wide:
+        // later periods' deltas compared against this one).
+        await clearPeriodInsights(this.prisma, schoolId)
       }
     }
     return true

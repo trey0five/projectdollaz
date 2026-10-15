@@ -10,14 +10,52 @@ export type {
   SheetCandidate,
   StatementMetadata,
   StatementType,
+  StatementSectionFact,
+  ColumnChoice,
+  SavedLayout,
+  SyntheticPin,
+  SyntheticRegistry,
+  IntakeMemory,
+  IngestOptions,
 } from './types.js'
 export {
   excelAdapter,
   parseTrialBalance,
   listTrialBalanceSheets,
+  detectStartRow,
+  detectColumns,
 } from './adapters/excelAdapter.js'
 export { csvAdapter, parseTrialBalanceCsv } from './adapters/csvAdapter.js'
 export { adapters, getAdapter, ingest } from './registry.js'
+
+// Intake (#32 / #40 / #41): plain failures + preview, picked columns, school
+// memory, statement-half pairing, re-keying synthesized numbers. Browser-safe.
+export type { IngestErrorCode, IngestFailure } from './intake/errors.js'
+export { IngestError, isIngestError, ingestFailureOf } from './intake/errors.js'
+export type { FilePreview, PreviewColumn, PreviewWarning, FailureVariant, ColumnRole } from './intake/preview.js'
+export {
+  PREVIEW_ROWS,
+  PREVIEW_COLS,
+  previewFile,
+  layoutSignature,
+  explainFailure,
+  columnLetter,
+  findDebitCreditPair,
+  unassignedNumericColumns,
+} from './intake/preview.js'
+export { parseWithColumns, gridReadsAsStatement, BUDGETISH } from './intake/override.js'
+export { EMPTY_INTAKE_MEMORY, buildIntakeMemory } from './intake/memory.js'
+export type { StatementHalf, PairResult } from './statements/pairing.js'
+export {
+  syntheticKey,
+  syntheticKeys,
+  statementHalf,
+  pairStatements,
+  asStatementResult,
+} from './statements/pairing.js'
+export { validateSyntheticRenumber, renumberSynthetic } from './statements/renumber.js'
+export { statementSections, normalizeStatementSection, STATEMENT_SECTION_KEYS } from './statements/sections.js'
+export type { StatementSectionKey } from './statements/sections.js'
 
 // QuickBooks statement EXPORTS (P&L / Statement of Activity, Balance Sheet,
 // Budget vs Actuals) → trial-balance rows (issue #31). Browser + node.
@@ -26,6 +64,8 @@ export {
   statementAdapter,
   isStatementExport,
   hasDebitCreditHeader,
+  isBudgetReport,
+  ACTUAL_HEADER,
   hasKnownSectionRow,
   detectStatementType,
   statementTypeFromFileName,
@@ -94,6 +134,7 @@ export type {
   PeriodInference,
 } from './classify.js'
 export {
+  statementLabel,
   classifyRole,
   resolveRoles,
   inferPeriod,

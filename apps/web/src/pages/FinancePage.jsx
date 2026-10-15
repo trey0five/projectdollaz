@@ -35,6 +35,8 @@ import {
   Table2,
   CheckCircle2,
   ArrowLeft,
+  ListChecks,
+  CloudUpload,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -52,6 +54,9 @@ import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
 import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
 import { addDataHref } from '../lib/dataDestinations.js'
+import { reviewVerdict, reviewButtonLabel, REVIEW_HREF } from '../lib/reviewQueue.js'
+import { requestOpenReview } from '../lib/reviewRequest.js'
+import { useReviewCount } from '../hooks/useReviewCount.js'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../components/analytics/skeletons.jsx'
 import { toSignals } from '../components/home/HomeHero.jsx'
@@ -84,6 +89,9 @@ import {
   money,
   moneyShort,
   warningTiles,
+  warningsMode,
+  balanceSheetGap,
+  NO_LAST_YEAR,
 } from '../components/finance/financeAurora.js'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
@@ -124,6 +132,10 @@ function FinanceHeader({
   verdict = null,
   kpis = null,
   boardPacket = false,
+  // A4: accounts the saved statements could not place. > 0 makes the band's
+  // PRIMARY (white) button "Review N accounts", deep-linking straight to the
+  // open review panel on the Add-data trial balance step.
+  reviewCount = 0,
 }) {
   // Under v2 the ModuleTabs shell already renders the breadcrumb, so this header
   // omits its own back link; v1 (standalone page, no ModuleTabs) keeps it.
@@ -148,7 +160,30 @@ function FinanceHeader({
         title="Finance"
         verdict={verdict}
         actions={
-          uiV2 || boardPacket ? (
+          reviewCount > 0 ? (
+            <>
+              {/* THE ONE JOB RIGHT NOW: the white button goes straight to the
+                  open review panel. requestOpenReview makes the ask sticky so
+                  the panel opens once the stored files have mounted. */}
+              <AuroraButton
+                variant="primary"
+                to={uiV2 ? REVIEW_HREF : addDataHref(uiV2, { add: 'tb' })}
+                onClick={() => requestOpenReview()}
+                icon={<ListChecks size={18} aria-hidden="true" />}
+                data-testid="band-review-button"
+                data-kyro-avoid=""
+              >
+                {reviewButtonLabel(reviewCount)}
+              </AuroraButton>
+              {uiV2 && (
+                <AuroraButton to="?tab=add" icon={<CloudUpload size={18} aria-hidden="true" />}>
+                  Add data
+                </AuroraButton>
+              )}
+              {boardPacket ? <BoardPacketExportButton periodId={selectedPeriodId} /> : null}
+              {uiV2 && <RecordsCta module="finance" />}
+            </>
+          ) : uiV2 || boardPacket ? (
             <>
               {/* On-page Add-data + Workspaces entries (mirror the sidebar tabs) — v2 only. */}
               {uiV2 && <AddDataCta />}
@@ -382,9 +417,18 @@ export default function FinancePage() {
     window.addEventListener('penny:data-changed', onDataChanged)
     return () => window.removeEventListener('penny:data-changed', onDataChanged)
   }, [reloadMetrics])
-  const { text: insightText, source: insightSource } = useInsights(schoolId, selectedPeriodId)
+  // Asks again whenever the figures' snapshot changes (a re-save of the same
+  // year, or Approve rebuilding the statements) — never a stale read.
+  const { text: insightText, source: insightSource } = useInsights(
+    schoolId,
+    selectedPeriodId,
+    data?.freshness?.dataAsOf ?? null,
+  )
   const { summary: complianceSummary } = useCompliance(schoolId, selectedPeriodId)
   const { budget } = useBudget(schoolId, selectedPeriodId)
+  // A4: how many accounts the SAVED statements for this year couldn't place —
+  // read from the server's own snapshot, so it is right even after a reload.
+  const reviewCount = useReviewCount(schoolId, selectedPeriodId) ?? 0
 
   const metricsByKey = useMemo(() => {
     const m = {}
@@ -612,7 +656,7 @@ export default function FinancePage() {
                     {activePeriod?.label ? ` \u00b7 ${activePeriod.label}` : ''}.{' '}
                     {statementsHaveNumbers
                       ? 'Open your overview whenever you like.'
-                      : 'Your books are saved, but we can’t read them yet — categorise the accounts below and your statements fill in.'}
+                      : 'Your books are saved, but we can’t read them yet — sort the accounts below and your statements fill in.'}
                   </p>
                 </div>
               </div>
@@ -643,8 +687,9 @@ export default function FinancePage() {
               <div>
                 <h2 className="font-serif text-display text-ink">Light up Finance</h2>
                 <p className="mx-auto mt-2 max-w-xl text-body text-ink2">
-                  Drop in your trial balance — statements, analytics, budget and board reports
-                  all light up from this one upload.
+                  Drop in your trial balance (or your QuickBooks Profit &amp; Loss and Balance
+                  Sheet) — statements, analytics, budget and board reports all light up from
+                  this one upload.
                 </p>
               </div>
             </div>
@@ -785,6 +830,23 @@ export default function FinancePage() {
     // no budget, tuition's share of income — both carry real bands/signs).
     const glass = (key, label, Icon) => {
       const m = metricsByKey[key]
+      // No Balance Sheet for this year: the card says so and takes the person
+      // to the trial-balance step (where "Add its Balance Sheet" is primary).
+      const gap = vitalsLoading ? null : balanceSheetGap(m)
+      if (gap) {
+        return {
+          key,
+          icon: Icon,
+          label,
+          value: gap.value,
+          textValue: true,
+          caption: gap.caption,
+          verdict: 'watch',
+          verdictLabel: gap.action,
+          to: gap.action === 'Review' && canEdit ? REVIEW_HREF : addDataHref(uiV2, { add: 'tb' }),
+          'data-testid': `kpi-gap-${key}`,
+        }
+      }
       const fmt = m ? metricFormat(m.key, m.unit) : 'ratio'
       const { value, unit } = kpiFigure(m, fmt)
       return {
@@ -818,6 +880,16 @@ export default function FinancePage() {
           ? glass('tuition_dependency', 'Tuition share of income', PieChart)
           : { key: 'budget', icon: Target, label: 'Against budget', value: null, caption: 'No budget for this year yet' },
     ]
+    // "No last-year numbers yet" ONCE (on the first card that would say it);
+    // the rest say the date their figure is for.
+    {
+      let said = false
+      for (let i = 0; i < kpis.length; i += 1) {
+        if (kpis[i].caption !== NO_LAST_YEAR) continue
+        if (said) kpis[i] = { ...kpis[i], caption: periodEnd ? `On ${periodEnd}` : null }
+        said = true
+      }
+    }
 
     // ONE sentence for the band.
     const v = financeVerdict({
@@ -826,7 +898,15 @@ export default function FinancePage() {
       change: statementsHaveNumbers ? changeInNetAssets : null,
       metrics: [...VITAL_KEYS, 'tuition_dependency'].map((k) => metricsByKey[k]).filter(Boolean),
     })
-    const verdict = !statementsHaveNumbers ? (
+    // Warnings are only "nothing flagged" when real numbers were read — AND
+    // KYRO's read of them is about those numbers. A read written before the
+    // accounts were sorted ("Not enough data to summarize…", live-caught still
+    // cached after a review rebuilt the statements) checked nothing either.
+    // A4: accounts waiting for a person come FIRST, in plain words — the band's
+    // white button below goes straight to them.
+    const verdict = reviewCount > 0 ? (
+      <>{reviewVerdict(reviewCount, statementsHaveNumbers)}</>
+    ) : !statementsHaveNumbers ? (
       <>We can’t read these accounts yet. Sort them in Add data and this page fills in.</>
     ) : v.lead || v.tail ? (
       <>
@@ -839,13 +919,34 @@ export default function FinancePage() {
       </>
     ) : null
 
-    // Warnings: KYRO's insight lines (or the readiness line) as tiles.
+    // Warnings: KYRO's insight lines (or the readiness line) as tiles. Only
+    // lines tagged Risk / Watch / Strength become tiles (warningTiles →
+    // realSignals); a chatty reply with none is the empty state, never tiles.
     const warnings = insightText
       ? warningTiles(toSignals(statusLine))
       : statusLine
         ? [{ id: 'readiness', title: statusLine.replace(/\.$/, ''), desc: null, verdict: readinessTone, icon: ShieldCheck, to: '/readiness' }]
         : []
     const worst = warnings.find((w) => w.verdict === 'risk') ? 'risk' : warnings.find((w) => w.verdict === 'watch') ? 'watch' : 'good'
+    // Nothing read → fully neutral. Numbers read but accounts still waiting →
+    // the REAL risks still show (one unsorted sundry account must not hide a
+    // cash problem) with a line that they may change; only the green "Nothing
+    // flagged" is held back, because an all-clear over unsorted accounts
+    // isn't one. (warningsMode, financeAurora.js.)
+    const wMode = warningsMode({
+      hasNumbers: statementsHaveNumbers,
+      insightText,
+      reviewCount,
+      tileCount: warnings.length,
+    })
+    const warningsProvisional = wMode === 'provisional'
+    // The year's numbers aren't complete (unreadable, accounts waiting, or no
+    // Balance Sheet): nothing is "checked" yet, so Readiness can't say "Good".
+    const dataIncomplete =
+      !statementsHaveNumbers ||
+      reviewCount > 0 ||
+      Object.values(metricsByKey).some((m) => balanceSheetGap(m) != null)
+    const warningsPending = wMode === 'unread' || wMode === 'waiting'
 
     // Chart colours: the module hue + its companion; "left over" wears its sign.
     const leftColor = changeInNetAssets != null && changeInNetAssets < 0 ? '#e11d48' : '#059669'
@@ -854,27 +955,90 @@ export default function FinancePage() {
     overview = (
     <div className="au-scope mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <FinanceHeader
-        onWhatLitUp={statementsHaveNumbers ? () => setRevealSchoolId(schoolId) : null}
+        // "What changed" needs numbers AND a year before them to change
+        // from; the board packet needs numbers.
+        onWhatLitUp={statementsHaveNumbers && basis !== null ? () => setRevealSchoolId(schoolId) : null}
         schoolName={activeSchool?.name}
         periods={savedPeriods}
         selectedPeriodId={selectedPeriodId}
         onSelectPeriod={setSelectedPeriodId}
         verdict={verdict}
         kpis={kpis}
-        boardPacket
+        boardPacket={statementsHaveNumbers}
+        reviewCount={canEdit ? reviewCount : 0}
       />
 
       {/* ── Warnings — what KYRO spotted this year ─────────────────────────── */}
+      {/* NO FALSE ALL-CLEAR. When nothing could be read, KYRO has checked
+          nothing, so the section is neutral and says when warnings will show.
+          When the numbers ARE read but accounts still wait, the real risks
+          show with a line that they may change — never a green "Nothing
+          flagged" while accounts are unsorted. */}
       <AuroraSection
         first
         icon={AlertTriangle}
-        tone={warnings.length ? worst : 'good'}
+        tone={warningsPending ? null : warnings.length ? worst : 'good'}
         title="Warnings"
         subtitle={periodLabel ? `What KYRO spotted in ${periodLabel}` : 'What KYRO spotted this year'}
-        count={warnings.length ? verdictCountLabel(warnings.map((w) => w.verdict)) || `${warnings.length} notes` : null}
+        count={
+          !warningsPending && warnings.length
+            ? verdictCountLabel(warnings.map((w) => w.verdict)) || `${warnings.length} notes`
+            : null
+        }
       >
-        {warnings.length ? (
-          <AuroraTileGrid cols={Math.min(4, Math.max(2, warnings.length))}>
+        {warningsPending ? (
+          <AuroraEmpty
+            icon={ListChecks}
+            text={
+              reviewCount > 0
+                ? 'Warnings show up once your accounts are sorted.'
+                : 'Warnings show up once KYRO can read your numbers.'
+            }
+            data-testid="warnings-pending"
+            action={
+              canEdit && reviewCount > 0 ? (
+                <AuroraLightButton
+                  hue="#d97706"
+                  to={uiV2 ? REVIEW_HREF : addDataHref(uiV2, { add: 'tb' })}
+                  onClick={() => requestOpenReview()}
+                  icon={<ListChecks size={15} aria-hidden="true" />}
+                >
+                  {reviewButtonLabel(reviewCount)}
+                </AuroraLightButton>
+              ) : canEdit ? (
+                <AuroraLightButton
+                  variant="ghost"
+                  to={addDataHref(uiV2, { add: 'tb' })}
+                  icon={<CloudUpload size={15} aria-hidden="true" />}
+                >
+                  Add data
+                </AuroraLightButton>
+              ) : null
+            }
+          />
+        ) : warnings.length ? (
+          <>
+          {warningsProvisional && (
+            <p
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px] font-medium text-ink2"
+              data-testid="warnings-provisional"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <ListChecks size={15} aria-hidden="true" className="text-[#9a4508]" />
+                {`These may change once ${reviewCount} account${reviewCount === 1 ? ' is' : 's are'} sorted.`}
+              </span>
+              {canEdit && (
+                <Link
+                  to={uiV2 ? REVIEW_HREF : addDataHref(uiV2, { add: 'tb' })}
+                  onClick={() => requestOpenReview()}
+                  className="font-semibold text-[#9a4508] underline decoration-[#9a4508]/40 underline-offset-2 hover:decoration-[#9a4508]"
+                >
+                  {reviewButtonLabel(reviewCount)}
+                </Link>
+              )}
+            </p>
+          )}
+          <AuroraTileGrid cols={Math.min(4, Math.max(2, warnings.length))} className="au-tiles-warn">
             {warnings.map((w) => (
               <AuroraTile
                 key={w.id}
@@ -887,6 +1051,7 @@ export default function FinancePage() {
               />
             ))}
           </AuroraTileGrid>
+          </>
         ) : (
           <AuroraEmpty
             icon={CheckCircle2}
@@ -1049,18 +1214,21 @@ export default function FinancePage() {
           <AuroraTile
             to="/readiness"
             icon={ShieldCheck}
-            tone={complianceSummary ? readinessTone : null}
+            tone={complianceSummary && !(dataIncomplete && readinessTone === 'good') ? readinessTone : null}
             title="Readiness"
             desc={
               !complianceSummary
                 ? 'Check the books are ready for review.'
-                : material > 0
+                : dataIncomplete && material === 0 && reportable === 0
+                  ? 'Not checked yet — finish this year’s numbers first.'
+                  : material > 0
                   ? `${material} serious finding${material === 1 ? '' : 's'} and ${reportable} item${reportable === 1 ? '' : 's'} to report.`
                   : reportable > 0
                     ? `${reportable} item${reportable === 1 ? '' : 's'} to report.`
                     : 'No problems found.'
             }
-            verdict={complianceSummary ? readinessTone : null}
+            verdict={complianceSummary && !(dataIncomplete && readinessTone === 'good') ? readinessTone : null}
+            data-testid="readiness-tile"
             verdictLabel={
               !complianceSummary ? null : material > 0 ? `${material} to fix` : reportable > 0 ? `${reportable} to review` : null
             }
@@ -1130,6 +1298,16 @@ export default function FinancePage() {
               canEdit={canEdit}
               onLitUp={() => setRevealSchoolId(schoolId)}
               dataReady={statementsHaveNumbers}
+              // "Done — show my numbers": the overview opens on the year just
+              // saved, with freshly read figures (the band, warnings, charts).
+              onFinished={(periodId) => {
+                if (periodId) setSelectedPeriodId(periodId)
+                // A school's FIRST year added here must not land on the
+                // first-run screen (its latch holds it on purpose for the
+                // in-place intake) — the person asked for their numbers.
+                setFirstRunSchoolId(null)
+                reloadMetrics()
+              }}
             />
           </FinanceAddData>
         }

@@ -1,22 +1,46 @@
 import { createHash } from 'node:crypto'
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { generateInsight, type MetricResult } from '@finrep/analytics'
+import {
+  formatMetricDelta,
+  formatMetricValueLong,
+  resolveDisplayUnit,
+  type MetricResult,
+} from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BedrockClient } from '../assistant/bedrock.client.js'
+import { validateInsightReply } from './insight-reply.js'
+import { generateInsightSignals } from './insight-rule.js'
+import { guardInsightLines } from './insight-guard.js'
+
+/**
+ * Bumped when the reply gate or the rule fallback changes, so every cached
+ * insight written under the old rules (a conversational "I'll need information
+ * such as…" reply in v1, untagged rule prose in v2 — which the Finance page
+ * showed as "Nothing flagged" while a metric was at risk) is regenerated once
+ * instead of being served from cache forever. v4: the fingerprint also carries
+ * the snapshot's generated-at time, so a re-saved / remapped year never reuses
+ * the insight written about its previous numbers (see insight-cache.ts). v5:
+ * LLM lines pass the value guard (insight-guard.ts) and balance-sheet metrics
+ * are unavailable on a year with no balance sheet — cached text predating
+ * either is regenerated.
+ */
+export const INSIGHT_CACHE_VERSION = 'v5'
 
 /** The insight endpoint response: the summary text + which path produced it. */
 export interface InsightResponse {
   text: string
   source: 'rule' | 'llm'
+  /** ISO time the snapshot this insight describes was generated (additive). */
+  dataAsOf?: string
 }
 
 /**
  * Phase 4D — AI insight summary.
  *
- * ALWAYS-ON baseline: the pure, deterministic rule-based generator in
- * @finrep/analytics. OPTIONAL upgrade: when ANTHROPIC_API_KEY is configured we
+ * ALWAYS-ON baseline: the pure, deterministic TAGGED rule generator
+ * (insight-rule.ts, same sentences as @finrep/analytics generateInsight). OPTIONAL upgrade: when ANTHROPIC_API_KEY is configured we
  * ask Claude for a richer 1–3 sentence board-level narrative. On ANY error
  * (no key, network, timeout, parse, rate-limit) we fall back to the rule text —
  * this NEVER throws and NEVER blocks the dashboard (mirrors the StripeClient
@@ -61,18 +85,23 @@ export class InsightService {
    * and regenerates. computeMetricsResponse enforces tenant isolation + 404.
    */
   async insightFor(schoolId: string, periodId: string): Promise<InsightResponse> {
-    const { periodId: fiscalPeriodId, metrics } =
+    const { periodId: fiscalPeriodId, metrics, freshness } =
       await this.analytics.computeMetricsResponse(schoolId, periodId)
-    const fingerprint = this.fingerprint(metrics)
+    const dataAsOf = freshness?.dataAsOf
+    const fingerprint = this.fingerprint(metrics, dataAsOf)
 
     const cached = await this.prisma.periodInsight.findUnique({
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
     })
     if (cached && cached.fingerprint === fingerprint) {
-      return { text: cached.text, source: cached.source === 'llm' ? 'llm' : 'rule' }
+      // Belt and braces: a cached LLM text must still pass today's reply gate.
+      if (cached.source !== 'llm') return { text: cached.text, source: 'rule', dataAsOf }
+      const ok = validateInsightReply(cached.text)
+      const guarded = ok ? guardInsightLines(ok, metrics).text : null
+      if (guarded) return { text: guarded, source: 'llm', dataAsOf }
     }
 
-    const result = await this.generate(metrics)
+    const result: InsightResponse = { ...(await this.generate(metrics)), dataAsOf }
 
     // Best-effort cache write — never fail the response on a write error.
     try {
@@ -90,8 +119,9 @@ export class InsightService {
   }
 
   /** Deterministic hash of the metric values that drive the insight. Includes the
-   * active provider so toggling an LLM key also invalidates the cache. */
-  private fingerprint(metrics: MetricResult[]): string {
+   * active provider so toggling an LLM key also invalidates the cache, and the
+   * snapshot's generated-at time so a rebuilt period never reuses the old text. */
+  private fingerprint(metrics: MetricResult[], dataAsOf?: string): string {
     const compact = metrics
       .map(
         (m) =>
@@ -106,20 +136,42 @@ export class InsightService {
             ? 'or'
             : 'an'
           : 'rule'
-    return createHash('sha256').update(`${provider}::${compact}`).digest('hex')
+    return createHash('sha256')
+      .update(`${INSIGHT_CACHE_VERSION}::${provider}::${dataAsOf ?? 'x'}::${compact}`)
+      .digest('hex')
   }
 
-  /** Generate fresh: deterministic rule text, optionally upgraded by an LLM. */
+  /**
+   * Generate fresh: deterministic rule text, optionally upgraded by an LLM.
+   * The LLM is NEVER called when the school has no available metric — with
+   * nothing to summarize a model can only chat back ("I'll need information
+   * such as…"), and that must never surface as a warning. Its reply is accepted
+   * only as tagged signals (validateInsightReply); anything else → rule text.
+   * The rule text is TAGGED too (generateInsightSignals): the Finance Warnings
+   * grid only tiles tagged lines, so an untagged fallback would read as
+   * "Nothing flagged" while a metric is at risk.
+   */
   private async generate(metrics: MetricResult[]): Promise<InsightResponse> {
-    const ruleText = generateInsight(metrics)
-    if (!this.isConfigured()) {
+    const ruleText = generateInsightSignals(metrics)
+    if (!this.isConfigured() || !hasAvailableMetric(metrics)) {
       return { text: ruleText, source: 'rule' }
     }
     try {
-      const llmText = await this.callLlm(metrics)
-      if (llmText && llmText.trim().length > 0) {
-        return { text: llmText.trim(), source: 'llm' }
+      const llmText = validateInsightReply(await this.callLlm(metrics))
+      if (llmText) {
+        // Value guard: every figure + status must match the metric it names;
+        // a failing line becomes that metric's rule sentence.
+        const guarded = guardInsightLines(llmText, metrics)
+        if (guarded.replaced || guarded.dropped) {
+          this.logger.warn(
+            `insight value guard: ${guarded.replaced} line(s) replaced by the rule sentence, ${guarded.dropped} dropped`,
+          )
+        }
+        if (guarded.text) return { text: guarded.text, source: 'llm' }
+        this.logger.warn('no Claude insight line passed the value guard; using the rule-based summary')
+        return { text: ruleText, source: 'rule' }
       }
+      this.logger.warn('Claude insight reply was not a list of tagged signals; using the rule-based summary')
     } catch (err) {
       this.logger.warn(
         `Claude insight upgrade failed; falling back to rule-based summary: ${
@@ -135,11 +187,12 @@ export class InsightService {
     const lines = metrics
       .filter((m) => m.available && m.value !== null)
       .map((m) => {
-        const delta =
-          m.periodOverPeriodDelta !== null
-            ? `, change ${m.periodOverPeriodDelta >= 0 ? '+' : ''}${m.periodOverPeriodDelta}`
-            : ''
-        return `- ${m.label}: ${m.value} (${m.unit}), status ${m.status}${delta}`
+        // FORMATTED values (25.8%, 152 days) — never the raw fraction, which
+        // the model once read as "0.26%" beside a 25.8% card.
+        const unit = resolveDisplayUnit(m.key, m.unit)
+        const d = formatMetricDelta(m.periodOverPeriodDelta, unit)
+        const delta = d ? `, change vs prior year ${d}` : ''
+        return `- ${m.label}: ${formatMetricValueLong(m.value, unit)}, status ${m.status}${delta}`
       })
       .join('\n')
 
@@ -149,7 +202,12 @@ export class InsightService {
       'category tag in square brackets — [RISK], [WATCH], or [STRENGTH] — followed by a ' +
       'single concise, plain-language sentence (max ~14 words). Lead with the biggest ' +
       'risk; flag high tuition dependency if present; include at least one [STRENGTH] when ' +
-      'warranted. No preamble, no markdown, no extra commentary — just the tagged lines.' +
+      'warranted. No preamble, no markdown, no extra commentary — just the tagged lines. ' +
+      'Never ask questions or request more information; use only the metrics below. ' +
+      'Name the metric in each line and quote its figure EXACTLY as written below; tag ' +
+      'it to match its status (risk → [RISK], watch → [WATCH], good → [STRENGTH]). ' +
+      'Never mention a metric that is not listed (for example cash or reserves when ' +
+      'they are absent).' +
       '\n\nExample:\n[RISK] Tuition dependency is 87% of revenue, leaving little buffer.\n' +
       '[WATCH] Cash on hand is 43 days; monitor liquidity.\n[STRENGTH] Operating reserve ' +
       'covers seven months of expenses.\n\nMetrics:\n' +
@@ -243,6 +301,11 @@ export class InsightService {
     }
     return extractAnthropicText(await res.json())
   }
+}
+
+/** True when at least one metric has a real value to summarize. */
+export function hasAvailableMetric(metrics: MetricResult[]): boolean {
+  return metrics.some((m) => m.available && m.value !== null)
 }
 
 /** Pull the first text block out of an Anthropic Messages response. */

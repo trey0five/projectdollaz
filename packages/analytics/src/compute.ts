@@ -92,7 +92,20 @@ function evaluate(
 
   // Phase 4D additive fields (band -> status, named inputs, metadata) are stitched
   // on by the shared assembler so the per-school and org surfaces never drift.
-  return assembleMetricResult(def, out, periodOverPeriodDelta)
+  const result = assembleMetricResult(def, out, periodOverPeriodDelta)
+  // A balance-sheet metric on a year with no (readable) balance sheet says WHY.
+  if (!result.available && cur.balanceSheetMissing && usesBalanceSheet(def)) {
+    result.reason = cur.balanceSheetMissing
+  }
+  return result
+}
+
+/** Financial inputs that only a Statement of Financial Position supplies. */
+const BALANCE_SHEET_INPUTS = new Set(['cash', 'restrictedCash', 'naWithout', 'naWith'])
+
+/** True when the metric reads any balance-sheet input (registry-declared). */
+export function usesBalanceSheet(def: MetricDef): boolean {
+  return (def.inputs ?? []).some((i) => i.source === 'financials' && BALANCE_SHEET_INPUTS.has(i.key))
 }
 
 export interface ComputeMetricsArgs {

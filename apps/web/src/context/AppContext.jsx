@@ -17,9 +17,30 @@ import {
   deriveOpeningNetAssets,
   DEFAULT_CHART,
 } from '@finrep/engine'
-import { ingest, classifyRole, resolveRoles, inferPeriod } from '@finrep/ingestion'
+import {
+  ingest,
+  classifyRole,
+  resolveRoles,
+  inferPeriod,
+  validateSyntheticRenumber,
+  renumberSynthetic,
+  statementSections,
+} from '@finrep/ingestion'
 import { formatDate, formatShortDate, PERIOD_LABELS } from '../lib/format.js'
-import { importsApi, mappingApi, apiErrorMessage } from '../lib/api.js'
+import { importsApi, mappingApi } from '../lib/api.js'
+import { getIntakeMemory, invalidateIntakeMemory } from '../lib/intakeMemory.js'
+import { failureFromError, failureText } from '../lib/ingestFailure.js'
+import {
+  pairIntakeFiles,
+  removeIntakeEntry,
+  setRoleInRaw,
+  memberHolding,
+  memberIdsOf,
+} from '../lib/statementPairing.js'
+import { rememberBytes, withSessionBytes } from '../lib/sessionBytes.js'
+import { autoMapEntries } from '../lib/sectionSuggest.js'
+import { serverMappedAccts, reviewSummary } from '../lib/reviewQueue.js'
+import { rememberPicks, sessionPicks } from '../lib/sessionPicks.js'
 import { usePersistence } from './PersistenceContext.jsx'
 
 const AppContext = createContext(null)
@@ -45,6 +66,45 @@ function readBytes(file) {
   })
 }
 
+/**
+ * One READY FileEntry from a parse result. Shared by the drop path and the
+ * column picker so both produce exactly the same shape. `bytes` stays on the
+ * entry for THIS tab only (the picker re-reads them); it is never part of a
+ * save payload — save() sends rows + metadata.
+ */
+function buildReadyEntry({
+  id,
+  fileName,
+  fileSize,
+  bytes,
+  result,
+  role = null,
+  roleConfirmed = false,
+  roleFromSlot = false,
+}) {
+  const { rows, metadata, warnings } = result
+  const suggestion = classifyRole({ fileName, metadata })
+  return {
+    id,
+    fileName,
+    fileSize,
+    status: 'ready',
+    rows,
+    metadata,
+    warnings: Array.isArray(warnings) ? warnings : [],
+    bytes: bytes ?? null,
+    suggestion,
+    role: role ?? suggestion.role,
+    roleConfirmed: !!roleConfirmed,
+    // The role came from WHERE the file was dropped (an empty slot), not from a
+    // person picking it — a statement half dropped next to its other half
+    // follows that half (statementPairing mergedRole).
+    roleFromSlot: !!(roleConfirmed && roleFromSlot),
+    balance: validateDataset(rows),
+    unmappedCount: findUnmapped(rows).length,
+  }
+}
+
 export function AppProvider({
   children,
   school = null,
@@ -65,7 +125,18 @@ export function AppProvider({
   // `school` is the SELECTED school (from SchoolContext) — it carries the engine
   // begin-balance fields. The old PIN login is gone; auth is handled upstream.
   const persistence = usePersistence()
-  const [files, setFiles] = useState(() => initialFiles) // ordered FileEntry[]
+  // RAW uploads, in drop order. What the intake SHOWS (`files`) is derived from
+  // these by pairIntakeFiles: a Profit and Loss half + its Balance Sheet half
+  // become one merged entry (#40). Hydrated entries get this tab's bytes back
+  // (sessionBytes) so "Change columns" survives the autosave remount.
+  const [rawFiles, setRawFiles] = useState(() => withSessionBytes(school?.id, initialFiles))
+  // "Combine anyway" pairs the person forced: [{ plId, bsId }] (either order).
+  const [manualPairs, setManualPairs] = useState([])
+  const files = useMemo(() => pairIntakeFiles(rawFiles, manualPairs), [rawFiles, manualPairs])
+  // The ONE open column picker (#32), by intake id; null = closed.
+  const [pickerFileId, setPickerFileId] = useState(null)
+  // What KYRO remembers about this school's uploads (null = nothing / unavailable).
+  const [intakeMemory, setIntakeMemory] = useState(null)
   // Seed the period from the hydrated period when present; otherwise default. The
   // user-entered value still wins once periodTouched flips.
   const [periodType, setPeriodType] = useState(() => initialPeriod?.periodType || 'ytd')
@@ -89,7 +160,7 @@ export function AppProvider({
   // freshly-categorized account immediately drops out of review and shows up in
   // the statements. Keys are String(acct) to match the PATCH /mapping contract;
   // the engine reads entries[r.acct] with a numeric acct and string-coercion
-  // makes the lookup equivalent. Mutated ONLY by the mapAccount action and
+  // makes the lookup equivalent. Mutated ONLY by the mapAccounts action and
   // resetIntake — never an effect.
   //
   // KNOWN LIMITATION (DEFERRED — do not solve here): GET /schools/:id/mapping
@@ -99,19 +170,26 @@ export function AppProvider({
   // the canonical merged chart). The clean fix is an additive backend change
   // (GET returns entries) in the fenced apps/api/src/mapping/** owned by the
   // mapping agent — coordinate there rather than working around it here.
-  const [mappedOverlay, setMappedOverlay] = useState({}) // { [String(acct)]: SCoaCategory } — THIS session's picks
+  //
+  // Seeded from this TAB's confirmed picks (sessionPicks — only ever written
+  // after PATCH /mapping succeeded), so an autosave remount doesn't re-flag
+  // accounts the school sorted a second ago. After a reload the saved snapshot
+  // covers them instead (serverMapped below).
+  const [mappedOverlay, setMappedOverlay] = useState(() => sessionPicks(school?.id)) // { [String(acct)]: SCoaCategory } — THIS session's picks
   const [mappingAccts, setMappingAccts] = useState(() => new Set()) // String(acct) with PATCH in flight
   // Auto-collapse the intake panel once exactly: the first time a valid,
   // conflict-free setup exists. After that, expand/collapse is user-driven
-  // (this ref keeps us from fighting a manual re-expand on every recompute).
-  const autoCollapsedRef = useRef(false)
+  // (this flag keeps us from fighting a manual re-expand on every recompute).
+  const [autoCollapsed, setAutoCollapsed] = useState(false)
 
   // ── Intake reset ───────────────────────────────────────
   // Clearing intake state is exposed (used when switching schools) and run
   // automatically whenever the selected school changes, so one school's
   // uploads never leak into another's report preview.
   const resetIntake = useCallback(() => {
-    setFiles([])
+    setRawFiles([])
+    setManualPairs([])
+    setPickerFileId(null)
     setStatus('')
     setPeriodDate('')
     setPeriodType('ytd')
@@ -121,7 +199,7 @@ export function AppProvider({
     setMappedOverlay({})
     setMappingAccts(new Set())
     setPromotePy(true)
-    autoCollapsedRef.current = false
+    setAutoCollapsed(false)
   }, [])
 
   // NOTE: the old schoolId-change reset effect is gone. AppProvider is remounted
@@ -133,6 +211,10 @@ export function AppProvider({
   // Each dropped/browsed file: insert a 'parsing' entry immediately, then
   // ingest -> validate -> classify, and replace it with a 'ready'/'error'
   // entry. Files resolve independently and concurrently.
+  const schoolId = school?.id ?? null
+  // The latest A1 auto-sort (autoSortAccounts, declared further down), for the
+  // file handlers to call after a read. Synced in an effect, never in render.
+  const autoSortRef = useRef(null)
   const loadFiles = useCallback(
     (fileList, forcedRole = null) => {
       const list = Array.from(fileList || [])
@@ -140,39 +222,45 @@ export function AppProvider({
       setStatus(`Reading ${list.length} file${list.length > 1 ? 's' : ''}…`)
       setIntakeExpanded(true)
 
+      // The school's remembered layouts + numbers, fetched ONCE per drop. Any
+      // failure resolves to null, which is exactly today's parse.
+      const memoryP = getIntakeMemory(schoolId).then((m) => {
+        setIntakeMemory(m)
+        return m
+      })
+
       list.forEach(async (file) => {
         const id = uid()
-        setFiles((prev) => [
+        setRawFiles((prev) => [
           ...prev,
           { id, fileName: file.name, fileSize: file.size, status: 'parsing' },
         ])
 
+        let bytes = null
         try {
-          const bytes = await readBytes(file)
-          const { rows, metadata } = ingest(file.name, bytes)
-          const suggestion = classifyRole({ fileName: file.name, metadata })
-          const balance = validateDataset(rows)
-          const unmappedCount = findUnmapped(rows).length
+          bytes = await readBytes(file)
+          const memory = await memoryP
+          const result = ingest(file.name, bytes, { memory })
 
           // When a file is dropped/browsed INTO a specific empty slot, honor
           // that intent: stamp the slot's role as a confirmed override instead
           // of using the auto-classification. The classification ALGORITHM is
           // untouched — we just pin the resolved role for this entry.
-          const entry = {
+          const entry = buildReadyEntry({
             id,
             fileName: file.name,
             fileSize: file.size,
-            status: 'ready',
-            rows,
-            metadata,
-            suggestion,
-            role: forcedRole ?? suggestion.role,
+            bytes,
+            result,
+            role: forcedRole,
             roleConfirmed: forcedRole != null,
-            balance,
-            unmappedCount,
-          }
+            roleFromSlot: forcedRole != null,
+          })
+          const { rows, suggestion } = entry
 
-          setFiles((prev) => prev.map((f) => (f.id === id ? entry : f)))
+          setRawFiles((prev) => prev.map((f) => (f.id === id ? entry : f)))
+          // A1: a statement export's accounts sort themselves (no-op for a TB).
+          void autoSortRef.current?.(entry.rows, entry.metadata, file.name)
 
           // NOTE: the period date/type are NO LONGER stamped here. They are
           // PURELY DERIVED from whichever file ends up occupying the CY slot
@@ -184,18 +272,38 @@ export function AppProvider({
             `✓ ${file.name} — ${rows.length} accounts (${suggestion.role.toUpperCase()})`
           )
         } catch (err) {
-          setFiles((prev) =>
+          // #32: a file KYRO couldn't read says WHY in plain words, asks the one
+          // question that unblocks it, and — when the grid could be read at all —
+          // keeps its bytes + preview so the person can show KYRO the columns.
+          const failure = failureFromError(err)
+          setRawFiles((prev) =>
             prev.map((f) =>
               f.id === id
-                ? { id, fileName: file.name, fileSize: file.size, status: 'error', error: err.message }
+                ? {
+                    id,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    status: 'error',
+                    error: failureText(failure),
+                    failure,
+                    bytes: failure.canPick ? bytes : null,
+                    // Where it was dropped, so "Use these columns" puts it
+                    // back in that slot rather than asking for a role.
+                    role: forcedRole,
+                    roleConfirmed: forcedRole != null,
+                    roleFromSlot: forcedRole != null,
+                  }
                 : f
             )
           )
-          setStatus(`⚠ ${file.name}: ${err.message}`)
+          // Open the picker for the first readable failure (never steal it from
+          // one already open). An event handler, never an effect.
+          if (failure.canPick) setPickerFileId((prev) => prev ?? id)
+          setStatus(`⚠ ${file.name}: ${failure.reason}`)
         }
       })
     },
-    []
+    [schoolId]
   )
 
   // Load files PINNED to a specific role (drop/browse into an empty slot).
@@ -204,11 +312,13 @@ export function AppProvider({
     [loadFiles]
   )
 
-  const setFileRole = useCallback((id, role) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, role, roleConfirmed: true } : f))
-    )
-  }, [])
+  // A merged P&L + Balance Sheet entry fans the role out to both halves.
+  const setFileRole = useCallback(
+    (id, role) => {
+      setRawFiles((prev) => setRoleInRaw(prev, files, id, role))
+    },
+    [files],
+  )
 
   // Remove a file. Unsaved files are just dropped from local state. A PERSISTED
   // file is a stored import in Postgres, so a local filter alone would leave it
@@ -217,10 +327,18 @@ export function AppProvider({
   // regenerated without it, or cleared when no CY remains). Optimistic local
   // removal gives instant feedback; refresh() bumps the hydration token so the
   // provider remounts on the authoritative post-delete seed.
+  //
+  // A MERGED P&L + Balance Sheet entry removes only the halves added in this
+  // session (a saved half reappears as its own card) and never deletes anything
+  // on the server — it was never saved as itself.
   const removeFile = useCallback(
     async (id) => {
-      const target = files.find((f) => f.id === id)
-      setFiles((prev) => prev.filter((f) => f.id !== id))
+      const { deleteImport } = removeIntakeEntry([], [], files, id)
+      const target = deleteImport
+      setRawFiles((prev) => removeIntakeEntry(prev, [], files, id).rawFiles)
+      setManualPairs((prev) => removeIntakeEntry([], prev, files, id).manualPairs)
+      const gone = new Set([id, ...memberIdsOf(files, id)])
+      setPickerFileId((prev) => (prev && gone.has(prev) ? null : prev))
       if (readOnly || !target?.persisted || !target.importId || !school?.id) return
       try {
         setStatus(`Deleting ${target.fileName}…`)
@@ -403,88 +521,79 @@ export function AppProvider({
     })
   }, [])
 
-  // ── Assign a category to a flagged ("N to review") account ──────────────────
-  // Optimistically records the pick in the session overlay (so activeChart, and
-  // thus the preview + the card's unmapped list, update immediately), then
-  // PATCHes /mapping to PERSIST it into the school's canonical merged chart so
-  // the server's canonical generate and future saves include it. On failure the
-  // overlay pick is rolled back and the error surfaced. No-op when read-only or
-  // there is no school / category. All functional setState updaters so deps stay
-  // [readOnly, school]. Keys are String(acct) to match the PATCH contract.
-  const mapAccount = useCallback(
-    async (acct, categoryKey) => {
-      if (readOnly || !school?.id || !categoryKey) return
-      const key = String(acct)
-      // Optimistic: add to overlay (idempotent on re-pick) and mark in-flight.
-      setMappedOverlay((prev) => ({ ...prev, [key]: categoryKey }))
-      setMappingAccts((prev) => {
-        const n = new Set(prev)
-        n.add(key)
-        return n
-      })
-      try {
-        await mappingApi.mergeEntries(school.id, { [key]: categoryKey })
-        setStatus(`Categorized account ${key}.`)
-        // THE SERVER JUST REBUILT THE STATEMENTS. Categorising an account is
-        // the one edit that changes every number on the page without touching a
-        // file, and the API regenerates the affected periods on this call — but
-        // nothing here told the rest of the app to look again, so a user could
-        // classify their whole chart and watch the screen keep insisting it
-        // could not read their books. Same signal Penny's writes use.
-        window.dispatchEvent(
-          new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }),
-        )
-      } catch (err) {
-        // Roll the optimistic pick back so the account re-flags for another try.
-        setMappedOverlay((prev) => {
-          const next = { ...prev }
-          delete next[key]
-          return next
-        })
-        setStatus(apiErrorMessage(err, `Could not categorize account ${key}.`))
-      } finally {
-        setMappingAccts((prev) => {
-          const n = new Set(prev)
-          n.delete(key)
-          return n
-        })
-      }
-    },
-    [readOnly, school],
-  )
-
+  // ── Sort flagged ("N to review") accounts ─────────────────────────────────
+  // (The old one-account mapAccount is gone: every pick now goes through the
+  // review popup's ONE save below.)
   /**
-   * Categorise SEVERAL accounts in ONE request.
+   * Sort SEVERAL accounts in ONE request.
    *
-   * The review panel's "use all suggestions" fired mapAccount per account, so a
+   * The review panel's "use all suggestions" once fired one save per account, so a
    * 33-account trial balance sent 33 concurrent PATCHes — each merging into the
    * same row and rebuilding the statements. Most picks were lost and the school
    * was left with numbers that were WRONG rather than missing. (The server-side
    * merge is atomic now too; this is the other half — one request, one rebuild.)
    */
+  //
+  // `onlyNew` makes the save FILL-ONLY on the server: an account the school's
+  // mapping already places keeps its category, so approving pre-filled
+  // suggestions (or carrying a renumbered account's category) can never
+  // re-point a pick this browser can't see.
+  //
+  // `chosen` (the review popup passes it) = the accounts the PERSON picked.
+  // Those are their decision and go as a normal merge — never silently dropped
+  // by fill-only — while the untouched suggestions go fill-only. Two requests
+  // at most, one after the other (never concurrent), each rebuilding once.
   const mapAccounts = useCallback(
-    async (entries) => {
+    async (entries, { onlyNew = false, chosen = null } = {}) => {
       const keys = Object.keys(entries ?? {})
       if (readOnly || !school?.id || keys.length === 0) return
+      const picked = {}
+      const rest = {}
+      for (const k of keys) {
+        if (chosen && chosen.has(String(k))) picked[k] = entries[k]
+        else rest[k] = entries[k]
+      }
       setMappedOverlay((prev) => ({ ...prev, ...entries }))
       setMappingAccts((prev) => {
         const n = new Set(prev)
         for (const k of keys) n.add(String(k))
         return n
       })
+      const saved = []
       try {
-        await mappingApi.mergeEntries(school.id, entries)
-        setStatus(`Categorized ${keys.length} account${keys.length === 1 ? '' : 's'}.`)
+        if (Object.keys(rest).length > 0) {
+          await mappingApi.mergeEntries(school.id, rest, { onlyNew })
+          saved.push(...Object.keys(rest))
+        }
+        if (Object.keys(picked).length > 0) {
+          await mappingApi.mergeEntries(school.id, picked)
+          saved.push(...Object.keys(picked))
+        }
+        rememberPicks(school.id, entries)
+        setStatus(`Sorted ${keys.length} account${keys.length === 1 ? '' : 's'}.`)
         window.dispatchEvent(
           new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }),
         )
-      } catch (err) {
+        return true
+      } catch {
+        // Roll back only what didn't save; what did save is on the server.
+        const savedSet = new Set(saved)
+        if (saved.length > 0) {
+          const kept = {}
+          for (const k of saved) kept[k] = entries[k]
+          rememberPicks(school.id, kept)
+          window.dispatchEvent(
+            new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }),
+          )
+        }
         setMappedOverlay((prev) => {
           const next = { ...prev }
-          for (const k of keys) delete next[k]
+          for (const k of keys) if (!savedSet.has(k)) delete next[k]
           return next
         })
-        setStatus(`Could not categorize: ${err?.message ?? 'try again'}`)
+        // Plain words and a next step — never the raw error ("Network Error").
+        setStatus('We couldn’t save your account sorting just now. Press Review accounts to try again.')
+        return false
       } finally {
         setMappingAccts((prev) => {
           const n = new Set(prev)
@@ -493,7 +602,7 @@ export function AppProvider({
         })
       }
     },
-    [readOnly, school?.id, setStatus],
+    [readOnly, school],
   )
 
   // ── SAVE (Phase 1C): persist the slotted, newly-uploaded imports + request the
@@ -511,10 +620,15 @@ export function AppProvider({
       if (entry.fromHistory || entry.persisted) continue
       imports.push({
         role,
-        sourceName: entry.fileName,
+        sourceName: String(entry.fileName || '').slice(0, 255),
         rows: entry.rows,
         metadata: entry.metadata || {},
       })
+      // This tab keeps the bytes (never sent) so "Change columns" survives the
+      // post-save remount.
+      if (entry.bytes) {
+        rememberBytes(school?.id, String(entry.fileName || '').slice(0, 255), entry.rows, entry.bytes)
+      }
     }
     if (imports.length === 0) return null
 
@@ -534,7 +648,7 @@ export function AppProvider({
         imports: [
           {
             role: 'cy',
-            sourceName: byRole.py.fileName,
+            sourceName: String(byRole.py.fileName || '').slice(0, 255),
             rows: byRole.py.rows,
             metadata: byRole.py.metadata || {},
           },
@@ -561,8 +675,11 @@ export function AppProvider({
       : null
 
     const { saved } = await persistence.savePeriods(payloads, { focus: cyPayload, savedLabel })
+    // A save can add a picked layout / KYRO's numbers to the school's memory.
+    invalidateIntakeMemory(school?.id)
     return saved.find((s) => s.payload === cyPayload)?.snapshot ?? null
   }, [
+    school,
     readOnly,
     byRole,
     effectivePeriodDate,
@@ -592,6 +709,187 @@ export function AppProvider({
     [mappedOverlay],
   )
 
+  // ── What the SERVER already places (A4) ─────────────────────────────────────
+  // GET /mapping returns no entries, so after a reload this browser only knows
+  // the default chart. The saved snapshot was built with the school's real
+  // mapping and lists the accounts IT couldn't place; for the saved files that
+  // list is the whole review — any other account is the server's, and asking
+  // again would let "Approve" overwrite a pick this browser can't see. Only a
+  // snapshot of THIS intake's period counts.
+  const latestSnapshot = persistence?.latestSnapshot ?? null
+  const serverMapped = useMemo(() => {
+    if (!latestSnapshot) return new Set()
+    const snapPeriod = latestSnapshot.fiscalPeriodId
+    if (snapPeriod && initialPeriod?.id && snapPeriod !== initialPeriod.id) return new Set()
+    return serverMappedAccts(latestSnapshot, rawFiles)
+  }, [latestSnapshot, rawFiles, initialPeriod])
+
+  // The accounts still waiting for a person, across the intake (unique accts).
+  const review = useMemo(
+    () => reviewSummary(files, activeChart, serverMapped),
+    [files, activeChart, serverMapped],
+  )
+
+  // ── A1: a QuickBooks statement export sorts itself ──────────────────────────
+  // A Profit and Loss / Balance Sheet export says which section every account
+  // sits in (metadata.statement.sections) — as reliable as the AccountType the
+  // live QuickBooks sync files by. Accounts whose section AND name make the
+  // category clear drop out of "to review" and into the live preview straight
+  // away. Accounts whose class is known but whose exact category isn't stay
+  // "to review", pre-filled. A real trial balance has no section facts, so
+  // nothing here touches it: it keeps confirm-first review.
+  //
+  // PREVIEW ONLY — THIS NEVER WRITES THE SCHOOL'S MAPPING. The browser can't see
+  // the school's stored picks (GET /mapping returns no entries), so a PATCH from
+  // here would re-point an account the school already sorted (67000 picked as
+  // admin last year, auto-filed back to fixedOther this year) and the server
+  // would rebuild every period with it. The SAVE does the persisting:
+  // ImportsService.create applies the same sure, section-backed categories
+  // against the school's REAL mapping and never re-points a known account. And
+  // locally it only FILLS gaps — a pick already in this session's overlay wins.
+  const autoSortAccounts = useCallback(
+    (rows, metadata, fileName) => {
+      if (readOnly || !school?.id) return
+      let sections = {}
+      try {
+        sections = statementSections(metadata)
+      } catch {
+        sections = {}
+      }
+      if (Object.keys(sections).length === 0) return
+      const unmapped = findUnmapped(rows || [], activeChart).filter(
+        (r) => !serverMapped.has(String(r.acct)),
+      )
+      const { entries, review: left } = autoMapEntries(unmapped, sections)
+      const n = Object.keys(entries).length
+      if (n === 0) return
+      setMappedOverlay((prev) => {
+        const next = { ...prev }
+        for (const [k, v] of Object.entries(entries)) if (next[k] == null) next[k] = v
+        return next
+      })
+      setStatus(
+        `✓ ${fileName} — sorted ${n} account${n === 1 ? '' : 's'} by their QuickBooks sections` +
+          (left > 0 ? `; ${left} ${left === 1 ? 'needs' : 'need'} a quick check.` : '.'),
+      )
+    },
+    [readOnly, school, activeChart, serverMapped],
+  )
+  // loadFiles / applyColumns are declared above this; they reach the latest
+  // autoSortAccounts through autoSortRef, synced after each render (never in render).
+  useEffect(() => {
+    autoSortRef.current = autoSortAccounts
+  }, [autoSortAccounts])
+
+  // ── Column picker (#32) ─────────────────────────────────────────────────────
+  const openColumnPicker = useCallback((id) => setPickerFileId(id), [])
+  const closeColumnPicker = useCallback(() => setPickerFileId(null), [])
+
+  // Re-read a file with the columns the person picked. Runs in the handler (the
+  // picker already showed the same read live and only enables its button on a
+  // success). The entry keeps its id; a saved entry becomes an unsaved copy so
+  // autosave posts the corrected import. Returns true when it read.
+  const applyColumns = useCallback(
+    (id, choice) => {
+      const target = rawFiles.find((f) => f.id === id)
+      if (!target?.bytes || !choice) return false
+      try {
+        const result = ingest(target.fileName, target.bytes, { columns: choice, memory: intakeMemory })
+        const keepRole = !!target.roleConfirmed && !!target.role
+        let entry = buildReadyEntry({
+          id,
+          fileName: target.fileName,
+          fileSize: target.fileSize,
+          bytes: target.bytes,
+          result,
+          role: keepRole ? target.role : null,
+          roleConfirmed: keepRole,
+          roleFromSlot: keepRole && !!target.roleFromSlot,
+        })
+        // A file KYRO couldn't read on its own rarely classifies with any
+        // confidence — and then sat in the This-year slot asking "Choose
+        // role". When nothing else holds This year, that is where it goes.
+        const thisYearTaken = rawFiles.some(
+          (f) => f.id !== id && f.status === 'ready' && !f.fromHistory && f.role === 'cy',
+        )
+        const unsure = entry.role === 'unknown' || (entry.suggestion?.confidence ?? 0) < 0.5
+        if (!keepRole && unsure && !thisYearTaken) {
+          entry = { ...entry, role: 'cy', roleConfirmed: true, roleFromSlot: true }
+        }
+        setRawFiles((prev) => prev.map((f) => (f.id === id ? entry : f)))
+        setPickerFileId(null)
+        setStatus(`✓ ${target.fileName} — ${entry.rows.length} accounts read with your columns`)
+        void autoSortRef.current?.(entry.rows, entry.metadata, target.fileName)
+        return true
+      } catch (err) {
+        setStatus(`⚠ ${target.fileName}: ${failureText(failureFromError(err))}`)
+        return false
+      }
+    },
+    [rawFiles, intakeMemory],
+  )
+
+  // "Combine anyway": force a P&L half and a Balance Sheet half together.
+  const combineFiles = useCallback((aId, bId) => {
+    if (!aId || !bId || aId === bId) return
+    setManualPairs((prev) => [
+      ...prev.filter((p) => ![p.plId, p.bsId].some((x) => x === aId || x === bId)),
+      { plId: aId, bsId: bId },
+    ])
+  }, [])
+
+  // Re-key an account KYRO numbered (#40). Validated by the parser (income
+  // starts with 4, expenses 5–9, not already used). Returns the plain message
+  // when refused, null when done. A saved entry becomes an unsaved copy so the
+  // corrected numbers are what autosave stores; a category already picked for
+  // the old number follows it to the new one.
+  const renumberAccount = useCallback(
+    (id, fromAcct, toAcct) => {
+      if (readOnly) return 'This view is read-only.'
+      const from = Number(fromAcct)
+      const to = typeof toAcct === 'string' && toAcct.trim() === '' ? NaN : Number(toAcct)
+      const member = memberHolding(rawFiles, files, id, from)
+      if (!member || !member.metadata) return 'Only accounts KYRO numbered can be renumbered.'
+      const refused = validateSyntheticRenumber(member.rows, member.metadata, from, to)
+      if (refused) return refused
+      if (to === from) return null
+      let next
+      try {
+        next = renumberSynthetic(member.rows, member.metadata, from, to)
+      } catch (err) {
+        return err?.message || 'That number can’t be used.'
+      }
+      setRawFiles((prev) =>
+        prev.map((f) =>
+          f.id === member.id
+            ? {
+                ...f,
+                rows: next.rows,
+                metadata: next.metadata,
+                persisted: false,
+                importId: undefined,
+                balance: validateDataset(next.rows),
+                unmappedCount: findUnmapped(next.rows).length,
+              }
+            : f,
+        ),
+      )
+      // Carry the old number's category to the new one — FILL-ONLY. "No
+      // entry for `to`" is judged against THIS browser's chart (defaults +
+      // overlay), not the school's stored picks, and `entries[from]` is often
+      // an unsaved auto-sort guess; a plain merge could re-point an account the
+      // school already filed (41500 development → other) and rebuild every
+      // period. onlyNew: an account the server already places keeps its own.
+      const entries = activeChart.mapping?.entries || {}
+      if (entries[from] != null && entries[to] == null) {
+        void mapAccounts({ [String(to)]: entries[from] }, { onlyNew: true })
+      }
+      setStatus(`Account ${from} is now ${to}.`)
+      return null
+    },
+    [readOnly, rawFiles, files, activeChart, mapAccounts],
+  )
+
   // ── LIVE PREVIEW: reports derived over the pure engine ──────
   // `generatedAt` is intentionally OMITTED so re-renders never thrash a
   // clock value (the engine is deterministic; export stamps the clock).
@@ -618,8 +916,9 @@ export function AppProvider({
   // render-time state transition (the pattern this repo already uses for
   // tab reset) — NOT a setState-in-effect — so it stays clean under the
   // react-hooks lint rule. Subsequent expand/collapse is fully user-driven.
-  if (autoCollapse && reports && !hasUnresolved && !autoCollapsedRef.current) {
-    autoCollapsedRef.current = true
+  // (State, not a ref: a ref written during render is invisible to React.)
+  if (autoCollapse && reports && !hasUnresolved && !autoCollapsed) {
+    setAutoCollapsed(true)
     if (intakeExpanded) setIntakeExpanded(false)
   }
 
@@ -713,13 +1012,26 @@ export function AppProvider({
     removeFile,
     expand,
     collapse,
+    // #32 column picker / #40 pairing + re-key.
+    intakeMemory,
+    pickerFileId,
+    openColumnPicker,
+    closeColumnPicker,
+    applyColumns,
+    combineFiles,
+    renumberAccount,
     // Category-mapping (intake "assign a category" editor). activeChart drives
-    // the preview + per-file unmapped detection; mapAccount persists a pick;
+    // the preview + per-file unmapped detection; mapAccounts persists picks;
     // mappingAccts is the per-row in-flight set (consumers call .has(key)).
     activeChart,
-    mapAccount,
     mapAccounts,
     mappingAccts,
+    // A4: accounts the saved snapshot shows the server already places, and the
+    // intake-wide review queue (unique accounts) the callout + cards read.
+    serverMappedAccts: serverMapped,
+    review,
+    // A5: the review popup is scoped to this school.
+    schoolId,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

@@ -46,7 +46,10 @@ export class MappingController {
     @Param('schoolId') schoolId: string,
     @Body() dto: MergeMappingDto,
   ) {
-    const merged = await this.mapping.mergeEntries(schoolId, dto.entries)
+    // onlyNew = fill-only (existing keys win); the rebuild below runs either way.
+    const merged = await this.mapping.mergeEntries(schoolId, dto.entries, {
+      onlyNew: dto.onlyNew === true,
+    })
 
     // Every period that actually holds a current-year import. A period with only
     // a prior-year comparative cannot generate, and failing the whole remap on

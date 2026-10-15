@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config'
 import type { ImportRole, QboConnection, User } from '@finrep/db'
 import { SCOA_CATEGORIES, type SCoaCategory } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { clearPeriodInsights } from '../analytics/insight-cache.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
@@ -516,6 +517,9 @@ export class QboService {
         }
       } else {
         await this.prisma.statementSnapshot.deleteMany({ where: { schoolId, fiscalPeriodId: periodId } })
+        // Statements gone → the saved insight about them goes too (school-wide:
+        // later periods' deltas compared against this one).
+        await clearPeriodInsights(this.prisma, schoolId)
       }
       // Drop a period only when nothing user-owned remains (a QBO-created history
       // year). Guarded on imports + monthly + budget so we never cascade real data.

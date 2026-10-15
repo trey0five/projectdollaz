@@ -9,9 +9,44 @@
 import type { ReportBundle, SOAResult } from '@finrep/engine'
 import type {
   ExpenseLineKey,
+  MetricUnavailableReason,
   PeriodFinancials,
   RevenueLineKey,
 } from './types.js'
+
+/**
+ * Does the snapshot's current-year Statement of Financial Position rest on any
+ * real balance-sheet account?
+ *
+ * The engine ALWAYS builds an SFP from a non-empty trial balance — even a P&L
+ * export alone (statement partial 'pl'), where every asset/liability line sums
+ * to 0 and net assets are just the school's opening figure + the year's change.
+ * Read as-is that gave "Days cash on hand: 0 days — at risk" and a made-up
+ * operating reserve. The SFP lineage records the trial-balance rows behind
+ * each asset/liability line; when NO line has a single source row, there is
+ * no balance sheet to measure. Snapshots without lineage (legacy) are trusted
+ * as before. Returns the reason when missing, else null.
+ */
+export function missingBalanceSheet(bundle: ReportBundle): MetricUnavailableReason | null {
+  const sfp = bundle.sfpResults?.cy
+  if (sfp === null || sfp === undefined) return 'needs-balance-sheet'
+  const lin = bundle.lineage?.sfp?.cy
+  if (!lin) return null // legacy snapshot: no lineage to judge by
+  const sourced = Object.values(lin).some(
+    (l) => l && l.scoaCategory !== null && Array.isArray(l.sources) && l.sources.length > 0,
+  )
+  if (sourced) return null
+  // Nothing sorted into a balance-sheet line. If the unmapped list holds
+  // balance-sheet-numbered accounts (1xxx assets / 2xxx liabilities / 3xxx net
+  // assets) the sheet is there but awaiting review; otherwise there is none.
+  const unsortedBs = (bundle.unmapped ?? []).some((r) => {
+    const acct = Math.abs(Math.trunc(Number((r as { acct?: unknown }).acct)))
+    if (!Number.isFinite(acct) || acct < 100) return false
+    const lead = String(acct)[0]
+    return lead === '1' || lead === '2' || lead === '3'
+  })
+  return unsortedBs ? 'balance-sheet-unsorted' : 'needs-balance-sheet'
+}
 
 export const REVENUE_LINE_KEYS: readonly RevenueLineKey[] = [
   'tuition',
@@ -100,7 +135,8 @@ function pickExpense(soa: SOAResult): Record<ExpenseLineKey, number> {
  */
 export function fromBundle(bundle: ReportBundle): PeriodFinancials {
   const soa = bundle.soaResults.cy
-  const sfp = bundle.sfpResults.cy
+  const missing = missingBalanceSheet(bundle)
+  const sfp = missing ? null : bundle.sfpResults.cy
   const hasSFP = sfp !== null && sfp !== undefined
 
   return {
@@ -115,5 +151,7 @@ export function fromBundle(bundle: ReportBundle): PeriodFinancials {
     naWithout: hasSFP ? sfp.naWithout : null,
     naWith: hasSFP ? sfp.naWith : null,
     hasSFP,
+    // Only present when missing, so a full bundle's projection is unchanged.
+    ...(missing ? { balanceSheetMissing: missing } : {}),
   }
 }

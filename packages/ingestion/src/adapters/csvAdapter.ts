@@ -4,7 +4,7 @@
 // start-row detection heuristic, emitting identical NormalizedRow[].
 // Lib-light: hand-rolled CSV parsing (handles quoted fields/commas).
 // ─────────────────────────────────────────────────────────────
-import { ACCT_MAX, isPlausibleAcct, detectColumns, rowTotalFor } from './excelAdapter.js'
+import { ACCT_MAX, isPlausibleAcct, detectColumns, noAmountCells, rowTotalFor } from './excelAdapter.js'
 import type { IngestionAdapter, IngestionResult, NormalizedRow } from '../types.js'
 import { extractSheetMetadata } from '../metadata.js'
 
@@ -122,6 +122,18 @@ export function parseTrialBalanceCsv(bytes: ArrayBuffer): IngestionResult {
     throw new Error(
       `No account rows found (start row detected: ${startRow}). ` +
         'Ensure account numbers (1–999999) are in column A with the description in column B.'
+    )
+  }
+
+  // Same refusal as the Excel adapter (#32 D21): every total is zero AND no
+  // amount column was recognised by name → the balances sit in a column we
+  // could not find. Never import a chart of zeros that looks like success.
+  if (rows.every((r) => r.total === 0) && noAmountCells(raw, startRow, cols)) {
+    const hdr = (startRow > 0 ? raw[startRow - 1] ?? [] : []).map((c) => (c ?? '').toString().trim()).filter(Boolean)
+    throw new Error(
+      `Found ${rows.length} account rows but no amount column. ` +
+        `Header cells seen: ${hdr.length ? hdr.join(' | ') : '(none)'}. ` +
+        'Name the balance column "Actual", "Total", "Balance", "Debit"/"Credit", or "YTD".',
     )
   }
 

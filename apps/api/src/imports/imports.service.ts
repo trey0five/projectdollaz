@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common'
 import type { Import, ImportRole, Prisma, User } from '@finrep/db'
+import { buildIntakeMemory, type IntakeMemory } from '@finrep/ingestion'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { clearPeriodInsights } from '../analytics/insight-cache.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
+import { MappingService } from '../mapping/mapping.service.js'
+import { statementAutoMapping } from './statement-auto-map.js'
 import { StatementsService } from '../statements/statements.service.js'
 import type { CreateImportDto } from './dto/create-import.dto.js'
 
@@ -53,6 +57,15 @@ export interface ImportSummary {
   active: boolean
 }
 
+/**
+ * How many of a school's newest imports feed its intake memory. Memory is
+ * DERIVED from Import.metadata (no table, no migration): the column layouts a
+ * person picked (metadata.layout) and the numbers KYRO gave unnumbered P&L
+ * accounts (metadata.statement.synthesized). 400 covers years of monthly
+ * re-uploads; buildIntakeMemory caps the output (20 layouts, 2000 pins).
+ */
+export const INTAKE_MEMORY_SCAN = 400
+
 /** Read an import's stored metadata.source into the public sourceType enum. */
 function readSourceType(metadata: unknown): ImportSourceType {
   const source =
@@ -66,11 +79,17 @@ function readSourceType(metadata: unknown): ImportSourceType {
 
 @Injectable()
 export class ImportsService {
+  private readonly logger = new Logger(ImportsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly periods: PeriodsService,
     private readonly statements: StatementsService,
+    // A1 — statement accounts sort themselves. Appended LAST and @Optional so
+    // positional-arg unit specs (which stop at statements) still construct; with
+    // no MappingService the auto-sort is simply skipped.
+    @Optional() private readonly mapping?: MappingService,
   ) {}
 
   private toPublic(imp: Import): ImportPublic {
@@ -128,7 +147,46 @@ export class ImportsService {
       },
     })
 
+    await this.autoSortStatementAccounts(schoolId, dto.rows, dto.metadata)
+
     return this.toPublic(imp)
+  }
+
+  /**
+   * A1 — a QuickBooks statement export knows each account's report section, so
+   * the accounts this school's mapping doesn't know yet are merged with their
+   * SURE section-backed category before anything generates statements (the
+   * intake, and a KYRO-chat import that has no review step). Unclear accounts
+   * stay for the review step; a plain trial balance (no section facts) is never
+   * touched; an account the mapping already knows is never re-pointed.
+   * Best-effort: a failure here never fails the import — the accounts simply
+   * stay "to review" as before.
+   */
+  private async autoSortStatementAccounts(
+    schoolId: string,
+    rows: CreateImportDto['rows'],
+    metadata: unknown,
+  ): Promise<void> {
+    if (!this.mapping) return
+    try {
+      if (!metadata || typeof metadata !== 'object') return
+      const st = (metadata as { statement?: { sections?: unknown } }).statement
+      if (!st || typeof st !== 'object' || !st.sections) return
+      const { chart } = await this.mapping.ensureActive(schoolId)
+      const patch = statementAutoMapping(
+        rows,
+        metadata,
+        chart.mapping.entries as unknown as Record<string, unknown>,
+      )
+      if (Object.keys(patch).length === 0) return
+      // Fill-only: the patch was computed from a READ of the mapping; a manual
+      // pick landing between that read and this write must not be overwritten.
+      await this.mapping.mergeEntries(schoolId, patch, { onlyNew: true })
+    } catch (err) {
+      this.logger.warn(
+        `statement auto-sort skipped: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
   }
 
   /** List imports for a period (newest-first), with an `active` flag per role. */
@@ -153,6 +211,23 @@ export class ImportsService {
         active,
       }
     })
+  }
+
+  /**
+   * The school's intake memory (#32 remembered column layouts + #41 S-B(b)
+   * pinned synthetic account numbers), derived from its stored imports' metadata,
+   * newest first. Selects ONLY metadata (never rows). buildIntakeMemory is pure
+   * and defensive — metadata is client-written JSON — and skips QuickBooks-sync
+   * imports. Tenant scope = the RolesGuard on :schoolId plus the where clause.
+   */
+  async intakeMemory(schoolId: string): Promise<IntakeMemory> {
+    const rows = await this.prisma.import.findMany({
+      where: { schoolId },
+      select: { metadata: true },
+      orderBy: { createdAt: 'desc' },
+      take: INTAKE_MEMORY_SCAN,
+    })
+    return buildIntakeMemory(rows.map((r) => r.metadata))
   }
 
   /** Fetch a single import (full rows), tenant-checked against schoolId. */
@@ -193,7 +268,7 @@ export class ImportsService {
     const periodId = imp.fiscalPeriodId
     const role = imp.role
     // Ownership/tenant check on the owning period (throws if not this school's).
-    await this.periods.getOwnedPeriod(schoolId, periodId)
+    const owned = await this.periods.getOwnedPeriod(schoolId, periodId)
 
     // Remove the ENTIRE role slot for this period (the active version + every
     // superseded re-upload) so nothing resurfaces.
@@ -235,6 +310,9 @@ export class ImportsService {
     await this.prisma.statementSnapshot.deleteMany({
       where: { schoolId, fiscalPeriodId: periodId },
     })
+    // No statements left → no insight about them either (and later periods'
+    // deltas no longer have this year to compare against).
+    await clearPeriodInsights(this.prisma, schoolId, periodId, owned?.periodEndDate ?? null)
     return { deleted: importId, role, removed, periodId, snapshot: 'cleared' }
   }
 }

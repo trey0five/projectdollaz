@@ -1,4 +1,6 @@
 import {
+  IsBoolean,
+  IsOptional,
   IsObject,
   IsNotEmptyObject,
   registerDecorator,
@@ -43,4 +45,13 @@ export class MergeMappingDto {
   @IsNotEmptyObject()
   @IsStringMap(500)
   entries!: Record<string, string>
+
+  /**
+   * Fill-only: keys the school's mapping already holds keep their category; only
+   * missing keys are added. For AUTOMATIC sorting, never for a person's pick.
+   * Must stay decorated — the global ValidationPipe is forbidNonWhitelisted.
+   */
+  @IsOptional()
+  @IsBoolean()
+  onlyNew?: boolean
 }

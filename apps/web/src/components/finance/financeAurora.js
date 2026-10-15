@@ -32,7 +32,8 @@ export const SHORT_NAME = {
   operating_margin: 'Margin',
   days_cash_on_hand: 'Cash',
   months_operating_reserve: 'Reserve',
-  tuition_dependency: 'Tuition reliance',
+  // ONE name for one number: the card says "Tuition share of income".
+  tuition_dependency: 'Tuition share of income',
 }
 
 /** "$430,000" — whole dollars, unicode minus for negatives. */
@@ -74,6 +75,18 @@ export function financeVerdict({ periodLabel, periodEndDate, change, metrics = [
     out.lead = `${name} ${periodClosed(periodEndDate, today) ? 'closed' : 'is running'}`
     out.em = change >= 0 ? `${money(change)} ahead` : `${money(Math.abs(change))} behind`
     out.emTone = change >= 0 ? null : 'risk'
+  }
+  // A year with no (readable) Balance Sheet: cash and reserve can't be worked
+  // out, and saying "every key number looks healthy" over the income half
+  // would be a false all-clear. The band says what is missing instead.
+  const bsMissing = metrics.some((m) => m && !m.available && m.reason === 'needs-balance-sheet')
+  const bsUnsorted = metrics.some((m) => m && !m.available && m.reason === 'balance-sheet-unsorted')
+  if (bsMissing || bsUnsorted) {
+    out.tail = bsMissing
+      ? 'The Balance Sheet is missing, so cash and reserve can’t be worked out yet.'
+      : 'Some Balance Sheet accounts need sorting before cash and reserve show.'
+    out.tailTone = 'watch'
+    return out
   }
   const banded = metrics.filter((m) => m?.available && isBandedStatus(m.status))
   if (banded.length) {
@@ -210,10 +223,36 @@ export function splitSignal(text) {
   return { title: m[1].trim().replace(/\.$/, ''), desc: /[.!?]$/.test(rest) ? rest : `${rest}.` }
 }
 
-/** Insight signals ({category, text}) → Warnings tiles, worst first. */
+// A line that asks for something, or talks about itself, is not a finding —
+// it is the AI being chatty because it had nothing to read ("I'll need
+// information such as:", "Could you share your revenue breakdown?").
+const NOT_A_FINDING =
+  /\?\s*$|:\s*$|^(i\b|i'm|i’m|i'll|i’ll|please\b|could\s+you|can\s+you|would\s+you|to\s+help\b|let\s+me\b|we\s+need\b|we'll\s+need|we’ll\s+need)/i
+
+/**
+ * Only REAL findings become Warnings tiles: a line KYRO tagged Risk / Watch /
+ * Strength (toSignals' category), that is not a question or a request for
+ * information. An untagged ("neutral") line never becomes a tile — with no
+ * readable numbers the AI can reply conversationally, and five green tiles
+ * cut from "I'm ready to help…" read as five findings that don't exist.
+ */
+export function realSignals(signals = []) {
+  return (signals || []).filter(
+    (sg) =>
+      sg &&
+      SIGNAL_VERDICT[sg.category] != null &&
+      typeof sg.text === 'string' &&
+      sg.text.trim().length > 0 &&
+      !NOT_A_FINDING.test(sg.text.trim()),
+  )
+}
+
+/** Insight signals ({category, text}) → Warnings tiles, worst first. Untagged
+ *  and request-for-information lines are dropped (realSignals): zero real
+ *  findings → [] and the page shows its designed empty state. */
 export function warningTiles(signals = []) {
   const order = { risk: 0, watch: 1, good: 2 }
-  return signals
+  return realSignals(signals)
     .map((sg, i) => {
       const verdict = SIGNAL_VERDICT[sg.category] ?? null
       const { title, desc } = splitSignal(sg.text)
@@ -227,4 +266,39 @@ export function warningTiles(signals = []) {
       }
     })
     .sort((a, b) => (order[a.verdict] ?? 3) - (order[b.verdict] ?? 3))
+}
+
+/**
+ * What the Warnings section may honestly say (S4). Pure.
+ *   'unread'      — nothing could be read (no figures, or KYRO's read says it
+ *                   had nothing to read): fully neutral, no tiles;
+ *   'provisional' — figures read, accounts still wait, real tiles exist: show
+ *                   the tiles with "These may change once N accounts are
+ *                   sorted." (a trivial unsorted account must not hide a risk);
+ *   'waiting'     — figures read, accounts wait, no tiles: neutral, never the
+ *                   green all-clear;
+ *   'tiles'       — the tiles;
+ *   'clear'       — real numbers, nothing waiting, nothing tagged: "Nothing flagged".
+ */
+export function warningsMode({ hasNumbers, insightText = null, reviewCount = 0, tileCount = 0 }) {
+  const notRead = /^Not enough data to summari[sz]e/.test(String(insightText ?? '').trim())
+  if (!hasNumbers || notRead) return 'unread'
+  if (reviewCount > 0) return tileCount > 0 ? 'provisional' : 'waiting'
+  return tileCount > 0 ? 'tiles' : 'clear'
+}
+
+/**
+ * A balance-sheet KPI that can't be worked out, and why → null when it can.
+ *   'needs-balance-sheet'    → "Needs your Balance Sheet"
+ *   'balance-sheet-unsorted' → "Sort its accounts"
+ */
+export function balanceSheetGap(metric) {
+  if (!metric || metric.available) return null
+  if (metric.reason === 'needs-balance-sheet') {
+    return { value: 'Needs your Balance Sheet', caption: 'Add it to see cash and reserve', action: 'Add it' }
+  }
+  if (metric.reason === 'balance-sheet-unsorted') {
+    return { value: 'Sort its accounts', caption: 'Balance Sheet accounts need a category', action: 'Review' }
+  }
+  return null
 }

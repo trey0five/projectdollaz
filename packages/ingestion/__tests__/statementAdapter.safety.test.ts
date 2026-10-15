@@ -256,14 +256,17 @@ describe('S1 — zero-value leaves are kept (the customer file keeps its full ch
     expect(r.warnings).toBeUndefined()
   })
 
-  it('a balance-sheet account inside a P&L-typed flat export is skipped WITH a warning (never silently)', () => {
+  it('a balance-sheet-numbered row inside a P&L-typed flat export is counted with its neighbours WITH a warning (#41 S-C, never silently)', () => {
     // One stray 2xxxx row does NOT make the flat export a trial balance — its values do not tie (S-A).
+    // By design (S-C) it is no longer skipped: it sits after the last expense row, so it is signed as an expense.
     const withBs = [...CUSTOMER, [24100, '24100 Deferred Income - Fall', 5000]]
     const r = ingest(CUSTOMER_NAME, workbook({ Sheet1: withBs }))
     expect(r.metadata?.statement?.type).toBe('bva')
-    expect(r.rows.some((x) => x.acct === 24100)).toBe(false)
+    expect(r.rows.find((x) => x.acct === 24100)).toEqual({ acct: 24100, desc: '24100 Deferred Income - Fall', total: 5000 })
     expect(r.rows.find((x) => x.acct === 40200)!.total).toBe(-488257.5)
-    expect(r.warnings?.some((w) => /skipped: 24100 Deferred Income/.test(w))).toBe(true)
+    expect(r.warnings).toEqual([
+      '"24100 Deferred Income - Fall" has a balance-sheet number but sits among your expense accounts, so it was counted as expense.',
+    ])
   })
 
   it('a balance-sheet account inside a SECTIONED P&L export (outside any section) is skipped WITH a warning (never silently)', () => {
@@ -315,7 +318,8 @@ describe('S4 — a workbook of monthly Statement-of-Activity tabs is signed as s
   it('parseStatementWorkbook imports the first sheet and WARNS about the rest', () => {
     const r = parseStatementWorkbook(bytes)!
     expect(r.metadata.sheet).toBe('Jul 2025')
-    expect(r.warnings?.some((w) => /2 statement sheets.*only "Jul 2025".*"Aug 2025"/.test(w))).toBe(true)
+    expect(r.warnings).toContain('This workbook has 2 statements: we used "Jul 2025". Use Add years for the others ("Aug 2025").')
+    expect(r.metadata.statement.workbook).toEqual({ code: 'other-statement-sheets', statements: 2, used: ['Jul 2025'], unused: ['Aug 2025'] })
   })
 
   it('a P&L + Balance Sheet pair is still ONE merged full TB, not two half-candidates', () => {
@@ -601,11 +605,13 @@ describe('S-A — a FLAT grid spanning both balance-sheet and activity blocks is
     ]
     const r = ingest('SoA.xlsx', workbook({ Sheet1: rows }))
     expect(r.metadata?.statement?.type).toBe('pl')
+    // S-C (#41): above the first income row, followed by income → counted as income (by design).
     expect(r.rows).toEqual([
+      { acct: 24100, desc: 'Deferred Income - Fall', total: 0 },
       { acct: 40000, desc: 'Tuition', total: -500 },
       { acct: 60100, desc: 'Salaries', total: 300 },
     ])
-    expect(r.warnings?.some((w) => /skipped: Deferred Income - Fall/.test(w))).toBe(true)
+    expect(r.warnings?.some((w) => /"24100 Deferred Income - Fall" has a balance-sheet number but sits among your income accounts/.test(w))).toBe(true)
   })
 
   it('the customer’s flat SoA (all 4xxxx–7xxxx) is unaffected — still 31-style rows, signed by block', () => {
@@ -678,5 +684,50 @@ describe('S-B(a) — synthetic-number collisions are warned, naming both account
       expect(row.acct).toBeGreaterThanOrEqual(QBO_REVENUE_BASE + 1000)
       expect(row.acct).toBeLessThan(QBO_REVENUE_BASE + 9000)
     }
+  })
+})
+
+// ── S-C (#41) · balance-sheet-numbered rows inside a FLAT P&L ─────────────────
+
+describe('S-C — a 2xxxx/3xxxx row printed among a flat P&L’s accounts takes its neighbours’ section', () => {
+  const head: unknown[][] = [['Profit and Loss'], ['July 2025 - June 2026'], [], ['Acct', 'Desc', 'Total']]
+  it('between 40100 and 40200 → income, number kept, total −value, one plain warning', () => {
+    const r = ingest('Flat Profit and Loss 6-30-26.xlsx', workbook({ Sheet1: [...head,
+      [40100, 'Tuition', 512000], [24110, 'Deferred Income - Spring', 18000], [40200, 'Registration Fees', 9600],
+      [60100, 'Salaries', 300000], [65000, 'Utilities', 21000],
+    ] }))
+    expect(r.metadata?.statement?.partial).toBe('pl')
+    expect(r.rows.find((x) => x.acct === 24110)).toEqual({ acct: 24110, desc: 'Deferred Income - Spring', total: -18000 })
+    expect(r.warnings).toEqual([
+      '"24110 Deferred Income - Spring" has a balance-sheet number but sits among your income accounts, so it was counted as income.',
+    ])
+  })
+  it('after 70100 → expense, +value, expense wording', () => {
+    const r = ingest('Flat Profit and Loss.xlsx', workbook({ Sheet1: [...head,
+      [40100, 'Tuition', 512000], [70100, 'Misc', 300], [24110, 'Deferred Income - Spring', 18000],
+    ] }))
+    expect(r.rows.find((x) => x.acct === 24110)!.total).toBe(18000)
+    expect(r.warnings?.[0]).toMatch(/sits among your expense accounts, so it was counted as expense\.$/)
+  })
+  it('several rows → one warning naming them', () => {
+    const r = ingest('Flat Profit and Loss.xlsx', workbook({ Sheet1: [...head,
+      [40100, 'Tuition', 512000], [24110, 'Deferred A', 1], [24120, 'Deferred B', 2], [30500, 'Odd', 3], [60100, 'Salaries', 10],
+    ] }))
+    expect(r.warnings).toEqual([
+      '3 accounts numbered like balance-sheet accounts sit among your income accounts and were counted as income: 24110 Deferred A, 24120 Deferred B, 30500 Odd',
+    ])
+  })
+  it('a 1xxxx row present → no inference: the old skip + warning', () => {
+    const r = ingest('Flat Profit and Loss.xlsx', workbook({ Sheet1: [...head,
+      [10100, 'Checking', 5], [40100, 'Tuition', 512000], [24110, 'Deferred Income - Spring', 18000], [60100, 'Salaries', 10],
+    ] }))
+    expect(r.rows.some((x) => x.acct === 24110)).toBe(false)
+    expect(r.warnings?.some((w) => /skipped: .*Deferred Income - Spring/.test(w))).toBe(true)
+  })
+  it('only an expense follows a leading 2xxxx row → no inference (skipped)', () => {
+    const r = ingest('Flat Profit and Loss.xlsx', workbook({ Sheet1: [...head,
+      [24110, 'Deferred Income - Spring', 18000], [60100, 'Salaries', 10], [40100, 'Tuition', 500],
+    ] }))
+    expect(r.rows.some((x) => x.acct === 24110)).toBe(false)
   })
 })

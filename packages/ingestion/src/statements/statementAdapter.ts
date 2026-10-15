@@ -58,7 +58,9 @@
 // ─────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx'
 import type { IngestionAdapter, IngestionResult, NormalizedRow, SheetMetadata } from '../types.js'
-import type { StatementMetadata, StatementType } from '../types.js'
+import type { StatementMetadata, StatementSectionFact, StatementType, SyntheticRegistry } from '../types.js'
+import { mergeSectionFacts, sectionFact } from './sections.js'
+import { pairStatements } from './pairing.js'
 import { extractSheetMetadata, fiscalYearEndForMonth } from '../metadata.js'
 import {
   applyBalancePlug,
@@ -74,6 +76,7 @@ import {
   sectionFromAcct,
   sectionSign,
   syntheticOffset,
+  normalizeLeafName,
   type TbSection,
 } from './tbConventions.js'
 
@@ -112,6 +115,22 @@ export interface StatementParseOptions {
   typeHint?: StatementType
   /** Receives per-sheet failures the workbook walkers would otherwise swallow. */
   onWarning?: (message: string) => void
+  /**
+   * NEW (#32). The columns a person PICKED: skips planColumns' detection
+   * (header row, account / description / value columns). Statement-ness is
+   * still the detector's call (or `force` + a known section row), and a
+   * Debit | Credit grid is still refused first. The Budget-vs-Actuals "needs an
+   * Actual header" refusal is skipped — the person chose the column (the
+   * picker's own budget-column guard runs before this).
+   */
+  plan?: { headerRow: number; acct: number; desc: number; value: number }
+  /**
+   * NEW (#41 S-B(b)). The school's remembered numbers for UNNUMBERED P&L
+   * accounts, keyed by syntheticKey(section, name, ordinal). A pinned leaf
+   * keeps last time's number; every other leaf hashes as before but never
+   * lands on a pinned number. Absent ⇒ numbering byte-identical to before.
+   */
+  knownSynthetic?: SyntheticRegistry
 }
 
 // ── Cell helpers ──────────────────────────────────────────────────────────────
@@ -291,6 +310,31 @@ export function isStatementExport(grid: RawGrid): boolean {
     else if (!hasMoney && SECTION_LABELS.has(key)) sectionRows++
   }
   return sectionRows > 0 && totalRows + computedRows > 0
+}
+
+/** Statement type named by the grid's banner (top rows) or its sheet name, else undefined. */
+export function statementTypeOfGrid(grid: RawGrid, sheetName: string): StatementType | undefined {
+  return detectStatementType(`${bannerCells(grid).join(' ')} ${sheetName}`)
+}
+
+/** A money-column header that names ACTUAL figures (the only thing a budget-typed report may be read from). */
+export const ACTUAL_HEADER = /actual/i
+
+/**
+ * Is this grid a BUDGET report (a "Budget Overview", a "Budget vs Actuals", a
+ * sheet or banner titled Budget)? Its money columns are budget figures unless
+ * the column header says Actual — so a picked or remembered column on it must
+ * be an Actual column, never "Total" or a month name. Evidence: the banner /
+ * sheet-name type, the file-name type (not for a Debit | Credit grid — the
+ * file name never overrides a trial balance's own header), or the word
+ * "budget" in the banner rows ABOVE the header row or in the sheet name.
+ */
+export function isBudgetReport(grid: RawGrid, sheetName: string, headerRow: number, fileName = ''): boolean {
+  if (!grid || grid.length === 0) return false
+  if (statementTypeOfGrid(grid, sheetName) === 'bva') return true
+  if (fileName && !hasDebitCreditHeader(grid) && statementTypeFromFileName(fileName) === 'bva') return true
+  const above = headerRow > 0 ? bannerCells(grid, headerRow) : []
+  return /\bbudget\b/i.test([...above, sheetName].join(' '))
 }
 
 // ── Header / column detection ─────────────────────────────────────────────────
@@ -477,6 +521,30 @@ function planColumns(grid: RawGrid, column?: string): ColumnPlan {
     plan.value = best >= 0 ? best : densest()
   }
   return plan
+}
+
+/** Stack-filled header text of one column: the header row, blanks filled from up to 2 rows above (nearest first). */
+export function stackedHeaderAt(grid: RawGrid, headerRow: number, col: number): string {
+  if (headerRow < 0 || col < 0) return ''
+  for (let up = 0; up <= 2; up++) {
+    const r = headerRow - up >= 0 ? grid[headerRow - up] : undefined
+    const t = r ? text(r[col]) : ''
+    if (t !== '') return t
+  }
+  return ''
+}
+
+/** The ColumnPlan for a person's picked columns (no detection). */
+function pickedPlan(grid: RawGrid, picked: NonNullable<StatementParseOptions['plan']>): ColumnPlan {
+  const headerRow = picked.headerRow >= 0 ? picked.headerRow : -1
+  return {
+    value: picked.value,
+    valueHeader: stackedHeaderAt(grid, headerRow, picked.value),
+    acct: picked.acct,
+    desc: picked.desc,
+    headerRow,
+    startRow: headerRow >= 0 ? headerRow + 1 : 0,
+  }
 }
 
 // ── The walk ──────────────────────────────────────────────────────────────────
@@ -746,25 +814,44 @@ export function parseStatementGrid(
   sheetName: string,
   opts: StatementParseOptions = {},
 ): StatementSheetResult | null {
-  if (!grid || grid.length < 3) return null
+  return parseStatementGridDetailed(grid, sheetName, opts).result
+}
+
+/**
+ * Why parseStatementGrid returned null: 'not-statement' (no evidence, or a
+ * Debit | Credit grid), 'trial-balance' (a flat grid whose values tie across
+ * both blocks — already TB-signed), 'no-value' (no money column), 'no-rows'
+ * (nothing could be signed).
+ */
+export type StatementRejection = 'not-statement' | 'trial-balance' | 'no-value' | 'no-rows'
+
+/** parseStatementGrid plus the reason for a null (the #32 picker needs to tell a TB from a failure). */
+export function parseStatementGridDetailed(
+  grid: RawGrid,
+  sheetName: string,
+  opts: StatementParseOptions = {},
+): { result: StatementSheetResult | null; why: StatementRejection | null } {
+  const reject = (why: StatementRejection) => ({ result: null, why })
+  if (!grid || grid.length < 3) return reject('not-statement')
   // A Debit | Credit grid is a trial balance, full stop — no banner, file-name
-  // hint or `force` may re-sign it (B1 / B2).
-  if (hasDebitCreditHeader(grid)) return null
-  let type = detectStatementType(`${bannerCells(grid).join(' ')} ${sheetName}`) ?? opts.typeHint
+  // hint, `force` or picked plan may re-sign it (B1 / B2).
+  if (hasDebitCreditHeader(grid)) return reject('not-statement')
+  let type = statementTypeOfGrid(grid, sheetName) ?? opts.typeHint
   const detected = type !== undefined || isStatementExport(grid)
   // `force` (the registry's "plain adapter found nothing" fallback) still needs
   // REAL statement evidence — a known section row — before walking a flat
   // grid; signing by leading digit alone would silently "succeed" on an
   // unlabeled TB whose real error the caller should see instead (B3).
-  if (!detected && !(opts.force && hasKnownSectionRow(grid))) return null
+  if (!detected && !(opts.force && hasKnownSectionRow(grid))) return reject('not-statement')
 
-  const plan = planColumns(grid, opts.column)
-  if (plan.value < 0) return null
+  const plan = opts.plan ? pickedPlan(grid, opts.plan) : planColumns(grid, opts.column)
+  if (plan.value < 0) return reject('no-value')
   // A Budget-vs-Actuals-typed report must be read from an ACTUAL column: the
   // "Budget Overview" report shares the banner family but is budget only, and
   // a budget must never import as actuals. (An explicit opts.column is the
-  // caller's deliberate choice and is honoured.)
-  if (type === 'bva' && !opts.column && !/actual/i.test(plan.valueHeader)) {
+  // caller's deliberate choice and is honoured; a PICKED or remembered column
+  // is not — a Budget Overview's "Total" / month columns are budget figures.)
+  if (type === 'bva' && !opts.column && !ACTUAL_HEADER.test(plan.valueHeader)) {
     throw new StatementExportError(
       `Budget vs Actuals export has no Actual column (columns seen: ${(grid[plan.headerRow] ?? []).map((c) => text(c)).filter(Boolean).join(' | ') || 'none'}). A Budget Overview is budget only — export the Budget vs. Actuals report, or the Profit and Loss.`,
     )
@@ -805,61 +892,28 @@ export function parseStatementGrid(
       else if (s === 'revenue' || s === 'expense') pl = true
       sum += l.value
     }
-    if (bs && pl && Math.abs(round2(sum)) <= 0.01) return null
-  }
-  const taken = new Set<number>()
-  for (const l of leaves) if (l.explicitAcct != null) taken.add(l.explicitAcct)
-
-  const rows: NormalizedRow[] = []
-  const synthesized: StatementMetadata['synthesized'] = []
-  const skipped: string[] = []
-
-  for (const leaf of leaves) {
-    // Zero leaves are KEPT: the plain TB keeps its zeros, mapping needs the
-    // full chart, and dropping them would make the row set depend on the
-    // period's activity.
-    const section = sectionOf(leaf, walkType)
-    if (!section) {
-      skipped.push(leaf.name)
-      continue
-    }
-    let acct: number
-    if (leaf.explicitAcct != null) {
-      acct = leaf.explicitAcct
-    } else if (section === 'revenue' || section === 'expense') {
-      // base + a stable hash of the name (see tbConventions: the live sync owns
-      // base + id below +1000). Collisions — same hash, or a number an explicit
-      // account already uses — skip forward within the synthetic sub-range.
-      const base = section === 'revenue' ? QBO_REVENUE_BASE : QBO_EXPENSE_BASE
-      const lo = base + QBO_SYNTHETIC_OFFSET
-      let off = syntheticOffset(leaf.name) - QBO_SYNTHETIC_OFFSET
-      const wanted = lo + off
-      acct = wanted
-      while (taken.has(acct)) {
-        off = (off + 1) % QBO_SYNTHETIC_SPAN
-        acct = lo + off
-      }
-      taken.add(acct)
-      if (acct !== wanted) {
-        // The skipped-to number depends on row ORDER, so a re-export that
-        // reorders these two could swap them — say so, naming both sides.
-        const holder = synthesized.find((s) => s.acct === wanted)?.name ?? rows.find((r) => r.acct === wanted)?.desc ?? `account ${wanted}`
-        warnings.push(
-          holder === leaf.name
-            ? `"${leaf.name}" appears more than once (same-named sub-accounts under different parents); the second copy was numbered ${acct} after ${wanted} — map both, the order could change between exports.`
-            : `Synthetic account-number collision: "${leaf.name}" hashed to ${wanted}, already used by "${holder}"; it was numbered ${acct} instead — this depends on row order, so re-key it in the mapping.`,
-        )
-      }
-      synthesized.push({ acct, name: leaf.name, section })
-    } else {
-      acct = bsEngineAcct(leaf, section)
-      synthesized.push({ acct, name: leaf.name, section })
-    }
-    // `|| 0` normalises the −0 a signed zero would otherwise carry.
-    rows.push({ acct, desc: leaf.name, total: round2(sectionSign(section) * leaf.value) || 0 })
+    if (bs && pl && Math.abs(round2(sum)) <= 0.01) return reject('trial-balance')
   }
 
-  if (rows.length === 0) return null
+  // S-C (#41): a FLAT P&L export (no section rows at all) that prints a few
+  // 2xxxx/3xxxx-numbered rows among its activity accounts ("24110 Deferred
+  // Income - Spring" between 40100 and 40200). Report order is Income →
+  // Expenses, so such a row takes the section of the nearest PRECEDING explicit
+  // P&L account (or, at the very top, the FOLLOWING one when that is income).
+  // Never when a 1xxxx row is present (that file has a balance sheet in it —
+  // keep the skip) and never on a sectioned export (its sections decide).
+  const inferred = inferFlatPnlSections(leaves, walkType)
+  if (inferred.warning) warnings.push(inferred.warning)
+  const sectionFor = (leaf: Leaf): TbSection | undefined => inferred.sections.get(leaf) ?? sectionOf(leaf, walkType)
+
+  const numbered = numberLeaves(leaves, sectionFor, opts.knownSynthetic)
+  warnings.push(...numbered.warnings)
+  const rows: NormalizedRow[] = numbered.rows
+  const synthesized: StatementMetadata['synthesized'] = numbered.synthesized
+  const skipped: string[] = numbered.skipped
+  const sections = buildSectionFacts(walkType, numbered.placed, rows, inferred.sections)
+
+  if (rows.length === 0) return reject('no-rows')
   if (skipped.length) {
     warnings.push(
       `${skipped.length} row(s) had no recognisable section or account number and were skipped: ${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? '…' : ''}`,
@@ -892,17 +946,238 @@ export function parseStatementGrid(
     column: plan.valueHeader || undefined,
     synthesized,
   }
+  if (Object.keys(sections).length) statement.sections = sections
   const basis = detectBasis(bannerText)
   if (basis) statement.basis = basis
   if (periodStart) statement.periodStart = periodStart
   metadata.statement = statement
 
   return {
-    rows,
-    startRow: plan.startRow,
-    warnings: warnings.length ? warnings : undefined,
-    metadata: metadata as StatementSheetResult['metadata'],
+    result: {
+      rows,
+      startRow: plan.startRow,
+      warnings: warnings.length ? warnings : undefined,
+      metadata: metadata as StatementSheetResult['metadata'],
+    },
+    why: null,
   }
+}
+
+// ── S-C: balance-sheet-numbered rows inside a flat P&L ────────────────────────
+
+/** "24110 Deferred Income - Spring" — the number is shown once, as printed. */
+function leafLabel(leaf: Leaf): string {
+  if (leaf.explicitAcct == null) return leaf.name
+  const n = String(leaf.explicitAcct)
+  return leaf.name.startsWith(n) ? leaf.name : `${n} ${leaf.name}`
+}
+
+function inferFlatPnlSections(
+  leaves: readonly Leaf[],
+  walkType: StatementType,
+): { sections: Map<Leaf, TbSection>; warning: string | null } {
+  const sections = new Map<Leaf, TbSection>()
+  if (walkType !== 'pl' || leaves.length === 0) return { sections, warning: null }
+  if (!leaves.every((l) => l.groups.length === 0)) return { sections, warning: null }
+  const explicitSection = (l: Leaf): TbSection | undefined =>
+    l.explicitAcct != null ? sectionFromAcct(l.explicitAcct) : undefined
+  if (leaves.some((l) => explicitSection(l) === 'asset')) return { sections, warning: null }
+
+  const isPnl = (s: TbSection | undefined): s is 'revenue' | 'expense' => s === 'revenue' || s === 'expense'
+  const moved: Array<{ leaf: Leaf; section: 'revenue' | 'expense' }> = []
+  leaves.forEach((leaf, i) => {
+    const own = explicitSection(leaf)
+    if (own !== 'liability' && own !== 'equity') return
+    let section: 'revenue' | 'expense' | undefined
+    for (let j = i - 1; j >= 0 && !section; j--) {
+      const s = explicitSection(leaves[j]!)
+      if (isPnl(s)) section = s
+    }
+    if (!section) {
+      for (let j = i + 1; j < leaves.length; j++) {
+        const s = explicitSection(leaves[j]!)
+        if (isPnl(s)) {
+          if (s === 'revenue') section = s
+          break
+        }
+      }
+    }
+    if (section) {
+      sections.set(leaf, section)
+      moved.push({ leaf, section })
+    }
+  })
+  if (moved.length === 0) return { sections, warning: null }
+  const kinds = new Set(moved.map((m) => m.section))
+  const word = kinds.size > 1 ? 'income and expense' : moved[0]!.section === 'revenue' ? 'income' : 'expense'
+  let warning: string
+  if (moved.length === 1) {
+    warning = `"${leafLabel(moved[0]!.leaf)}" has a balance-sheet number but sits among your ${word} accounts, so it was counted as ${word}.`
+  } else {
+    const named = moved.slice(0, 5).map((m) => leafLabel(m.leaf)).join(', ')
+    const tail = kinds.size > 1 ? 'were counted with the accounts around them' : `were counted as ${word}`
+    warning = `${moved.length} accounts numbered like balance-sheet accounts sit among your ${word} accounts and ${tail}: ${named}${moved.length > 5 ? ', …' : ''}`
+  }
+  return { sections, warning }
+}
+
+// ── Numbering (explicit · remembered pins · name hash) ────────────────────────
+
+/**
+ * Number every leaf and sign it. Explicit numbers are kept. Unnumbered P&L
+ * leaves get, in two passes (#41 S-B(b)):
+ *   1. a REMEMBERED number when the school's memory pins this leaf's key
+ *      (section + normalised name + ordinal) — unless an explicit account in
+ *      this file now holds it (then a plain warning, and pass 2);
+ *   2. otherwise base + the stable name hash, probing forward past explicit
+ *      numbers, numbers already assigned, and EVERY pinned number (so a new
+ *      name never steals an account's remembered number).
+ * With no memory, pass 1 is empty and pass 2 is exactly the old one-pass walk.
+ * Balance-sheet leaves take the engine's fixed family numbers.
+ */
+function numberLeaves(
+  leaves: readonly Leaf[],
+  sectionFor: (leaf: Leaf) => TbSection | undefined,
+  knownSynthetic: SyntheticRegistry | undefined,
+): {
+  rows: NormalizedRow[]
+  synthesized: StatementMetadata['synthesized']
+  skipped: string[]
+  warnings: string[]
+  /** Parallel to rows: the leaf, its signed section, and whether its number is a shared BS engine family number. */
+  placed: Array<{ leaf: Leaf; section: TbSection; family: boolean }>
+} {
+  const warnings: string[] = []
+  const skipped: string[] = []
+  const explicit = new Set<number>()
+  for (const l of leaves) if (l.explicitAcct != null) explicit.add(l.explicitAcct)
+
+  type Slot = { leaf: Leaf; section: TbSection; key: string | null; acct?: number; source?: 'remembered' }
+  const slots: Array<Slot | null> = []
+  const ordinals = new Map<string, number>()
+  for (const leaf of leaves) {
+    const section = sectionFor(leaf)
+    if (!section) {
+      skipped.push(leaf.name)
+      slots.push(null)
+      continue
+    }
+    let key: string | null = null
+    if (leaf.explicitAcct == null && (section === 'revenue' || section === 'expense')) {
+      const base = `${section}:${normalizeLeafName(leaf.name)}`
+      const n = (ordinals.get(base) ?? 0) + 1
+      ordinals.set(base, n)
+      key = n > 1 ? `${base}#${n}` : base
+    }
+    slots.push({ leaf, section, key })
+  }
+
+  // Pass 1 — remembered pins.
+  const reserved = new Set<number>()
+  const pins = knownSynthetic ?? {}
+  for (const pin of Object.values(pins)) if (pin && Number.isInteger(pin.acct)) reserved.add(pin.acct)
+  const assigned = new Set<number>()
+  const blockedPins = new Map<Slot, number>()
+  for (const slot of slots) {
+    if (!slot?.key) continue
+    const pin = Object.prototype.hasOwnProperty.call(pins, slot.key) ? pins[slot.key] : undefined
+    if (!pin || pin.section !== slot.section || !Number.isInteger(pin.acct)) continue
+    if (explicit.has(pin.acct)) {
+      blockedPins.set(slot, pin.acct)
+      continue
+    }
+    if (assigned.has(pin.acct)) continue
+    slot.acct = pin.acct
+    slot.source = 'remembered'
+    assigned.add(pin.acct)
+  }
+
+  // Pass 2 — the stable name hash, in leaf order.
+  for (const slot of slots) {
+    if (!slot?.key || slot.acct != null) continue
+    const base = slot.section === 'revenue' ? QBO_REVENUE_BASE : QBO_EXPENSE_BASE
+    const lo = base + QBO_SYNTHETIC_OFFSET
+    let off = syntheticOffset(slot.leaf.name) - QBO_SYNTHETIC_OFFSET
+    const wanted = lo + off
+    let acct = wanted
+    while (explicit.has(acct) || assigned.has(acct) || reserved.has(acct)) {
+      off = (off + 1) % QBO_SYNTHETIC_SPAN
+      acct = lo + off
+    }
+    slot.acct = acct
+    if (acct !== wanted && (explicit.has(wanted) || assigned.has(wanted))) {
+      // The skipped-to number depends on row ORDER, so a re-export that
+      // reorders these two could swap them — say so, naming both sides.
+      const holderSlot = slots.find((s) => s !== slot && s?.acct === wanted && s.key != null)
+      // (An explicit holder is named only when it was printed ABOVE this row —
+      // exactly the pre-pin wording, so a file without memory is byte-identical.)
+      const here = leaves.indexOf(slot.leaf)
+      const explicitHolder = leaves.slice(0, here).find((l) => l.explicitAcct === wanted)
+      const holder = holderSlot?.leaf.name ?? explicitHolder?.name ?? `account ${wanted}`
+      warnings.push(
+        holder === slot.leaf.name
+          ? `"${slot.leaf.name}" appears more than once (same-named sub-accounts under different parents); the second copy was numbered ${acct} after ${wanted} — map both, the order could change between exports.`
+          : `Synthetic account-number collision: "${slot.leaf.name}" hashed to ${wanted}, already used by "${holder}"; it was numbered ${acct} instead — this depends on row order, so re-key it in the mapping.`,
+      )
+    }
+    assigned.add(acct)
+    const was = blockedPins.get(slot)
+    if (was != null) {
+      warnings.push(
+        `"${slot.leaf.name}" was ${was} last time, but that number is now used by another account; it is ${acct} this time — check its category.`,
+      )
+    }
+  }
+
+  const rows: NormalizedRow[] = []
+  const synthesized: StatementMetadata['synthesized'] = []
+  const placed: Array<{ leaf: Leaf; section: TbSection; family: boolean }> = []
+  for (const slot of slots) {
+    if (!slot) continue
+    const { leaf, section } = slot
+    let acct: number
+    if (leaf.explicitAcct != null) {
+      acct = leaf.explicitAcct
+    } else if (slot.key != null) {
+      acct = slot.acct!
+      synthesized.push(slot.source ? { acct, name: leaf.name, section, source: slot.source } : { acct, name: leaf.name, section })
+    } else {
+      acct = bsEngineAcct(leaf, section)
+      synthesized.push({ acct, name: leaf.name, section })
+    }
+    placed.push({ leaf, section, family: leaf.explicitAcct == null && slot.key == null })
+    // Zero leaves are KEPT: the plain TB keeps its zeros, mapping needs the
+    // full chart, and dropping them would make the row set depend on the
+    // period's activity. `|| 0` normalises the −0 a signed zero would carry.
+    rows.push({ acct, desc: leaf.name, total: round2(sectionSign(section) * leaf.value) || 0 })
+  }
+  return { rows, synthesized, skipped, warnings, placed }
+}
+
+/**
+ * A1: the section fact of every numbered row (explicit numbers + synthesized
+ * P&L numbers; the BS engine family numbers are shared and left out). One
+ * account number printed under two different sections is ambiguous → no fact.
+ */
+function buildSectionFacts(
+  walkType: StatementType,
+  placed: ReadonlyArray<{ leaf: Leaf; section: TbSection; family: boolean }>,
+  rows: readonly NormalizedRow[],
+  inferred: ReadonlyMap<Leaf, TbSection>,
+): Record<string, StatementSectionFact> {
+  const statement: 'pl' | 'bs' = walkType === 'bs' ? 'bs' : 'pl'
+  const out: Record<string, StatementSectionFact> = {}
+  const conflicted = new Set<string>()
+  placed.forEach((p, i) => {
+    if (p.family) return
+    const key = String(rows[i]!.acct)
+    const fact = sectionFact(statement, p.leaf.groups, p.section, inferred.has(p.leaf) ? 'position' : 'number')
+    const prev = out[key]
+    if (prev && (prev.section !== fact.section || prev.statement !== fact.statement)) conflicted.add(key)
+    else if (!prev) out[key] = fact
+  })
+  for (const k of conflicted) delete out[k]
+  return out
 }
 
 // ── Merge a P&L with a Balance Sheet ──────────────────────────────────────────
@@ -921,7 +1196,10 @@ export function mergeStatementResults(
   pl: StatementSheetResult,
   bs: StatementSheetResult,
 ): StatementSheetResult {
-  const bsRows = bs.rows.filter((r) => !BS_RESULT_LABELS.has(normalizeGroup(r.desc)))
+  // Only the UNNUMBERED result line (engine equity family 300) is the P&L's
+  // result; an explicitly numbered equity account that happens to be named
+  // "Net Assets" ("30000 Net Assets") is a real opening balance and stays.
+  const bsRows = bs.rows.filter((r) => !(r.acct === BS_ENGINE_ACCT.equity && BS_RESULT_LABELS.has(normalizeGroup(r.desc))))
   const plugged = applyBalancePlug([...pl.rows, ...bsRows], STATEMENT_PLUG_DESC)
   const rows = plugged.rows
   const net = round2(rows.reduce((s, r) => s + r.total, 0))
@@ -944,6 +1222,9 @@ export function mergeStatementResults(
       imbalance: plugged.imbalance,
     },
   }
+  const sections = mergeSectionFacts(pl.metadata.statement.sections, bs.metadata.statement.sections)
+  if (sections && Object.keys(sections).length) metadata.statement.sections = sections
+  else delete metadata.statement.sections
   if (!periodEndDate) delete metadata.periodEndSource
   const warnings = [...(pl.warnings ?? []), ...(bs.warnings ?? [])]
   if (plugged.balancePlug != null) {
@@ -1024,14 +1305,61 @@ export function parseStatementWorkbook(
     const bs = found.find((r) => r.metadata.statement.type === 'bs')!
     return withWarnings(mergeStatementResults(pl, bs), warnings)
   }
+  // ONE Balance Sheet beside several P&Ls ('P&L Jan 2026' + 'P&L FY26' +
+  // 'Balance Sheet'): import the P&L whose period end matches the BS date,
+  // merged into a full TB — never the first tab blindly. Ambiguous (two P&Ls
+  // on the BS date) or no date match falls through to the first-sheet rule.
+  const dated = pairInWorkbook(found)
+  if (dated) {
+    const merged = mergeStatementResults(dated.pl, dated.bs)
+    const used = [dated.pl, dated.bs]
+    const unused = found.filter((r) => !used.includes(r))
+    return withWarnings(withWorkbookNote(merged, found.length, used, unused), [...warnings, workbookWarning(found.length, used, unused)])
+  }
   const first = found[0]!
   if (found.length > 1) {
-    const others = found.slice(1).map((r) => `"${r.metadata.sheet ?? '?'}"`).join(', ')
-    warnings.push(
-      `Workbook holds ${found.length} statement sheets; only "${first.metadata.sheet ?? '?'}" was imported (not imported: ${others}). Use the multi-year uploader to import each sheet, or export one report per file.`,
-    )
+    const unused = found.slice(1)
+    return withWarnings(withWorkbookNote(first, found.length, [first], unused), [...warnings, workbookWarning(found.length, [first], unused)])
   }
   return withWarnings(first, warnings)
+}
+
+/** The one P&L whose period end matches the workbook's ONE Balance Sheet, else null. */
+function pairInWorkbook(found: readonly StatementSheetResult[]): { pl: StatementSheetResult; bs: StatementSheetResult } | null {
+  const bss = found.filter((r) => r.metadata.statement.type === 'bs')
+  if (bss.length !== 1 || found.length < 3) return null
+  const { pairs } = pairStatements(found, (r) => r.metadata)
+  return pairs.length === 1 ? pairs[0]! : null
+}
+
+const sheetLabel = (r: StatementSheetResult): string => `"${r.metadata.sheet ?? '?'}"`
+
+/**
+ * Plain words, shown on the file card: how many statements the workbook holds,
+ * which were used, and where the others go. (The structured twin is
+ * metadata.statement.workbook.)
+ */
+function workbookWarning(total: number, used: StatementSheetResult[], unused: StatementSheetResult[]): string {
+  return (
+    `This workbook has ${total} statements: we used ${used.map(sheetLabel).join(' + ')}. ` +
+    `Use Add years for the others (${unused.map(sheetLabel).join(', ')}).`
+  )
+}
+
+function withWorkbookNote(
+  r: StatementSheetResult,
+  total: number,
+  used: StatementSheetResult[],
+  unused: StatementSheetResult[],
+): StatementSheetResult {
+  const name = (x: StatementSheetResult) => x.metadata.sheet ?? '?'
+  return {
+    ...r,
+    metadata: {
+      ...r.metadata,
+      statement: { ...r.metadata.statement, workbook: { code: 'other-statement-sheets', statements: total, used: used.map(name), unused: unused.map(name) } },
+    },
+  }
 }
 
 /**

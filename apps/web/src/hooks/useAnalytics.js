@@ -4,7 +4,7 @@
 // notEntitled flips on a 402 so the dashboard shows the friendly paused panel
 // instead of a raw error even if BillingContext lags.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { analyticsApi, isPaymentRequired } from '../lib/api.js'
 
 export function useAnalytics(schoolId, periodId) {
@@ -666,21 +666,42 @@ export function useDashboardLayout(schoolId) {
 // Same microtask-defer + cancelled pattern. NEVER throws to the UI: on any error
 // the text is left empty so the InsightBand simply hides. Re-fetches on period
 // change. The backend always returns deterministic rule-based text with no key.
-export function useInsights(schoolId, periodId) {
+/**
+ * KYRO's read of a period (the Warnings). `asOf` = the period's metrics
+ * freshness (`freshness.dataAsOf`, the snapshot the figures come from).
+ *
+ * The read used to be fetched once per school+period. A P&L saved alone and
+ * then its Balance Sheet for the SAME period, or the review popup's Approve
+ * rebuilding the statements, never asked again — so the page said "Days Cash
+ * on Hand is a risk at 0 days" over a card showing 152, or kept "Not enough
+ * data…" after the accounts were sorted. Now a changed `asOf` asks again;
+ * an unchanged one does not (the response's own `dataAsOf`, when the API
+ * sends it, says which snapshot the read describes).
+ */
+export function useInsights(schoolId, periodId, asOf = null) {
   const [text, setText] = useState('')
   const [source, setSource] = useState(null)
   const [loading, setLoading] = useState(true)
+  // What the last request was for: { key: 'sid|pid', asOf } (effects only).
+  const loadedRef = useRef({ key: null, asOf: null })
+  // Only the NEWEST request may write (an older read landing late would put
+  // the stale warnings back).
+  const seqRef = useRef(0)
 
-  const load = useCallback(async (sid, pid) => {
+  const load = useCallback(async (sid, pid, want) => {
+    const seq = ++seqRef.current
     try {
       const res = await analyticsApi.insights(sid, pid)
+      if (seq !== seqRef.current) return
       setText(res.data?.text ?? '')
       setSource(res.data?.source ?? null)
+      loadedRef.current = { key: `${sid}|${pid}`, asOf: res.data?.dataAsOf ?? want ?? null }
     } catch {
+      if (seq !== seqRef.current) return
       setText('')
       setSource(null)
     } finally {
-      setLoading(false)
+      if (seq === seqRef.current) setLoading(false)
     }
   }, [])
 
@@ -689,9 +710,16 @@ export function useInsights(schoolId, periodId) {
     Promise.resolve().then(() => {
       if (cancelled) return
       if (schoolId && periodId) {
+        const key = `${schoolId}|${periodId}`
+        const last = loadedRef.current
+        // Same period, and the figures haven't moved (or aren't known yet):
+        // the read on screen is still about them.
+        if (last.key === key && (asOf == null || asOf === last.asOf)) return
+        loadedRef.current = { key, asOf: asOf ?? null }
         setLoading(true)
-        load(schoolId, periodId)
+        load(schoolId, periodId, asOf)
       } else {
+        loadedRef.current = { key: null, asOf: null }
         setText('')
         setSource(null)
         setLoading(false)
@@ -700,7 +728,7 @@ export function useInsights(schoolId, periodId) {
     return () => {
       cancelled = true
     }
-  }, [schoolId, periodId, load])
+  }, [schoolId, periodId, asOf, load])
 
   return { text, source, loading }
 }

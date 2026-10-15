@@ -300,7 +300,20 @@ export interface PeriodFinancials {
    * annual path (defaults to 12 in the denominator, byte-identical to today).
    */
   elapsedMonths?: number | null
+  /**
+   * Why hasSFP is false, when it is (set by fromBundle): 'needs-balance-sheet' =
+   * the year has no balance sheet at all (a P&L-only save, or a snapshot with no
+   * SFP); 'balance-sheet-unsorted' = balance-sheet accounts are in the file but
+   * none is sorted into a balance-sheet category yet. Undefined when hasSFP.
+   */
+  balanceSheetMissing?: MetricUnavailableReason
 }
+
+/**
+ * Why a metric is unavailable, in words a UI can show. Only set on a result
+ * when the reason is known (today: the balance-sheet-dependent metrics).
+ */
+export type MetricUnavailableReason = 'needs-balance-sheet' | 'balance-sheet-unsorted'
 
 /** Revenue rollup line keys (mirror the SOAResult revenue fields). */
 export type RevenueLineKey =
@@ -471,6 +484,11 @@ export interface MetricResult {
   available: boolean
   value: number | null
   inputsMissing: string[]
+  /**
+   * Why the metric is unavailable, when known (e.g. 'needs-balance-sheet' for
+   * days cash / operating reserve on a P&L-only year). Absent otherwise.
+   */
+  reason?: MetricUnavailableReason
   /** cur.value - prior.value; null when either period's value is unavailable. */
   periodOverPeriodDelta: number | null
   /**

@@ -144,7 +144,7 @@ const DIOCESAN_SOURCE = {
 // Per-card bubble copy for Penny's "Show me around" tour (moved verbatim out of the
 // former GuideMascot before it was deleted). Keyed by source key; falls back to s.what.
 const HINTS = {
-  trialBalances: "Start here. Drop in your trial balance and I'll turn it into your statements.",
+  trialBalances: "Start here. Drop in your trial balance, or your QuickBooks Profit & Loss and Balance Sheet, and I'll turn it into your statements.",
   monthly: 'Adding each month here lets your board watch the year unfold.',
   operational: 'A few quick numbers here unlock your per-student metrics.',
   budget: 'Bring in your budget so we can compare plan vs. reality.',
@@ -369,7 +369,7 @@ export default function DataHubPage() {
           title="Get your numbers in"
           verdict={
             noPeriods ? (
-              <>Start with this year&rsquo;s trial balance. KYRO builds everything else from it.</>
+              <>Start with this year&rsquo;s trial balance or QuickBooks reports. KYRO builds everything else from it.</>
             ) : !summary ? null : allReady ? (
               <>
                 <VerdictEm tone="good">All set.</VerdictEm> Your statements, reports and checks are up to date.

@@ -75,6 +75,20 @@ export default function YearChip({ candidate: c, canEdit, currentYear, onSetEndD
           {c.sheet ? ` — ${c.sheet}` : ''}
         </span>
       </p>
+      {/* #40 / #32: how this year was read. */}
+      {c.merged && (
+        <p className="-mt-1.5 text-[12px] font-semibold text-ink2" data-testid="year-merged">
+          P&amp;L + Balance Sheet
+        </p>
+      )}
+      {c.metadata?.layout?.source === 'remembered' && (
+        <p className="-mt-1.5 text-[12px] text-ink2" data-testid="year-remembered">
+          Read with your saved columns
+        </p>
+      )}
+      {c.metadata?.layout?.source === 'picked' && (
+        <p className="-mt-1.5 text-[12px] text-ink2">Read with your columns</p>
+      )}
 
       {/* metrics */}
       <div className="flex flex-wrap items-center gap-1.5">

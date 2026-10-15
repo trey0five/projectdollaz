@@ -17,9 +17,19 @@ import {
   expandFileToCandidates,
   partitionCandidates,
   readBytes,
+  candidateFromColumns,
+  errorCandidate,
+  settleCandidates,
+  pairChosen,
+  candidateName as nameOf,
 } from '../lib/trendIntake.js'
 import { formatShortDate } from '../lib/format.js'
+import { getIntakeMemory, invalidateIntakeMemory } from '../lib/intakeMemory.js'
 import YearTimeline from './datahub/YearTimeline.jsx'
+import ColumnPicker from './intake/ColumnPicker.jsx'
+
+const HALF_LABEL = { pl: 'Income only', bs: 'Balance sheet only' }
+const OTHER_HALF = { pl: 'Balance Sheet', bs: 'Profit and Loss' }
 
 const ACCEPT = '.xlsx,.xls,.csv'
 
@@ -49,8 +59,12 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
   const [phase, setPhase] = useState('idle') // idle | saving | done
   const [progress, setProgress] = useState(null) // { index, total, payload }
   const [summary, setSummary] = useState(null) // { saved, failed, blocked, total }
+  // What KYRO remembers about this school's uploads (#32 / #41) — null = none.
+  const [memory, setMemory] = useState(null)
+  // The ONE open column picker, by error-candidate key (#32).
+  const [pickerKey, setPickerKey] = useState(null)
 
-  const { annual, monthly, undated, errors } = useMemo(
+  const { annual, monthly, undated, partial, errors } = useMemo(
     () => partitionCandidates(candidates),
     [candidates],
   )
@@ -68,34 +82,25 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
     setReading(true)
     setSummary(null)
     setPhase('idle')
+    // The school's remembered layouts + numbers (any failure → null = today's read).
+    const mem = await getIntakeMemory(persistence.schoolId)
+    setMemory(mem)
     const expanded = await Promise.all(
       list.map(async (f) => {
+        let bytes = null
         try {
-          const bytes = await readBytes(f)
-          return await expandFileToCandidates(f.name, bytes)
+          bytes = await readBytes(f)
+          return await expandFileToCandidates(f.name, bytes, mem)
         } catch (e) {
-          return [
-            {
-              key: `err_${f.name}_${Date.now()}`,
-              sourceName: f.name,
-              sheet: null,
-              rows: [],
-              metadata: {},
-              periodEndDate: null,
-              periodType: 'fy',
-              year: null,
-              isMonthly: false,
-              accountCount: 0,
-              balanced: false,
-              imbalance: 0,
-              status: 'error',
-              error: e?.message || 'Could not read this file.',
-            },
-          ]
+          return [errorCandidate(f.name, e, bytes)]
         }
       }),
     )
-    setCandidates((prev) => dedupeByYear([...prev, ...expanded.flat()]))
+    const added = expanded.flat()
+    setCandidates((prev) => settleCandidates([...prev, ...added]))
+    // Open the picker for the first file KYRO couldn't read but could preview.
+    const firstPickable = added.find((c) => c.status === 'error' && c.failure?.canPick && c.bytes)
+    if (firstPickable) setPickerKey((prev) => prev ?? firstPickable.key)
     setReading(false)
   }
 
@@ -143,8 +148,27 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
   // Re-dedupe after removal: if the removed candidate was the winner of a shared
   // end-date, the survivor must lose its `duplicate:true` flag or it would be
   // silently dropped from the save.
-  const removeCandidate = (key) =>
-    setCandidates((prev) => dedupeByYear(prev.filter((c) => c.key !== key)))
+  const removeCandidate = (key) => {
+    setCandidates((prev) => settleCandidates(prev.filter((c) => c.key !== key)))
+    setPickerKey((prev) => (prev === key ? null : prev))
+  }
+
+  // "Pair with…" (#41 S-D): the person says which P&L goes with which BS.
+  const pairWith = (aKey, bKey) => setCandidates((prev) => pairChosen(prev, aKey, bKey))
+
+  // The column picker's "Use these columns" (#32): re-read in the handler and
+  // replace the error candidate, then pair again (it may be a statement half).
+  const applyColumns = (key, choice) => {
+    const target = candidates.find((c) => c.key === key)
+    if (!target?.bytes) return
+    try {
+      const next = candidateFromColumns(target, target.bytes, choice, memory)
+      setCandidates((prev) => settleCandidates(prev.map((c) => (c.key === key ? next : c))))
+      setPickerKey(null)
+    } catch {
+      /* the picker only enables its button on a live success */
+    }
+  }
 
   // ── Save ────────────────────────────────────────────────────────────────────
   const runSave = async (targets) => {
@@ -164,7 +188,7 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
       imports: [
         {
           role: 'cy',
-          sourceName: `${c.sourceName}${c.sheet ? ` — ${c.sheet}` : ''}`,
+          sourceName: nameOf(c).slice(0, 255),
           rows: c.rows,
           metadata: c.metadata || {},
         },
@@ -173,6 +197,12 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
 
     setPhase('saving')
     setSummary(null)
+    // A1: a QuickBooks statement export's clear accounts sort themselves ON THE
+    // SAVE — ImportsService.create applies the sure, section-backed categories
+    // against the school's REAL mapping (an account it already knows is never
+    // re-pointed) before each year's statements are built. Nothing is PATCHed
+    // from here: this browser can't see the school's stored picks, so a PATCH
+    // would overwrite them. Real trial balances keep confirm-first review.
     const { saved, failed, blocked } = await persistence.savePeriods(payloads, {
       onProgress: ({ index, total, payload }) => {
         setProgress({ index, total, payload })
@@ -195,6 +225,11 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
     )
     setProgress(null)
     setPhase('done')
+    // A save can add a picked layout / KYRO's numbers to the school's memory.
+    invalidateIntakeMemory(persistence.schoolId)
+    if (saved.length > 0) {
+      window.dispatchEvent(new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }))
+    }
     setSummary({
       saved: saved.length,
       failed: failed.length,
@@ -206,7 +241,9 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
   const handleSave = () => runSave(savable)
   const handleRetry = () => runSave(annual.filter((c) => c.status === 'failed'))
 
-  const hasReviewable = annual.length > 0 || undated.length > 0 || errors.length > 0
+  const hasReviewable =
+    annual.length > 0 || undated.length > 0 || errors.length > 0 || partial.length > 0
+  const pickerCand = pickerKey ? errors.find((c) => c.key === pickerKey && c.bytes && c.failure?.preview) : null
   const monthlyOnly = annual.length === 0 && monthly.length > 0
 
   return (
@@ -338,6 +375,68 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
         </div>
       )}
 
+      {/* ── Half a trial balance (#41 S-D): never saved as a year ── */}
+      {partial.length > 0 && (
+        <div className="b2-callout" data-tone="watch" data-testid="bulk-partials">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 flex items-center gap-1.5 text-[14px] font-semibold text-ink">
+              <AlertTriangle size={14} className="text-ink2" /> Half a trial balance — not added yet
+            </p>
+            <div className="divide-y divide-hair/[0.1]">
+              {partial.map((c) => {
+                const partners = partial.filter((o) => o.key !== c.key && o.partial && o.partial !== c.partial)
+                return (
+                  <div key={c.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <span className="flex min-w-0 flex-1 basis-[14rem] flex-col text-[14px] text-ink">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <FileSpreadsheet size={13} className="shrink-0 text-ink2" />
+                        <span className="truncate">{nameOf(c)}</span>
+                      </span>
+                      <span className="text-[12.5px] text-ink2">
+                        {HALF_LABEL[c.partial]}
+                        {c.periodEndDate ? ` · ${formatShortDate(c.periodEndDate)}` : ''}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {partners.length > 0 ? (
+                        <select
+                          aria-label={`Pair ${nameOf(c)} with`}
+                          defaultValue=""
+                          onChange={(e) => e.target.value && pairWith(c.key, e.target.value)}
+                          className="max-w-[16rem] rounded-md border border-hair bg-white px-2 py-1 text-[13.5px] font-semibold text-ink outline-none ring-[#2563EB]/40 focus-visible:ring-2"
+                        >
+                          <option value="" disabled>
+                            Pair with…
+                          </option>
+                          {partners.map((o) => (
+                            <option key={o.key} value={o.key}>
+                              {nameOf(o)}
+                              {o.periodEndDate ? ` (${formatShortDate(o.periodEndDate)})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-[13px] text-ink2">
+                          Add its {OTHER_HALF[c.partial]} to save this year.
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${nameOf(c)}`}
+                        onClick={() => removeCandidate(c.key)}
+                        className="rounded-md p-1 text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
+                      >
+                        <X size={15} />
+                      </button>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Undated files: manual year picker ── */}
       {undated.length > 0 && (
         <div className="b2-callout" data-tone="watch">
@@ -399,13 +498,31 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
               className="b2-callout"
               data-tone="risk"
             >
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 text-[14px]">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <AlertTriangle size={14} className="shrink-0 text-ink2" />
-                <span className="truncate">
-                  {c.sourceName}: {c.error}
+              <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-2 text-[14px]">
+              <span className="flex min-w-0 flex-1 basis-[16rem] items-start gap-1.5">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-ink2" />
+                <span className="min-w-0">
+                  <span className="font-semibold">{c.sourceName}</span>
+                  {': '}
+                  {c.failure ? (
+                    <>
+                      {c.failure.reason}
+                      {c.failure.ask && <span className="font-semibold"> {c.failure.ask}</span>}
+                    </>
+                  ) : (
+                    c.error
+                  )}
                 </span>
               </span>
+              {canEdit && c.failure?.canPick && c.bytes && pickerKey !== c.key && (
+                <button
+                  type="button"
+                  onClick={() => setPickerKey(c.key)}
+                  className="btn btn-primary btn-sm shrink-0"
+                >
+                  Pick the columns
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={`Remove ${c.sourceName}`}
@@ -418,6 +535,20 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── The column picker (#32): one at a time, under the errors ── */}
+      {canEdit && pickerCand && (
+        <ColumnPicker
+          key={pickerCand.key}
+          fileName={pickerCand.sourceName}
+          bytes={pickerCand.bytes}
+          preview={pickerCand.failure.preview}
+          initial={pickerCand.failure.preview.guess}
+          memory={memory}
+          onApply={(choice) => applyColumns(pickerCand.key, choice)}
+          onCancel={() => setPickerKey(null)}
+        />
       )}
 
       {/* ── Progress bar ── */}

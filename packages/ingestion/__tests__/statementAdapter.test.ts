@@ -427,13 +427,11 @@ describe('(c) Budget vs Actuals export', () => {
     expect(() => parseStatementGrid(gridOf(overview), 'Budget Overview')).toThrow(/Budget vs Actuals export has no Actual column/)
     // …and THAT message is what the facade surfaces (not the plain adapter's).
     expect(() => ingest('Budget Overview.xlsx', workbook({ Sheet1: overview }))).toThrow(/no Actual column/)
-    // A numbered overview the plain adapter COULD read: the plain result stands (a
-    // sibling tab must never fail a workbook whose TB parsed) but the refusal rides
-    // along as a warning, so the caller can see the rows are budget, not actuals.
+    // A numbered overview the plain adapter COULD read is STILL refused: the sheet
+    // the plain adapter read is the budget report itself, so its rows are budget,
+    // never actuals. (Only a refused SIBLING tab rides along as a warning — F1.)
     const numbered = overview.map((r, i) => (i === 4 ? ['Acct', 'Desc', ...r.slice(1)] : i > 4 && typeof r[1] === 'number' ? [40000 + i, ...r] : [null, ...r]))
-    const kept = ingest('Budget Overview.xlsx', workbook({ Sheet1: numbered }))
-    expect(kept.metadata?.statement).toBeUndefined()
-    expect(kept.warnings).toEqual([expect.stringMatching(/Budget vs Actuals export has no Actual column/)])
+    expect(() => ingest('Budget Overview.xlsx', workbook({ Sheet1: numbered }))).toThrow(/no Actual column/)
   })
 })
 

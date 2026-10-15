@@ -7,12 +7,15 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useApp } from '../context/AppContext.jsx'
 
 export default function SaveBar() {
-  const { canEdit, canGenerate, dirty, save, saveState } = useApp()
+  const { canEdit, canGenerate, dirty, save, saveState, byRole = null } = useApp()
   const reduce = useReducedMotion()
   if (!canEdit) return null
 
   const busy = saveState === 'saving'
-  const saved = saveState === 'saved' && !dirty
+  // Saved = nothing new to save and this year's file is stored. Re-entering
+  // the step (saveState 'idle'), after a review Approve or a column re-read
+  // that already autosaved, used to show a greyed "Save" as if work was owed.
+  const saved = !dirty && !busy && (saveState === 'saved' || !!byRole?.cy?.persisted)
   const failed = saveState === 'error'
   const blocked = saveState === 'blocked'
 

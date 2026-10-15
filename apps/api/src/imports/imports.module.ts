@@ -4,6 +4,7 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { StatementsModule } from '../statements/statements.module.js'
+import { MappingModule } from '../mapping/mapping.module.js'
 import { ImportsController } from './imports.controller.js'
 import { ImportsService } from './imports.service.js'
 
@@ -15,9 +16,13 @@ import { ImportsService } from './imports.service.js'
  * StatementsModule is imported so DELETE can re-run the canonical generate to
  * reconcile the period snapshot after a trial balance is removed (no circular
  * dep — StatementsModule does not import ImportsModule).
+ *
+ * MappingModule is imported so a saved QuickBooks statement export can merge
+ * its section-backed account categories (A1, ImportsService.create). No cycle:
+ * MappingModule imports only Auth + Statements, neither imports ImportsModule.
  */
 @Module({
-  imports: [AuthModule, AuditModule, PeriodsModule, BillingModule, StatementsModule],
+  imports: [AuthModule, AuditModule, PeriodsModule, BillingModule, StatementsModule, MappingModule],
   controllers: [ImportsController],
   providers: [ImportsService],
   exports: [ImportsService],

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import { ingest } from '@finrep/ingestion'
 import { monthlyApi, apiErrorMessage } from '../../lib/api.js'
+import { getIntakeMemory } from '../../lib/intakeMemory.js'
+import { failureFromError, failureText } from '../../lib/ingestFailure.js'
 import { fyMonthKeys } from '../../lib/monthlyShapes.js'
 
 // The signed net of the parsed rows as an accounting dollar figure ($0.00 when
@@ -95,7 +97,10 @@ export default function MonthlyUploadCard({
     setParseError('')
     try {
       const bytes = await readBytes(file)
-      const { rows, metadata } = ingest(file.name, bytes)
+      // #32: the school's remembered layouts help a monthly file too (no
+      // picker here — a file that still can't be read says why, plainly).
+      const memory = await getIntakeMemory(schoolId)
+      const { rows, metadata } = ingest(file.name, bytes, { memory })
       if (!Array.isArray(rows) || rows.length === 0) {
         setParsed(null)
         setParseError('No account rows were found in this spreadsheet.')
@@ -104,7 +109,7 @@ export default function MonthlyUploadCard({
       setParsed({ rows, metadata })
     } catch (e) {
       setParsed(null)
-      setParseError(e?.message || 'Could not parse this spreadsheet.')
+      setParseError(failureText(failureFromError(e)) || 'Could not parse this spreadsheet.')
     }
   }
 

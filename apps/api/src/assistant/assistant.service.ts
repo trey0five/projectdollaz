@@ -15,7 +15,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common'
 import type { Prisma, User } from '@finrep/db'
-import type { NormalizedRow } from '@finrep/ingestion'
+import type { IntakeMemory, NormalizedRow } from '@finrep/ingestion'
 import {
   computeDriverBudget,
   defaultAssumptions,
@@ -1311,7 +1311,11 @@ export class AssistantService {
     if (attachments?.length) {
       let prep: PreparedAttachments
       try {
-        prep = await this.files.prepare(attachments, redactor)
+        // The school's intake memory (remembered column layouts + pinned
+        // synthetic account numbers). Best-effort: any failure → null, which
+        // reads every file exactly as before.
+        const memory = await this.intakeMemoryOrNull(schoolId)
+        prep = await this.files.prepare(attachments, redactor, { memory })
       } catch (e) {
         const text =
           e instanceof AttachmentError
@@ -3080,6 +3084,16 @@ export class AssistantService {
         targetDate: args.targetDate,
         status: args.status,
       },
+    }
+  }
+
+  /** The school's intake memory for attachment parsing; ANY failure → null (today's read). */
+  private async intakeMemoryOrNull(schoolId: string): Promise<IntakeMemory | null> {
+    if (!schoolId) return null
+    try {
+      return await this.imports.intakeMemory(schoolId)
+    } catch {
+      return null
     }
   }
 

@@ -8,11 +8,17 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
+  asStatementResult,
   ingest,
+  isIngestError,
   listTrialBalanceSheets,
   listStatementSheets,
   isStatementPair,
+  mergeStatementResults,
+  pairStatements,
+  statementHalf,
   statementTypeFromFileName,
+  type IntakeMemory,
   type NormalizedRow,
   type SheetCandidate,
   type SheetMetadata,
@@ -89,6 +95,19 @@ export interface PreparedAttachments {
   importCandidates: ImportCandidate[]
 }
 
+export interface PrepareOptions {
+  /**
+   * The school's intake memory (ImportsService.intakeMemory): remembered column
+   * layouts (#32, used ONLY when the automatic read fails) and pinned synthetic
+   * account numbers (#41 S-B(b)). null/absent = today's behaviour exactly.
+   */
+  memory?: IntakeMemory | null
+}
+
+/** The pointer to the Add-data column picker appended to every parse-failure digest. */
+export const PICKER_HINT =
+  'They can also pick the columns themselves on Add data → Finance, and KYRO will remember them.'
+
 /** Thrown on a validation failure; chatStream catches it and emits error+done. */
 export class AttachmentError extends Error {}
 
@@ -107,14 +126,14 @@ export function partialStatementNotice(metadata: SheetMetadata | undefined): str
   if (stmt.partial === 'bs') {
     return (
       'This is a balance sheet only — it has no income or expense accounts. Importing it as the current-year ' +
-      'trial balance would leave the Statement of Activities empty. Add the Profit and Loss / Statement of ' +
-      'Activity export and I’ll merge them, or tell me to import the balance-sheet half anyway.'
+      'trial balance would leave the Statement of Activities empty. Attach the Profit and Loss / Statement of ' +
+      'Activity export together with this one and I’ll merge them, or tell me to import the balance-sheet half anyway.'
     )
   }
   return (
     'This is an income statement only — it has no balance-sheet accounts. Importing it as the current-year ' +
-    'trial balance would leave the Statement of Financial Position empty. Add the Balance Sheet export and ' +
-    'I’ll merge them, or tell me to import the income half anyway.'
+    'trial balance would leave the Statement of Financial Position empty. Attach the Balance Sheet export ' +
+    'together with this one and I’ll merge them, or tell me to import the income half anyway.'
   )
 }
 
@@ -141,7 +160,9 @@ export class AssistantFilesService {
   async prepare(
     attachments: AttachmentInput[],
     redactor?: Redactor,
+    opts: PrepareOptions = {},
   ): Promise<PreparedAttachments> {
+    const memory = opts.memory ?? null
     // FERPA: the same request redactor so a NON-trial-balance spreadsheet's text
     // column (which may hold family/student names) is tokenized in the digest.
     const red = redactor ?? new Redactor(false)
@@ -244,7 +265,7 @@ export class AssistantFilesService {
       if (att.kind === 'xlsx') {
         let sheets: SheetCandidate[] = []
         try {
-          sheets = this.withBudget(att.name, () => this.workbookSheetCandidates(att.name, ab))
+          sheets = this.withBudget(att.name, () => this.workbookSheetCandidates(att.name, ab, memory))
         } catch (e) {
           this.logger.warn(
             `attachment sheet-enumeration failed: ${e instanceof Error ? e.message : 'error'}`,
@@ -259,14 +280,14 @@ export class AssistantFilesService {
 
       let result: { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } | null = null
       try {
-        result = this.ingestWithBudget(att.name, ab)
+        result = this.ingestWithBudget(att.name, ab, memory)
       } catch (e) {
+        // The log keeps the technical message (unchanged). The digest carries ONLY
+        // the plain reason + ask (column letters / row numbers, never cell text) —
+        // NEVER e.preview, which holds raw cells and must not reach the model.
         this.logger.warn(`attachment parse failed for a spreadsheet: ${e instanceof Error ? e.message : 'error'}`)
         digests.push(
-          this.wrapDigest(
-            att.name,
-            `kind: spreadsheet\nattachmentId: ${attachmentId}\nThis spreadsheet could not be parsed as a trial balance. Tell the user it didn't look like a standard trial balance and ask how they'd like to proceed. To FILE it to Knowledge as-is, call file_document with attachmentId "${attachmentId}".`,
-          ),
+          this.wrapDigest(att.name, this.parseFailureDigest(attachmentId, e, red)),
         )
         continue
       }
@@ -293,7 +314,86 @@ export class AssistantFilesService {
       digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate, red))
     }
 
+    this.pairSameTurn(parsed, importCandidates, digests)
+
     return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
+  }
+
+  /**
+   * The digest body for a spreadsheet ingest() could not read. An IngestError
+   * carries a plain `reason` (column letters / row numbers only — never cell
+   * text) and an optional `ask`; anything else keeps today's generic text.
+   * e.preview is deliberately never touched here.
+   */
+  private parseFailureDigest(attachmentId: string, e: unknown, red: Redactor): string {
+    const fileIt = `To FILE it to Knowledge as-is, call file_document with attachmentId "${attachmentId}".`
+    if (isIngestError(e)) {
+      const plain = red.redactText(`${e.reason}${e.ask ? ` ${e.ask}` : ''}`)
+      return (
+        `kind: spreadsheet\nattachmentId: ${attachmentId}\n` +
+        `This spreadsheet could not be read as a trial balance. Tell the user, in these plain words: "${plain}" ` +
+        `${PICKER_HINT} Do not guess the numbers. ${fileIt}`
+      )
+    }
+    return (
+      `kind: spreadsheet\nattachmentId: ${attachmentId}\n` +
+      `This spreadsheet could not be parsed as a trial balance. Tell the user it didn't look like a standard trial balance and ask how they'd like to proceed. ` +
+      `${PICKER_HINT} ${fileIt}`
+    )
+  }
+
+  /**
+   * Same-turn pairing (D20): a QuickBooks P&L half and a Balance Sheet half
+   * attached in ONE message, ending on the same date, merge into ONE full trial
+   * balance registered under `pair:<plId>+<bsId>`. pairStatements never guesses
+   * (two P&Ls for one date → no pair). The halves stay listed AND gated exactly
+   * as before — the merged candidate is additive. A cross-turn merge is out of
+   * scope (attachments are request-scoped).
+   */
+  private pairSameTurn(
+    parsed: Map<string, ParsedFile>,
+    importCandidates: ImportCandidate[],
+    digests: string[],
+  ): void {
+    const halves = [...parsed.entries()].filter(
+      ([, p]) => p.isTrialBalanceCandidate && statementHalf(p.metadata) != null,
+    )
+    if (halves.length < 2) return
+    const { pairs } = pairStatements(halves, ([, p]) => p.metadata)
+    for (const { pl: [plId, pl], bs: [bsId, bs] } of pairs) {
+      const plRes = asStatementResult(pl.rows, pl.metadata)
+      const bsRes = asStatementResult(bs.rows, bs.metadata)
+      if (!plRes || !bsRes) continue
+      let merged: ReturnType<typeof mergeStatementResults>
+      try {
+        merged = mergeStatementResults(plRes, bsRes)
+      } catch (e) {
+        this.logger.warn(`attachment statement merge failed: ${e instanceof Error ? e.message : 'error'}`)
+        continue
+      }
+      const id = `pair:${plId}+${bsId}`
+      const sourceName = `${pl.sourceName} + ${bs.sourceName}`.slice(0, 255)
+      const metadata: SheetMetadata = { ...merged.metadata, sourceName }
+      const candidate = this.looksLikeTrialBalance(merged.rows)
+      parsed.set(id, { sourceName, rows: merged.rows, metadata, isTrialBalanceCandidate: candidate })
+      if (candidate) {
+        importCandidates.push({ attachmentId: id, kind: 'trial_balance', sourceName, metadata })
+      }
+      const plug = merged.metadata.statement.balancePlug
+      const lines = [
+        `kind: spreadsheet (combined QuickBooks statements)`,
+        `Combined "${this.safeName(pl.sourceName)}" + "${this.safeName(bs.sourceName)}" into one full trial balance (P&L + balance sheet) — attachmentId "${id}". Prefer this one.`,
+        `rowCount: ${merged.rows.length}`,
+        metadata.periodEndDate ? `periodEndDate: ${metadata.periodEndDate}` : null,
+        plug != null
+          ? `The two exports were ${Math.abs(merged.metadata.statement.imbalance ?? plug).toFixed(2)} apart, so one balancing line (account 399) was added — tell the user.`
+          : `The P&L and balance sheet tie; no balancing line was needed.`,
+        candidate
+          ? `If the user wants to import these, call propose_import_trial_balance with attachmentId "${id}" (no importPartial needed — this is a full trial balance). NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
+          : `This did not look like a standard trial balance; do not propose importing it.`,
+      ].filter((l): l is string => l != null)
+      digests.push(this.wrapDigest(sourceName, lines.join('\n')))
+    }
   }
 
   /**
@@ -305,7 +405,11 @@ export class AssistantFilesService {
    * `ingest` path below merges it into ONE full trial balance. Mirrors
    * apps/web/src/lib/trendIntake.js workbookSheetCandidates.
    */
-  private workbookSheetCandidates(fileName: string, ab: ArrayBuffer): SheetCandidate[] {
+  private workbookSheetCandidates(
+    fileName: string,
+    ab: ArrayBuffer,
+    memory: IntakeMemory | null = null,
+  ): SheetCandidate[] {
     // A refused sheet (a "Budget Overview" tab) arrives through onWarning and is
     // never thrown from listStatementSheets; the try is belt and braces so a
     // sibling tab can never fail the TB sheets beside it.
@@ -313,6 +417,7 @@ export class AssistantFilesService {
     try {
       statements = listStatementSheets(ab, {
         typeHint: statementTypeFromFileName(fileName),
+        ...(memory ? { knownSynthetic: memory.synthetic } : {}),
         onWarning: (w) => this.logger.warn(`attachment statement sheet: ${w}`),
       })
     } catch (e) {
@@ -330,8 +435,10 @@ export class AssistantFilesService {
   private ingestWithBudget(
     name: string,
     ab: ArrayBuffer,
+    memory: IntakeMemory | null = null,
   ): { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } {
-    return this.withBudget(name, () => ingest(name, ab))
+    // No memory → call exactly as before (byte-identical output).
+    return this.withBudget(name, () => (memory ? ingest(name, ab, { memory }) : ingest(name, ab)))
   }
 
   /** Time-budget wrapper: log (never throw) when a parse takes too long. */

@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
 import IntakeBar from '../IntakeBar.jsx'
 import IntakeConfirmBand from '../finance/IntakeConfirmBand.jsx'
 import BulkYearsUploader from '../BulkYearsUploader.jsx'
+import { useReviewCount } from '../../hooks/useReviewCount.js'
 import IntegrationsSection from '../settings/IntegrationsSection.jsx'
+import IntakeFinishBar from '../intake/IntakeFinishBar.jsx'
+import { OPEN_ADD_YEARS_EVENT } from '../../lib/statementNotes.js'
 
 const TABS = [
   { key: 'single', label: 'This year', Icon: FileSpreadsheet },
@@ -51,11 +54,25 @@ export default function TrialBalanceModalBody({
   // means the accounts have not been categorised yet, so the checkpoint asks
   // for that instead of offering a celebration over an empty statement.
   dataReady = true,
+  // THE ONE FINISH (Finance → Add data → Trial balance). Provided ⇒ the step
+  // ends in a single "Done — show my numbers" bar that goes straight to the
+  // full Finance overview — no second "That's saved" screen, no confirm band.
+  onFinish = null,
 }) {
   const [mode, setMode] = useState(() =>
     TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
   )
   const active = canEdit ? mode : 'single'
+
+  // A file card's "Open Add years" (a workbook with more statements than one
+  // picture) switches to the multi-year tab. A listener, not a prop: the card
+  // sits inside AppProvider, several components down.
+  useEffect(() => {
+    if (!canEdit) return undefined
+    const onOpenYears = () => setMode('bulk')
+    window.addEventListener(OPEN_ADD_YEARS_EVENT, onOpenYears)
+    return () => window.removeEventListener(OPEN_ADD_YEARS_EVENT, onOpenYears)
+  }, [canEdit])
   // Which period the user has already answered for. Keyed by period id so saving
   // a SECOND year asks again — that upload lights up different things (year-over-
   // year columns) and deserves its own reward.
@@ -67,6 +84,8 @@ export default function TrialBalanceModalBody({
     !!activePeriod &&
     answeredPeriodId !== activePeriod.id &&
     (hydratedFiles || []).length > 0
+  // The saved statements' own "N to review" — the same count the Finance band shows.
+  const reviewCount = useReviewCount(showConfirm ? school?.id ?? null : null, activePeriod?.id ?? null)
 
   return (
     <div>
@@ -114,7 +133,7 @@ export default function TrialBalanceModalBody({
           autoCollapse={false}
           autoSave
         >
-          <IntakeBar />
+          <IntakeBar confirmBandShowing={showConfirm} onFinish={onFinish} />
         </AppProvider>
       )}
 
@@ -124,7 +143,8 @@ export default function TrialBalanceModalBody({
       {showConfirm && (
         <div className="px-5 pb-5">
           <IntakeConfirmBand
-          dataReady={dataReady}
+            dataReady={dataReady}
+            reviewCount={reviewCount}
             period={activePeriod}
             files={hydratedFiles}
             onConfirm={() => {
@@ -161,6 +181,15 @@ export default function TrialBalanceModalBody({
       {canEdit && active === 'qbo' && (
         <div className="p-5">
           <IntegrationsSection embedded />
+        </div>
+      )}
+
+      {/* The same one finish on the other two tabs (the single tab's lives in
+          the intake, which knows whether its files are saved and sorted).
+          Secondary: "Save N years" / QuickBooks' own buttons stay the primary. */}
+      {canEdit && onFinish && active !== 'single' && (
+        <div className="px-5 pb-5">
+          <IntakeFinishBar state="ready" primary={false} onFinish={onFinish} className="!mt-0" />
         </div>
       )}
     </div>

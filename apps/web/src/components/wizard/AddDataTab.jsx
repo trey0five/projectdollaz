@@ -12,12 +12,13 @@
 //     the existing `penny:data-changed` refresh event.
 //   • Unconfigured module → own empty-teach state, never crash.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PackageOpen } from 'lucide-react'
 import PageHeader from '../ui/surface/PageHeader.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import AddDataWizard from './AddDataWizard.jsx'
+import { requestOpenReview } from '../../lib/reviewRequest.js'
 import { wizardConfigFor, wizardModuleLabel } from './wizardConfigs.jsx'
 
 export default function AddDataTab({
@@ -32,6 +33,9 @@ export default function AddDataTab({
   // onLitUp because it governs the same thing: whether a celebration is
   // truthful yet. See FinancePage.statementsHaveNumbers.
   dataReady = true,
+  // Optional: the host page's "the person finished — show what they saved"
+  // hook, called with the period id the intake just saved (Finance selects it).
+  onFinished = null,
 }) {
   const { activeSchool } = useSchools()
   const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
@@ -77,12 +81,20 @@ export default function AddDataTab({
   const [deepLink] = useState(() => {
     try {
       const q = new URLSearchParams(window.location.search)
-      return { option: q.get('add'), intake: q.get('intake') }
+      return { option: q.get('add'), intake: q.get('intake'), review: q.get('review') === '1' }
     } catch {
-      return { option: null, intake: null }
+      return { option: null, intake: null, review: false }
     }
   })
   const initialOption = deepLink.option
+
+  // A4: `?review=1` (the Finance band's "Review N accounts") asks the trial
+  // balance step to open its review panel. The ask is sticky (reviewRequest) so
+  // the first file card that mounts with something to review takes it — the
+  // stored files hydrate a moment after this tab mounts. No setState here.
+  useEffect(() => {
+    if (deepLink.review) requestOpenReview()
+  }, [deepLink])
 
   const rawConfig = wizardConfigFor(module)
   // An option whose embed renders nothing for a viewer must not be OFFERED to a
@@ -124,6 +136,7 @@ export default function AddDataTab({
       // Finance passes one today; an embed without it simply renders no gate.
       onLitUp,
       dataReady,
+      onFinished,
       // Advisory tab hint for whichever embed the deep link opened.
       intake: deepLink.intake,
     }),
@@ -142,6 +155,7 @@ export default function AddDataTab({
       handleSaved,
       onLitUp,
       dataReady,
+      onFinished,
       deepLink,
     ],
   )

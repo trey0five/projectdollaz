@@ -91,6 +91,51 @@ export default function Penny() {
   const H = doveH
   const W = Math.round(doveH * geom.aspect)
 
+  // ── AVOID ZONES: KYRO never sits on a primary button. A page marks the
+  // controls it must not cover with `data-kyro-avoid` ("Done — show my
+  // numbers", "Review N accounts"); when one is under the home corner, KYRO
+  // rises just above it (the design is unchanged — only where it rests).
+  const [homeLift, setHomeLift] = useState(0)
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    let raf = 0
+    const measure = () => {
+      raf = 0
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const left = vw - HOME_X - W
+      const right = vw - HOME_X
+      const bottom = vh - HOME_Y
+      const top = bottom - H
+      let lift = 0
+      for (const el of document.querySelectorAll('[data-kyro-avoid]')) {
+        const r = el.getBoundingClientRect()
+        if (!r.width || !r.height) continue
+        const overlapsX = r.right > left - 6 && r.left < right + 6
+        // Anything from the owl's top down to the viewport bottom counts: it
+        // would otherwise rise INTO a button sitting just above it.
+        const overlapsY = r.bottom > top - 6 - lift && r.top < bottom + 6
+        if (overlapsX && overlapsY) lift = Math.max(lift, bottom - r.top + 10)
+      }
+      lift = Math.min(Math.max(0, Math.round(lift)), 280)
+      setHomeLift((prev) => (prev === lift ? prev : lift))
+    }
+    const schedule = () => {
+      if (!raf) raf = window.requestAnimationFrame(measure)
+    }
+    schedule()
+    window.addEventListener('scroll', schedule, { passive: true, capture: true })
+    window.addEventListener('resize', schedule)
+    // Buttons appear and disappear without a scroll (a save finishing).
+    const tick = window.setInterval(schedule, 600)
+    return () => {
+      window.removeEventListener('scroll', schedule, { capture: true })
+      window.removeEventListener('resize', schedule)
+      window.clearInterval(tick)
+      if (raf) window.cancelAnimationFrame(raf)
+    }
+  }, [W, H])
+
   // DERIVED (never stored in state via effect).
   const step = guide ? guide.steps[guide.index] : null
   // Agent walkthroughs always show Step n/m + Done (even single-step) so the user
@@ -173,9 +218,9 @@ export default function Penny() {
     // The flight transform (bl − homeL) then carries KYRO to a target — including
     // nav items in the LEFT sidebar — and back home to the right.
     const homeL = vw - HOME_X - W
-    const homeT = vh - HOME_Y - H
+    const homeT = vh - HOME_Y - homeLift - H
     return { x: bl - homeL, y: bt - homeT, parked: false, placeRight }
-  }, [box, W, H])
+  }, [box, W, H, homeLift])
 
   // ── Flight phase machine (sanctioned setState-in-effect, keyed on the travel
   // target): flying → gliding (last GLIDE_S) → perched. `lastRef` remembers the
@@ -297,7 +342,8 @@ export default function Penny() {
           the card. `[null, …]` starts y from wherever the owl is NOW, so
           home↔card↔card all arc; the mid keyframe is the lift. */}
       <motion.div
-        className="pointer-events-none fixed bottom-5 right-5 z-[55]"
+        className="pointer-events-none fixed right-5 z-[55]"
+        style={{ bottom: HOME_Y + homeLift, transition: reduce ? undefined : 'bottom 220ms ease-out' }}
         animate={
           reduce
             ? { x: travel.x, y: travel.y }

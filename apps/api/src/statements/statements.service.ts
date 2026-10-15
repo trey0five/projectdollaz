@@ -19,6 +19,7 @@ import {
   type SchoolConfig,
 } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { clearPeriodInsights } from '../analytics/insight-cache.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { MappingService } from '../mapping/mapping.service.js'
@@ -215,6 +216,10 @@ export class StatementsService {
         triggeredByUserId: actor.id,
       },
     })
+
+    // The saved KYRO insight described the OLD numbers — drop it (and later
+    // periods', whose deltas read this one) so the next read regenerates.
+    await clearPeriodInsights(this.prisma, schoolId, period.id, period.periodEndDate)
 
     await this.audit.write({
       schoolId,

@@ -93,6 +93,9 @@ export const wizardConfigs = {
   finance: {
     module: 'finance',
     hue: HUE.finance,
+    // Every "Done" in Finance's add-data flow lands on the FULL overview (the
+    // band, figures and warnings) — never the Records tab's Workspaces doors.
+    finishTo: 'overview',
     options: [
       {
         key: 'tb',
@@ -103,8 +106,12 @@ export const wizardConfigs = {
         Icon: FileSpreadsheet,
         label: 'Trial balance',
         blurb:
-          'Drop in your trial balance — or connect QuickBooks to sync it automatically. We turn it into your four statements.',
+          'Your trial balance, or the Profit & Loss and Balance Sheet exported from QuickBooks — or connect QuickBooks to sync it automatically. We turn it into your four statements.',
         cta: 'Add trial balance',
+        // The step ends ITSELF in one "Done — show my numbers" bar (inside the
+        // intake, which knows whether the files are saved and sorted) that goes
+        // straight to the overview: no wizard footer, no Step 3 screen.
+        ownFinish: true,
         renderEmbed: (ctx, nav) => (
           <TrialBalanceModalBody
             school={ctx.school}
@@ -118,14 +125,19 @@ export const wizardConfigs = {
             // years" CTA actually reaches; without it the CTA opened the
             // single-period intake and the ask silently did nothing.
             initialTab={ctx.intake}
-            // Same confirm-then-celebrate gate the first-run Finance screen uses,
-            // so adding a SECOND year through the wizard is rewarded too — not
-            // only a school's very first upload.
-            onConfirmed={ctx.onLitUp}
-            // Without this the Add-data tab — the screen most schools actually
-            // use — kept offering "show me what lit up" over an empty
-            // statement, which is the exact claim this release exists to stop.
-            dataReady={ctx.dataReady !== false}
+            // ONE finish. The old path ended in four places — a "Does this look
+            // right?" band (two buttons), a footer "I'm done", then a Step 3
+            // "That's saved" screen whose "Done" opened the Workspaces tab. Now:
+            // the period just saved becomes the overview's year, the figures
+            // reload, and the full overview opens. The celebration stays one
+            // click away there ("What changed").
+            // `periodId` comes from a save made AT finish time (the retry of a
+            // failed autosave); otherwise the period the intake just saved is
+            // ctx.activePeriod (the autosave already re-rendered this).
+            onFinish={(info) => {
+              ctx.onFinished?.(info?.periodId ?? ctx.activePeriod?.id ?? null)
+              nav.finishToOverview()
+            }}
           />
         ),
       },
