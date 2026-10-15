@@ -1,16 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // TbToStatements — "One upload. Four statements." The core product truth as a
-// LIVE moving example: a trial-balance file on the left feeds an animated
-// pipeline into a statement viewer that AUTO-CYCLES through the four generated
-// statements (Financial Position → Activities → Cash Flows → Net Assets), each
-// with realistic example numbers whose rows cascade in and totals count up.
-// Tabs are real buttons (clicking jumps the cycle). Light-ground section; all
-// loops respect reduced motion (static first statement, no auto-advance).
+// moving example: a trial-balance extract on the left feeds a statement viewer
+// that steps ONCE through the four generated statements (Financial Position →
+// Activities → Cash Flows → Net Assets) and then rests on the last; rows
+// cascade in and the total counts up on each. Tabs are real buttons (a click
+// stops the tour and jumps there). Premium UI P5: everything sits on the ground
+// as ruled figures (hairlines, double-ruled totals) — no frosted cards, no
+// looping packet beam. Reduced motion: the first statement, statically.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence, animate, useReducedMotion } from 'framer-motion'
-import { FileSpreadsheet, ArrowRight } from 'lucide-react'
-import '../../styles/landing-orbit.css'
+import { motion, AnimatePresence, animate, useInView, useReducedMotion } from 'framer-motion'
+import { FileSpreadsheet, ArrowRight, ArrowDown } from 'lucide-react'
+import SectionHead from './SectionHead.jsx'
 
 const fmt = (n) =>
   (n < 0 ? '(' : '') + '$' + Math.abs(n).toLocaleString('en-US') + (n < 0 ? ')' : '')
@@ -82,7 +83,10 @@ const STATEMENTS = [
   },
 ]
 
-// TB rows shown in the source file card.
+// How long the tour holds each statement (ms).
+const TOUR_MS = 4200
+
+// TB rows shown in the source extract.
 const TB_ROWS = [
   ['4000 · Tuition income', '10,850,000'],
   ['1010 · Operating cash', '1,240,000'],
@@ -114,145 +118,169 @@ function GrandValue({ value }) {
 
 export default function TbToStatements() {
   const reduce = useReducedMotion()
+  const viewerRef = useRef(null)
+  const inView = useInView(viewerRef, { once: true, margin: '-120px' })
   const [tab, setTab] = useState(0)
+  // The tour: once the viewer is on screen, step through the four statements
+  // ONE time and stop on the last. A click on any tab ends the tour.
+  const [touring, setTouring] = useState(true)
 
-  // Auto-cycle the statements (the "dynamic moving example"); clicking a tab
-  // jumps there and the cycle continues from it.
   useEffect(() => {
-    if (reduce) return undefined
-    const t = setInterval(() => setTab((v) => (v + 1) % STATEMENTS.length), 4200)
-    return () => clearInterval(t)
-  }, [reduce])
+    if (reduce || !inView || !touring) return undefined
+    if (tab >= STATEMENTS.length - 1) {
+      const end = setTimeout(() => setTouring(false), TOUR_MS)
+      return () => clearTimeout(end)
+    }
+    const t = setTimeout(() => setTab((v) => v + 1), TOUR_MS)
+    return () => clearTimeout(t)
+  }, [reduce, inView, touring, tab])
 
   const s = STATEMENTS[tab]
+  const pick = (i) => {
+    setTouring(false)
+    setTab(i)
+  }
 
   return (
-    <section aria-labelledby="tbstmt-h2" className="bg-transparent py-24">
+    <section aria-labelledby="tbstmt-h2" className="py-24">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <div className="text-center">
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
-            From trial balance to board-ready
-          </p>
-          <h2 id="tbstmt-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
-            One upload. Four statements.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-muted">
-            Drop the trial balance export your bookkeeper already makes — KYRO maps it and
-            generates every statement your auditor and board expect.
-          </p>
-        </div>
+        <SectionHead
+          id="tbstmt-h2"
+          kicker="From trial balance to board-ready"
+          title="One upload. Four statements."
+          sub="Drop the trial balance export your bookkeeper already makes. KYRO maps it and generates every statement your auditor and board expect."
+        />
 
-        <div className="mt-12 grid items-center gap-8 lg:grid-cols-[minmax(260px,340px)_auto_1fr]">
-          {/* ── The source: a trial-balance file ── */}
+        <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(240px,320px)_auto_minmax(0,1fr)] lg:items-start lg:gap-8">
+          {/* ── The source: a trial-balance extract, ruled ── */}
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            initial={reduce ? false : { opacity: 0, x: -20 }}
+            whileInView={reduce ? undefined : { opacity: 1, x: 0 }}
             viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="rounded-2xl border border-navy/10 bg-white/80 p-5 shadow-[0_16px_40px_-22px_rgba(16,28,61,0.3)] backdrop-blur-sm"
+            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            className="min-w-0"
           >
+            <div className="sec-head">
+              <p className="sec-label">The upload</p>
+              <span className="sec-rule" aria-hidden="true" />
+            </div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-700">
-                <FileSpreadsheet size={18} />
-              </span>
-              <div>
-                <b className="block text-[14px] font-semibold text-navy">June-TB.xlsx</b>
-                <span className="text-[11.5px] text-muted">412 rows · debits = credits ✓</span>
+              <FileSpreadsheet size={18} strokeWidth={1.75} className="shrink-0 text-ink2" aria-hidden="true" />
+              <div className="min-w-0">
+                <b className="block text-[15px] font-semibold leading-[22px] text-ink">June-TB.xlsx</b>
+                <span className="text-[13px] leading-[18px] text-ink2">412 rows · debits equal credits</span>
               </div>
             </div>
-            <div className="mt-4 space-y-1.5 font-mono text-[11px] text-navy/70" aria-hidden="true">
-              {TB_ROWS.map(([l, v], i) => (
-                <motion.div
-                  key={l}
-                  initial={reduce ? false : { opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.25 + i * 0.09 }}
-                  className="flex justify-between gap-3 border-b border-navy/5 pb-1"
-                >
-                  <span className="truncate">{l}</span>
-                  <span className="tabular-nums">{v}</span>
-                </motion.div>
-              ))}
-              <div className="pt-0.5 text-center text-navy/35">⋯ 407 more</div>
+            <div className="dt-wrap mt-4">
+              <table className="dt" aria-label="Trial balance extract">
+                <thead>
+                  <tr>
+                    <th scope="col">Account</th>
+                    <th scope="col" className="dt-num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TB_ROWS.map(([l, v], i) => (
+                    <motion.tr
+                      key={l}
+                      initial={reduce ? false : { opacity: 0 }}
+                      whileInView={reduce ? undefined : { opacity: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: 0.2 + i * 0.08 }}
+                    >
+                      <td className="whitespace-nowrap">{l}</td>
+                      <td className="dt-num">{v}</td>
+                    </motion.tr>
+                  ))}
+                  <tr>
+                    <td colSpan={2} className="text-ink2">407 more rows</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </motion.div>
 
-          {/* ── The pipeline: packets flowing right ── */}
-          <div aria-hidden="true" className="hidden justify-center lg:flex">
-            <svg width="90" height="40" viewBox="0 0 90 40" className="overflow-visible">
-              <line x1="4" y1="20" x2="86" y2="20" stroke="rgba(16,28,61,0.15)" strokeWidth="3" strokeLinecap="round" />
-              <line x1="4" y1="20" x2="86" y2="20" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" className="orbit-beam-flow" />
-              <path d="M78 12 L88 20 L78 28" fill="none" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          {/* ── The hand-off: a quiet arrow, not a looping beam ── */}
+          <div aria-hidden="true" className="hidden pt-[136px] text-ink2 lg:block">
+            <ArrowRight size={20} strokeWidth={1.5} />
+          </div>
+          <div aria-hidden="true" className="-my-4 flex justify-center text-ink2 lg:hidden">
+            <ArrowDown size={20} strokeWidth={1.5} />
           </div>
 
-          {/* ── The moving example: auto-cycling statement viewer ── */}
+          {/* ── The statements, stepping once ── */}
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            ref={viewerRef}
+            initial={reduce ? false : { opacity: 0, x: 20 }}
+            whileInView={reduce ? undefined : { opacity: 1, x: 0 }}
             viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white/85 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-sm"
+            transition={{ duration: 0.55, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            className="min-w-0"
           >
-            {/* gold hairline */}
-            <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
-            {/* tabs */}
-            <div role="tablist" aria-label="Generated statements" className="flex flex-wrap gap-1 border-b border-navy/10 px-3 pt-3">
+            <div role="tablist" aria-label="Generated statements" className="flex flex-nowrap gap-x-3 overflow-x-auto border-b border-hair [scrollbar-width:none] sm:gap-x-5">
               {STATEMENTS.map((st, i) => (
                 <button
                   key={st.key}
+                  type="button"
                   role="tab"
                   aria-selected={i === tab}
-                  onClick={() => setTab(i)}
-                  className={`relative rounded-t-lg px-3 py-2 text-[12.5px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-navy/40 ${
-                    i === tab ? 'text-navy' : 'text-navy/45 hover:text-navy/75'
+                  onClick={() => pick(i)}
+                  className={`relative -mb-px shrink-0 whitespace-nowrap py-2.5 text-[13px] font-semibold outline-none transition-colors focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 ${
+                    i === tab ? 'text-ink' : 'text-ink2 hover:text-ink'
                   }`}
                 >
                   {st.tab}
                   {i === tab && (
                     <motion.span
                       layoutId="tb-tab-underline"
-                      className="absolute inset-x-2 -bottom-px h-[2.5px] rounded-full bg-[#2563EB]"
-                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      className="absolute inset-x-0 bottom-0 h-[2px] bg-[#2563EB]"
+                      transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+                    />
+                  )}
+                  {/* The tour's progress: a hairline fill under the live tab. */}
+                  {i === tab && touring && inView && !reduce && (
+                    <motion.span
+                      key={`${st.key}-progress`}
+                      aria-hidden="true"
+                      className="absolute bottom-0 left-0 h-[2px] bg-ink/25"
+                      initial={{ width: '0%' }}
+                      animate={{ width: '100%' }}
+                      transition={{ duration: TOUR_MS / 1000, ease: 'linear' }}
                     />
                   )}
                 </button>
               ))}
             </div>
-            {/* statement body */}
-            <div className="min-h-[330px] px-5 py-4 sm:px-7">
+            <div className="min-h-[340px] pt-5" role="tabpanel" aria-label={s.title}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={s.key}
-                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+                  initial={reduce ? false : { opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
-                  transition={{ duration: 0.35 }}
+                  exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h3 className="font-serif text-[17px] font-semibold text-navy sm:text-[19px]">{s.title}</h3>
-                    <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-navy/45">{s.asOf}</span>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <h3 className="font-serif text-[22px] font-medium leading-7 text-ink">{s.title}</h3>
+                    <span className="text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-ink2">{s.asOf}</span>
                   </div>
                   <div className="mt-3">
                     {s.rows.map((r, i) => (
                       <motion.div
                         key={r.l}
-                        initial={reduce ? false : { opacity: 0, x: 12 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: reduce ? 0 : 0.1 + i * 0.06, duration: 0.3 }}
-                        className={`flex items-baseline justify-between gap-4 py-[5px] text-[13.5px] ${
-                          r.total
-                            ? 'border-t border-navy/15 font-semibold text-navy'
-                            : 'text-navy/75'
+                        initial={reduce ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: reduce ? 0 : 0.08 + i * 0.05, duration: 0.25 }}
+                        className={`flex items-baseline justify-between gap-4 border-b border-hair py-2 text-[15px] leading-[22px] ${
+                          r.total ? 'font-semibold text-ink' : 'text-ink'
                         }`}
                       >
-                        <span>{r.l}</span>
+                        <span className="min-w-0">{r.l}</span>
                         <span className="tabular-nums">{fmt(r.v)}</span>
                       </motion.div>
                     ))}
-                    {/* grand total — double-ruled, counts up */}
-                    <div className="mt-1.5 flex items-baseline justify-between gap-4 border-t-2 border-navy/60 py-2 text-[15px] font-bold text-navy [border-bottom:3px_double_rgba(16,28,61,0.6)]">
+                    {/* The grand total — double-ruled, counts up. */}
+                    <div className="mt-px flex items-baseline justify-between gap-4 border-b-[3px] border-double border-ink/60 py-2.5 text-[15px] font-semibold leading-[22px] text-ink">
                       <span>{s.grand.l}</span>
                       <GrandValue value={s.grand.v} />
                     </div>
@@ -260,30 +288,7 @@ export default function TbToStatements() {
                 </motion.div>
               </AnimatePresence>
             </div>
-            {/* auto-cycle progress */}
-            {!reduce && (
-              <div aria-hidden="true" className="flex gap-1.5 px-5 pb-4 sm:px-7">
-                {STATEMENTS.map((st, i) => (
-                  <span key={st.key} className="relative h-1 flex-1 overflow-hidden rounded-full bg-navy/10">
-                    {i === tab && (
-                      <motion.span
-                        key={`${st.key}-${tab}`}
-                        className="absolute inset-y-0 left-0 rounded-full bg-[#2563EB]"
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 4.2, ease: 'linear' }}
-                      />
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
           </motion.div>
-        </div>
-
-        {/* mobile pipeline hint */}
-        <div aria-hidden="true" className="mt-4 flex items-center justify-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-navy/45 lg:hidden">
-          upload <ArrowRight size={13} /> statements, automatically
         </div>
       </div>
     </section>

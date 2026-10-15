@@ -4,8 +4,9 @@
 // single video byte arrives (no black hole, no reveal delay); the entrance is a
 // quick unobtrusive settle that starts at once rather than waiting for canplay.
 // Autoplays muted/looped (browser policy), inline on mobile, audio stripped in
-// the encode. The bottom stays mostly clear of overlays — the frosted headline
-// card from the section below straddles up onto it. Reduced-motion: static.
+// the encode. This band is the page's ONE ink surface; the bottom stays mostly
+// clear of overlays — the headline card from the section below straddles up
+// onto it (144px on desktop; see LandingHero). Reduced-motion: static.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
@@ -55,10 +56,11 @@ export default function VideoHero({ onShown }) {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 90% at 50% 40%, transparent 60%, rgba(10,21,38,0.4) 100%), linear-gradient(to bottom, rgba(10,21,38,0.35), transparent 18%, transparent 90%, rgba(10,21,38,0.55) 100%)',
+              'radial-gradient(120% 90% at 50% 40%, transparent 60%, rgba(10,21,38,0.4) 100%), linear-gradient(to bottom, rgba(10,21,38,0.55), transparent 20%, transparent 90%, rgba(10,21,38,0.55) 100%)',
           }}
         />
-        {/* Gold hairline draws across the base as the settle finishes. */}
+        {/* A white hairline draws once across the base as the settle finishes
+            (gold is KYRO's colour only). */}
         {!reduce && (
           <motion.span
             aria-hidden="true"
@@ -66,7 +68,7 @@ export default function VideoHero({ onShown }) {
             animate={{ scaleX: 1 }}
             transition={{ duration: 1.1, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-x-0 bottom-0 h-px origin-left"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.75), transparent)' }}
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)' }}
           />
         )}
       </motion.div>

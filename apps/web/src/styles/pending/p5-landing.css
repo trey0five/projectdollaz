@@ -1,0 +1,146 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENDING — slice p5-landing (Premium UI P5, public landing). Classes the
+   surface primitives do not have yet; listed in the slice report for later
+   consolidation into styles/surface.css. Screen-only (no print rules).
+
+   .btn-lg / .btn-on-dark carry the SAME declarations as the c1-flows pending
+   copies (styles/pending/c1-flows.css — which also lists the .btn-secondary
+   compound selectors), so whichever file loads, the button is the same and
+   nothing here changes other pages after a client-side navigation away from
+   "/". Consolidate them once (proposed Button props size="lg",
+   variant="on-dark"; the on-dark variant should also own a white/60
+   focus-visible outline — the landing hero applies that locally for now).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Button size + on-dark variant (shared with c1-flows) ─────────────────── */
+.btn.btn-lg,
+.btn.btn-primary.btn-lg,
+.btn.btn-kyro.btn-lg {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  font-size: 14px;
+}
+.btn.btn-on-dark {
+  color: rgb(255 255 255 / 0.75);
+  border-color: rgb(255 255 255 / 0.18);
+  background: transparent;
+}
+.btn.btn-on-dark:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* ── Plate — a captioned product screenshot on the ground ─────────────────── */
+/* An image is not a card: one hairline, the panel radius, no shadow. The
+   caption sits under it on the ground as a figure caption. The hover is a quiet
+   one-shot rise of the hairline to ink (the image itself never moves). */
+.plate {
+  margin: 0;
+  min-width: 0;
+}
+.plate-frame {
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgb(var(--hair) / 0.12);
+  border-radius: var(--r-panel);
+  background: #ffffff;
+  transition: border-color 0.2s ease;
+}
+.plate:hover .plate-frame {
+  border-color: rgb(var(--hair) / 0.3);
+}
+.plate-frame > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.plate-cap {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.plate-cap > b {
+  flex: none;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+}
+
+/* Aside layout — the caption is a margin note beside the image (md+): a hairline
+   over a Garamond title and the caption in ink-2, aligned to the image top.
+   One side only (caption left): the margin column reads down the page like a
+   ledger's notes, the images stack in one column. */
+@media (min-width: 768px) {
+  .plate-aside {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+    column-gap: 2.5rem;
+    align-items: start;
+  }
+  .plate-aside > .plate-cap {
+    grid-column: 1;
+    grid-row: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0;
+    padding-top: 0.875rem;
+    border-top: 1px solid rgb(var(--hair) / 0.12);
+    font-size: 15px;
+    line-height: 22px;
+  }
+  .plate-aside > .plate-cap > b {
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 28px;
+    font-weight: 500;
+  }
+  .plate-aside > .plate-frame {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* ── Ruled index — a grid of figures divided by hairlines, no boxes ───────── */
+/* Cells draw their own top rule and (after the first column) a left rule, so
+   the grid reads as a ledger page, not a table of cards. 3-up by default;
+   .ruled-index-2 / .ruled-index-4 for the other counts; one column on phones. */
+.ruled-index {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.ruled-index-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ruled-index-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ruled-index > * {
+  min-width: 0;
+  padding: 1.25rem 1.5rem 1.25rem 0;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+.ruled-index > *:not(:nth-child(3n + 1)),
+.ruled-index-2 > *:nth-child(3n + 1):not(:nth-child(2n + 1)),
+.ruled-index-4 > *:nth-child(3n + 1):not(:nth-child(4n + 1)) {
+  padding-left: 1.5rem;
+  border-left: 1px solid rgb(var(--hair) / 0.1);
+}
+.ruled-index-2 > *:nth-child(2n + 1),
+.ruled-index-4 > *:nth-child(4n + 1) {
+  padding-left: 0;
+  border-left: 0;
+}
+@media (max-width: 767px) {
+  .ruled-index,
+  .ruled-index-2,
+  .ruled-index-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ruled-index > * {
+    padding-left: 0 !important;
+    padding-right: 0;
+    border-left: 0 !important;
+  }
+}
+

@@ -7,7 +7,10 @@
 // The transcript is decorative theatre: aria-hidden + `inert` (React 19) so
 // none of the real buttons inside are reachable; the adjacent sr-only <p>
 // carries the meaning. AnimatePresence mode="wait" keyed on scenarioIndex
-// gives the loop a clean fade-out → fresh-mount reset.
+// gives each scenario hand-off a clean fade-out → fresh-mount reset; the three
+// scenarios play ONCE and the last one's finished frame stays (no loop).
+// Rendered inside the hero's Panel: a header row on a hairline, the transcript
+// on white, a faux composer on a hairline — no tinted slab, no pulsing dot.
 // ─────────────────────────────────────────────────────────────────────────────
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUp, Mic } from 'lucide-react'
@@ -42,12 +45,12 @@ export default function PennyDemo() {
         ref={frameRef}
         aria-hidden="true"
         inert
-        className="flex h-[480px] flex-col rounded-xl bg-cream"
+        className="flex h-[480px] flex-col bg-white"
       >
         {/* Header — the real owl, driven by the script. It stays perched in the
             header (no flight in a chat header); the script's glance becomes the
             facing direction, and its blink loop is ignored by the owl. */}
-        <div className="flex items-center gap-3 border-b border-rule/60 px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-hair px-5 py-2.5">
           <PennyAvatar
             size={44}
             active
@@ -56,14 +59,14 @@ export default function PennyDemo() {
             celebrate={state.celebrate}
             speaking={state.speaking}
           />
-          <p className="flex items-center gap-2 font-serif text-[15px] font-semibold text-navy">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
             KYRO · AI Chief of Staff
-            <span className="h-2 w-2 rounded-full bg-gold shadow-glow motion-safe:animate-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-penny" />
           </p>
         </div>
 
         {/* Transcript — newest content pinned to the bottom, clipping at the top. */}
-        <div className="flex flex-1 flex-col justify-end overflow-hidden px-4 py-3">
+        <div className="flex flex-1 flex-col justify-end overflow-hidden px-5 py-3">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={scenarioIndex}
@@ -89,7 +92,7 @@ export default function PennyDemo() {
                   {/* Gold click-pulse over the Confirm button as the script "clicks". */}
                   {state.clickPulse && (
                     <motion.span
-                      className="pointer-events-none absolute bottom-3 left-14 h-9 w-9 rounded-full bg-gold/70"
+                      className="pointer-events-none absolute bottom-3 left-14 h-9 w-9 rounded-full bg-penny/70"
                       initial={{ scale: 0.5, opacity: 0.9 }}
                       animate={{ scale: 1.5, opacity: 0 }}
                       transition={{ duration: 0.45, ease: 'easeOut' }}
@@ -102,12 +105,12 @@ export default function PennyDemo() {
         </div>
 
         {/* Faux composer strip — pure decoration. */}
-        <div className="flex items-center gap-2 border-t border-rule/60 px-3 py-2.5">
-          <span className="flex-1 select-none rounded-full border border-rule/70 bg-white px-3.5 py-2 text-[13px] text-muted">
+        <div className="flex items-center gap-2 border-t border-hair px-4 py-2.5">
+          <span className="flex-1 select-none rounded-md border border-hair/[.18] bg-white px-3 py-2 text-[13px] text-ink2">
             Ask KYRO anything…
           </span>
-          <Mic size={16} className="shrink-0 text-muted" />
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold-gradient text-navy">
+          <Mic size={16} className="shrink-0 text-ink2" />
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-penny text-ink">
             <ArrowUp size={15} />
           </span>
         </div>

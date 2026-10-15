@@ -1,168 +1,109 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// BentoWall — "the platform, today": a live bento grid under the Orbit where
-// every cell runs a real micro-demo on loop. Content states CURRENT platform
-// truths (QBO diocesan split, SIS connectors, NBOA packet, self-measuring
-// strategy, org console…) — no vaporware. Cells cascade in with a 3-D tilt
-// spring (whileInView, once); the loops are CSS keyframes (landing-orbit.css)
-// behind prefers-reduced-motion. Decorative visuals are aria-hidden; each
-// cell's meaning is carried by its text.
+// BentoWall — "the platform, today" (#platform). Premium UI P5: the old bento
+// of frosted cells, each running a looping micro-mock, is now the product
+// itself: REAL screenshots of the current app (Plate) — Home as the lead plate,
+// then Finance, Analytics and Accreditation cropped to their content with a
+// margin-note caption — followed by a ruled index of the
+// rest of the platform (hairlines, no boxes). Every claim is a CURRENT platform
+// truth (QBO diocesan split, SIS connectors, NBOA packet, self-measuring
+// strategy, org console…) — no vaporware. Motion: one-shot reveals only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import {
-  Sparkles,
-  BarChart3,
-  RefreshCw,
-  Bot,
-  ListChecks,
-  GraduationCap,
-  FileBarChart2,
-  Target,
-  Building2,
-  Library,
-} from 'lucide-react'
-import '../../styles/landing-orbit.css'
+import { BarChart3, RefreshCw, Bot, ListChecks, GraduationCap, FileBarChart2, Target, Building2, Library } from 'lucide-react'
+import SectionHead from './SectionHead.jsx'
+import Plate from './Plate.jsx'
+import { EASE } from './Reveal.jsx'
+import '../../styles/pending/p5-landing.css'
 
-const BRIEF_LINES = [
-  { hue: '#FF6B5C', text: 'Cash days slipped below 90 — see June actuals' },
-  { hue: '#d4b47a', text: 'Accreditation Std 4 evidence due in 12 days' },
-  { hue: '#2563EB', text: 'Boiler service contract renews Friday — task created' },
+const PLATES = [
+  {
+    name: 'finance',
+    height: 884,
+    title: 'Finance',
+    caption: 'Statements, analytics, budget and cash on one ruled page.',
+    alt: 'The KYRO Finance overview: revenue, expense and change in net assets beside operating margin, days cash and reserve',
+  },
+  {
+    name: 'scorecard',
+    height: 932,
+    title: 'Analytics',
+    caption: 'Every metric against its target, attention first.',
+    alt: 'The KYRO Analytics scorecard: each metric with its target, value, change and status',
+  },
+  {
+    name: 'accreditation',
+    height: 790,
+    title: 'Accreditation',
+    caption: 'Readiness against your accreditor, with the fastest path to the next tier.',
+    alt: 'The KYRO Accreditation overview: documented and defensible coverage, projected index and the fastest path of standards',
+  },
 ]
 
-const CELL = 'relative overflow-hidden rounded-2xl border border-navy/10 bg-white/75 p-5 shadow-[0_16px_40px_-22px_rgba(16,28,61,0.3)] backdrop-blur-sm'
-const HEAD = 'mb-3 flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[#7a5e00]'
-
-function Cell({ i, span, children }) {
-  const reduce = useReducedMotion()
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 46, rotateX: 9 }}
-      whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.7, delay: reduce ? 0 : (i % 3) * 0.09, ease: [0.16, 1.2, 0.3, 1] }}
-      style={{ transformPerspective: 900 }}
-      className={`${CELL} ${span}`}
-    >
-      {children}
-    </motion.div>
-  )
-}
+const INDEX = [
+  { Icon: BarChart3, label: 'Peer benchmarks', body: 'Compare with similar schools by size band, county, type and grade span.' },
+  { Icon: RefreshCw, label: 'QuickBooks sync', body: 'Live sync. One diocesan company file splits into per-school books.' },
+  { Icon: Bot, label: 'Ask KYRO', body: 'Voice in, files in, records out. Every action is confirmed first and reversible.' },
+  { Icon: ListChecks, label: 'Tasks', body: 'Any briefing item can become assigned work, with recurring tasks that come due.' },
+  { Icon: GraduationCap, label: 'Enrollment intelligence', body: 'SIS rosters via OneRoster CSV or Blackbaud SKY, matched to your students by name.' },
+  { Icon: FileBarChart2, label: 'Board reports', body: 'An NBOA-style finance-committee packet, one click from a trial balance.' },
+  { Icon: Target, label: 'Strategic planning', body: 'Goals bound to live metrics and graded by the actuals. The plan measures itself.' },
+  { Icon: Building2, label: 'Dioceses & networks', body: 'Every school synced, compared and consolidated in one console, with org-wide statements.' },
+  { Icon: Library, label: 'Knowledge', body: 'Drop any document. KYRO files it to the right module and it stays searchable.' },
+]
 
 export default function BentoWall() {
   const reduce = useReducedMotion()
-  // Briefing cell: lines reveal one by one, then reset — a living inbox.
-  const [shown, setShown] = useState(1)
-  useEffect(() => {
-    if (reduce) { setShown(BRIEF_LINES.length); return undefined }
-    const t = setInterval(() => setShown((s) => (s >= BRIEF_LINES.length ? 1 : s + 1)), 1900)
-    return () => clearInterval(t)
-  }, [reduce])
-
   return (
-    <section id="platform" aria-labelledby="bento-h2" className="scroll-mt-20 bg-transparent py-24">
-      <div className="mx-auto max-w-5xl px-5 sm:px-8">
-        <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">The platform, today</p>
-        <h2 id="bento-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
-          Everything on board — live.
-        </h2>
+    <section id="platform" aria-labelledby="bento-h2" className="scroll-mt-20 py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <SectionHead
+          id="bento-h2"
+          kicker="The platform, today"
+          title="Everything on board, live."
+          sub="These are the screens a school sees today, shown with sample data. Every module reads from the same numbers."
+        />
 
-        <div className="mt-11 grid grid-cols-2 gap-3.5 sm:grid-cols-6">
-          {/* 1 · Daily briefing */}
-          <Cell i={0} span="col-span-2 sm:col-span-3">
-            <h5 className={HEAD}><Sparkles size={13} /> Daily briefing</h5>
-            {BRIEF_LINES.map((l, i) => (
-              <div
-                key={l.text}
-                className="flex items-center gap-2.5 border-t border-navy/10 py-2 text-[13px] text-navy/85 transition-all duration-500"
-                style={{ opacity: i < shown ? 1 : 0, transform: i < shown ? 'none' : 'translateY(8px)' }}
+        {/* Lead plate: Home — the daily briefing and every module. */}
+        <Plate
+          className="mt-12"
+          name="home"
+          title="Home"
+          caption="The daily briefing and every module, prioritized across all eight domains and shaped to your role."
+          alt="The KYRO Home screen: the daily briefing with operating margin, tuition discount and student-teacher ratio above a grid of module tiles"
+          sizes="(min-width: 1152px) 1088px, calc(100vw - 40px)"
+        />
+
+        {/* The rest of the lead modules: each shot is cropped to its content
+            (no app chrome) and shown at ~3/4 of the column with its caption as
+            a margin note, so the product's own type stays readable. */}
+        <div className="mt-16 space-y-14 md:space-y-16">
+          {PLATES.map((p) => (
+            <Plate key={p.name} {...p} layout="aside" sizes="(min-width: 1152px) 788px, (min-width: 768px) 72vw, calc(100vw - 40px)" />
+          ))}
+        </div>
+
+        {/* The rest of the platform — a ruled index, no cells. */}
+        <div className="sec mt-16">
+          <div className="sec-head">
+            <h3 className="sec-label">Also in the platform</h3>
+            <span className="sec-rule" aria-hidden="true" />
+          </div>
+          <ul className="ruled-index">
+            {INDEX.map((item, i) => (
+              <motion.li
+                key={item.label}
+                initial={reduce ? false : { opacity: 0, y: 10 }}
+                whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : (i % 3) * 0.06 }}
               >
-                <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full" style={{ background: l.hue }} />
-                {l.text}
-              </div>
+                <p className="flex items-center gap-2 text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-ink2">
+                  <item.Icon size={14} strokeWidth={1.75} aria-hidden="true" /> {item.label}
+                </p>
+                <p className="mt-2 text-[15px] leading-[22px] text-ink">{item.body}</p>
+              </motion.li>
             ))}
-            <p className="mt-2 text-[12px] text-muted">Prioritized across all eight domains — shaped to your role.</p>
-          </Cell>
-
-          {/* 2 · Analytics + peers */}
-          <Cell i={1} span="col-span-2 sm:col-span-3">
-            <h5 className={HEAD}><BarChart3 size={13} /> Analytics · peer benchmarked</h5>
-            <svg className="w-full" height="64" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
-              <path d="M6 54 L56 47 L106 50 L156 34 L206 38 L256 18 L294 10" fill="none" stroke="rgba(16,28,61,.15)" strokeWidth="2" />
-              <path className="bw-spark" d="M6 54 L56 47 L106 50 L156 34 L206 38 L256 18 L294 10" fill="none" stroke="#d4b47a" strokeWidth="2.6" strokeLinecap="round" />
-            </svg>
-            <p className="mt-2 text-[12px] text-muted">Compare with similar schools — size band, county, type and grade span.</p>
-          </Cell>
-
-          {/* 3 · QuickBooks */}
-          <Cell i={0} span="col-span-1 sm:col-span-2">
-            <h5 className={HEAD}><RefreshCw size={13} /> QuickBooks sync</h5>
-            <div aria-hidden="true" className="bw-pulse relative mx-auto my-2 flex h-14 w-14 items-center justify-center rounded-full">
-              <RefreshCw size={22} className="text-navy/75" />
-            </div>
-            <p className="text-center text-[12px] text-muted">Live sync — one diocesan file splits into per-school books.</p>
-          </Cell>
-
-          {/* 4 · Ask Penny */}
-          <Cell i={1} span="col-span-1 sm:col-span-2">
-            <h5 className={HEAD}><Bot size={13} /> Ask KYRO</h5>
-            <div aria-hidden="true" className="bw-type flex gap-1.5 py-2.5">
-              <i className="h-2 w-2 rounded-full bg-penny" /><i className="h-2 w-2 rounded-full bg-penny" /><i className="h-2 w-2 rounded-full bg-penny" />
-            </div>
-            <p className="text-[12px] text-muted">Voice in, files in — records out. Every action reversible.</p>
-          </Cell>
-
-          {/* 5 · Tasks */}
-          <Cell i={2} span="col-span-2 sm:col-span-2">
-            <h5 className={HEAD}><ListChecks size={13} /> Tasks</h5>
-            <div className="flex items-center gap-2.5 py-1.5" aria-hidden="true">
-              <span className="bw-tickbox relative h-5 w-5 flex-none rounded-md border-2 border-penny after:absolute after:inset-[3px] after:scale-0 after:rounded-sm after:bg-penny after:content-['']" />
-              <s className="bw-strike text-[13.5px] text-navy/85 [text-decoration-color:transparent]">Chase June invoices</s>
-            </div>
-            <p className="text-[12px] text-muted">Creates itself from the briefing — every attention item can become work assigned.</p>
-          </Cell>
-
-          {/* 6 · Enrollment */}
-          <Cell i={0} span="col-span-1 sm:col-span-2">
-            <h5 className={HEAD}><GraduationCap size={13} /> Enrollment intelligence</h5>
-            <b className="font-serif text-[34px] leading-none text-navy">412</b>
-            <p className="mt-1.5 text-[12px] text-muted">SIS rosters via OneRoster CSV or Blackbaud SKY — matched to your students by name.</p>
-          </Cell>
-
-          {/* 7 · Board packet */}
-          <Cell i={1} span="col-span-1 sm:col-span-2">
-            <h5 className={HEAD}><FileBarChart2 size={13} /> Board reports</h5>
-            <b className="font-serif text-[34px] leading-none text-navy">4<span className="text-[16px] text-navy/50"> statements</span></b>
-            <p className="mt-1.5 text-[12px] text-muted">NBOA-style finance-committee packet — one click from a trial balance.</p>
-          </Cell>
-
-          {/* 8 · Strategy */}
-          <Cell i={2} span="col-span-2 sm:col-span-2">
-            <h5 className={HEAD}><Target size={13} /> Strategic planning</h5>
-            <div aria-hidden="true" className="my-2 h-2 w-full overflow-hidden rounded-full bg-navy/10">
-              <span className="bw-goal block h-full rounded-full bg-gradient-to-r from-penny to-penny-pale" style={{ width: '8%' }} />
-            </div>
-            <p className="text-[12px] text-muted">Metric-bound goals graded by the live actuals — the plan measures itself.</p>
-          </Cell>
-
-          {/* 9 · Diocese network */}
-          <Cell i={0} span="col-span-2 sm:col-span-4">
-            <h5 className={HEAD}><Building2 size={13} /> Diocese &amp; networks</h5>
-            <div aria-hidden="true" className="flex items-center justify-center gap-3.5 py-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <i key={i} className="bw-dot h-3.5 w-3.5 rounded-full bg-navy/15" style={{ '--bw-delay': `${i * 0.3}s` }} />
-              ))}
-            </div>
-            <p className="text-center text-[12px] text-muted">
-              Every school synced, compared and consolidated — one console, org-wide statements, member access without swapping accounts.
-            </p>
-          </Cell>
-
-          {/* 10 · Knowledge */}
-          <Cell i={1} span="col-span-2 sm:col-span-2">
-            <h5 className={HEAD}><Library size={13} /> Knowledge</h5>
-            <b className="font-serif text-[34px] leading-none text-navy">∞<span className="text-[16px] text-navy/50"> memory</span></b>
-            <p className="mt-1.5 text-[12px] text-muted">Drop any document — KYRO files it to the right module and it's searchable forever.</p>
-          </Cell>
+          </ul>
         </div>
       </div>
     </section>

@@ -1,12 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// LandingPage — the public marketing homepage at "/". Composition (2026-07
-// redesign): video + hero/Penny demo stay; everything beneath is now the ORBIT
-// set-piece (pinned 3-D system — eight domains dock into Penny and collapse
-// into the briefing) followed by the live BENTO wall (current platform truths,
-// every cell running its micro-demo), then the diocese band, licensing note and
-// the 7:02 finale. The old day-timeline acts (LedgerSpine/ActSection/
-// IngestScrolly/DomainPlates) are retired from the composition but kept in the
-// tree for reference. Default export, loaded via React.lazy from App.jsx.
+// LandingPage — the public marketing homepage at "/". Premium UI P5: the app's
+// "ledger" system at editorial scale. ONE ink band (the hero video + its
+// straddling headline card); everything after it sits on the page ground,
+// divided by hairline section rules — no frosted cards, no glass except the
+// nav once scrolled, no infinite loops (the owl's idle is the one exception).
+//
+// Composition: video + hero/KYRO demo → the ORBIT set-piece (pinned; eight
+// domains dock into KYRO and collapse into the briefing) → the platform as
+// REAL product screenshots + a ruled index → TB → four statements → the cash
+// forecast workbook → the network roll-up → the one-click board packet → the
+// privacy statement → footer. Default export, loaded via React.lazy (App.jsx).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useState } from 'react'
 import LandingNav from './LandingNav.jsx'
@@ -20,40 +23,37 @@ import OrgCommandShow from './OrgCommandShow.jsx'
 import BoardReadyShow from './BoardReadyShow.jsx'
 import LandingFooter from './LandingFooter.jsx'
 import TrustBar from './TrustBar.jsx'
+import '../../styles/pending/p5-landing.css'
 
 export default function LandingPage() {
-  // The fixed nav stays hidden until the hero's TV-bloom "powers on". The
-  // callback is memoized so the hero's reveal timer isn't reset each phase.
+  // The fixed nav stays hidden until the hero video settles. The callback is
+  // memoized so the hero's reveal timer isn't reset each phase.
   const [navShown, setNavShown] = useState(false)
   const revealNav = useCallback(() => setNavShown(true), [])
 
   return (
-    // Light-blue page ground: the hero's transparent straddle block used to
-    // reveal the root between the video and the orbit; the whole page body now
-    // shares the orbit's light-blue ground (navs/footer keep their navy).
-    <div className="bg-[#e9f0fb] text-ink">
+    <div className="bg-ground text-ink">
       <LandingNav show={navShown} />
       <main id="main">
-        {/* The product video OPENS the page (cinematic entrance); the headline
-            hero now plays second, under it. VideoHero also reveals the fixed nav
-            so it doesn't wait for the below-the-fold hero intro. */}
+        {/* The product video OPENS the page; the headline card straddles its
+            lower edge. VideoHero also reveals the fixed nav. */}
         <VideoHero onShown={revealNav} />
         <LandingHero onIntroOpen={revealNav} />
-        {/* The set-piece: eight domains dock into Penny, then collapse into the
+        {/* The set-piece: eight domains dock into KYRO, then collapse into the
             morning briefing. */}
         <OrbitScrolly />
-        {/* The breadth: every current capability as a live bento cell. */}
+        {/* The breadth: real product screens + a ruled index of the rest. */}
         <BentoWall />
-        {/* TB → four statements, with the auto-cycling live example. */}
+        {/* TB → four statements, stepping through once. */}
         <TbToStatements />
-        {/* The self-typing QuickBooks cash forecast — dark cinema band. */}
+        {/* The self-typing QuickBooks cash forecast. */}
         <CashForecastCinema />
-        {/* Six schools stream into one superintendent console. */}
+        {/* Six schools roll up into one superintendent view. */}
         <OrgCommandShow />
-        {/* The board-ready path: slideshow + the demo packet. */}
+        {/* The board-ready path: the one-click packet. */}
         <BoardReadyShow />
+        <TrustBar />
       </main>
-      <TrustBar />
       <LandingFooter />
     </div>
   )

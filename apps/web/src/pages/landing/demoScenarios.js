@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// demoScenarios.js — the scripted Penny hero demo as DATA. Three looping
-// scenarios, each a sorted beat timeline `{ at, patch?, type?, advance? }`:
+// demoScenarios.js — the scripted Penny hero demo as DATA. Three scenarios,
+// played once in order, each a sorted beat timeline `{ at, patch?, type?, advance? }`:
 //   patch   → shallow-merged into the demo state at `at` ms
 //   type    → start a bounded typewriter into `field` at `ms` per char
 //             (cancelled early if a later patch writes the same field)

@@ -1,17 +1,21 @@
-// LandingNav — fixed marketing nav. Transparent over the navy hero; past 24px
-// of scroll it gains a navy-deep/85 blur + hairline so it stays readable over
-// the light acts. Brand block mirrors AppShell's (gold square + serif name).
+// LandingNav — fixed marketing nav. Transparent over the hero video (white
+// ink); past 24px of scroll it becomes the page's ONE glass surface: ground at
+// 85% + blur + a hairline, ink type — the same top strip the app uses. Brand
+// block = the KYRO mark + a set wordmark (the lockup's white lettering vanishes
+// on the light ground). Actions are the surface Button.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
+import { Button } from '../../components/ui/surface/index.js'
 import { NAV } from './landingContent.js'
 import { useAuth } from '../../context/AuthContext.jsx'
+import '../../styles/pending/p5-landing.css'
 
-const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
+const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 focus-visible:ring-offset-2'
 
-// `show` gates the nav's entrance: on the landing it stays hidden over the hero's
-// dark pre-"power-on" field and reveals once the hero's TV-bloom opens.
+// `show` gates the nav's entrance: it stays hidden for the hero video's first
+// beat and reveals once the video has settled.
 export default function LandingNav({ show = true }) {
   const reduce = useReducedMotion()
   const { isAuthenticated } = useAuth()
@@ -24,39 +28,41 @@ export default function LandingNav({ show = true }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  const link = scrolled ? 'text-ink2 hover:text-ink' : 'text-white/80 hover:text-white'
+
   return (
     <motion.header
       initial={reduce ? false : { opacity: 0, y: -10 }}
       animate={{ opacity: show ? 1 : 0, y: show ? 0 : -10 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${
-        show ? '' : 'pointer-events-none'
-      } ${
-        scrolled
-          ? 'border-b border-white/10 bg-navy-deep/85 backdrop-blur-md'
-          : 'border-b border-transparent bg-transparent'
+      className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${show ? '' : 'pointer-events-none'} ${
+        scrolled ? 'border-b border-hair bg-ground/85 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
       }`}
     >
       <a
         href="#main"
-        className={`sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-navy-deep focus:px-4 focus:py-2 focus:text-[13px] focus:font-semibold focus:text-white ${FOCUS_RING}`}
+        className={`sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-ink focus:px-4 focus:py-2 focus:text-[13px] focus:font-semibold focus:text-white ${FOCUS_RING}`}
       >
         Skip to content
       </a>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
-        {/* Brand block (AppShell language; links to the landing root). */}
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-8">
         <Link
           to="/"
           aria-label="KYRO — home"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className={`flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+          className={`flex min-w-0 items-center gap-2 rounded-md py-1 ${FOCUS_RING}`}
         >
-          <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
+          <img src="/kyro-mark.png" alt="" width="44" height="44" className="h-11 w-11 shrink-0 scale-[1.35] object-contain" />
+          <span
+            className={`text-[15px] font-semibold tracking-[0.32em] transition-colors duration-300 ${scrolled ? 'text-ink' : 'text-white'}`}
+          >
+            KYRO
+          </span>
         </Link>
 
         {/* Section anchors are md+ only; Sign in + Get started stay visible on
-            phones (compact sizing) so the mobile header always has actions. */}
-        <nav aria-label="Landing" className="flex shrink-0 items-center gap-3.5 md:gap-6">
+            phones so the mobile header always has actions. */}
+        <nav aria-label="Landing" className="flex shrink-0 items-center gap-3 md:gap-6">
           <div className="hidden items-center gap-6 md:flex">
             {NAV.anchors.map((a) => (
               <a
@@ -73,7 +79,7 @@ export default function LandingNav({ show = true }) {
                   }
                   document.getElementById(a.href.slice(1))?.scrollIntoView({ behavior })
                 }}
-                className={`rounded-md text-[13px] font-semibold text-white/70 transition-colors hover:text-gold-light ${FOCUS_RING}`}
+                className={`rounded-sm text-[13px] font-semibold transition-colors ${link} ${FOCUS_RING}`}
               >
                 {a.label}
               </a>
@@ -82,26 +88,17 @@ export default function LandingNav({ show = true }) {
           {isAuthenticated ? (
             // Signed-in visitors (they can reach the homepage via the app logo) get
             // a single clear way back into the product instead of Sign in / Get started.
-            <Link
-              to="/app"
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl btn-cta px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
-            >
+            <Button to="/app" variant="primary">
               Return to dashboard <ArrowRight size={14} aria-hidden />
-            </Link>
+            </Button>
           ) : (
             <>
-              <Link
-                to={NAV.signIn.to}
-                className={`rounded-md text-[13px] font-semibold text-white/85 transition-colors hover:text-gold-light ${FOCUS_RING}`}
-              >
+              <Link to={NAV.signIn.to} className={`rounded-sm text-[13px] font-semibold transition-colors ${link} ${FOCUS_RING}`}>
                 {NAV.signIn.label}
               </Link>
-              <Link
-                to={NAV.getStarted.to}
-                className={`whitespace-nowrap rounded-xl btn-cta px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
-              >
+              <Button to={NAV.getStarted.to} variant="primary">
                 {NAV.getStarted.label}
-              </Link>
+              </Button>
             </>
           )}
         </nav>
