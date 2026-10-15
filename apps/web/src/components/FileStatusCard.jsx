@@ -86,12 +86,14 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
 
   const { id, fileName, status } = file
   const fromHistory = !!file.fromHistory
+  // A ruled column, not a card-in-panel: the 2px top rule carries the state
+  // (risk = parse error, watch = accounts to review, hairline = fine).
   const ring =
     status === 'error'
-      ? 'border-[#e0a0a0]'
+      ? 'border-[rgb(var(--c-risk))]'
       : needsReview
-        ? 'border-gold shadow-glow'
-        : 'border-border'
+        ? 'border-[rgb(var(--c-watch))]'
+        : 'border-hair'
 
   return (
     <motion.div
@@ -100,24 +102,24 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
       animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.26, ease: [0.22, 0.8, 0.2, 1] }}
-      className={`relative flex w-full flex-col gap-3 rounded-2xl border-2 bg-white p-4 shadow-card ${ring}`}
+      className={`relative flex w-full flex-col gap-3 border-t-2 pt-3 ${ring}`}
     >
       {/* header */}
       <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-section text-navy">
+        <span className="mt-0.5 flex shrink-0 text-ink2">
           <FileSpreadsheet size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-navy" title={fileName}>
+          <p className="truncate text-sm font-semibold text-ink" title={fileName}>
             {fileName}
           </p>
           {status === 'parsing' && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-[14px] italic text-muted">
+            <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] italic text-ink2">
               <Loader2 size={12} className="animate-spin" /> Parsing…
             </p>
           )}
           {status === 'error' && (
-            <p className="mt-0.5 text-[14px] text-danger">{file.error}</p>
+            <p className="mt-0.5 text-[12.5px] text-ink">{file.error}</p>
           )}
         </div>
         {canEdit && !fromHistory && (
@@ -125,7 +127,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
             type="button"
             aria-label={`Remove ${fileName}`}
             onClick={() => removeFile(id)}
-            className="rounded-md p-1 text-muted transition-colors hover:bg-section hover:text-danger"
+            className="rounded-md p-1 text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
           >
             <X size={16} />
           </button>
@@ -134,16 +136,16 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
 
       {/* "from saved history" indicator for an auto-loaded comparative slot. */}
       {fromHistory && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 text-[14px] font-medium text-[#7a5e00]">
+        <div className="flex flex-wrap items-center gap-2 border-l-2 border-hair/[0.3] pl-3 text-[13px] font-medium text-ink">
           <span className="inline-flex items-center gap-1.5">
-            <History size={13} className="text-gold" /> From saved history
+            <History size={13} className="text-ink2" /> From saved history
             {file.historyPeriodLabel ? ` · ${file.historyPeriodLabel}` : ''}
           </span>
           {canEdit && onOverride && (
             <button
               type="button"
               onClick={onOverride}
-              className="font-semibold text-gold hover:underline"
+              className="font-semibold text-ink2 hover:underline"
             >
               Upload to override
             </button>
@@ -154,8 +156,8 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
       {/* parsing skeleton */}
       {status === 'parsing' && (
         <div className="space-y-2">
-          <div className="shimmer-bar h-3.5 w-2/3" />
-          <div className="shimmer-bar h-3.5 w-1/2" />
+          <div className="h-3.5 w-2/3 animate-pulse rounded-[4px] bg-ink/[0.06]" />
+          <div className="h-3.5 w-1/2 animate-pulse rounded-[4px] bg-ink/[0.06]" />
         </div>
       )}
 
@@ -164,12 +166,12 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
         <>
           {/* Metric chips: clean 2-column grid on phones, inline wrap at sm+. */}
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-            <span className="inline-flex w-full items-center justify-center rounded-full bg-section px-2.5 py-1 text-[14px] font-semibold text-navy sm:w-auto sm:justify-start">
+            <span className="pill pill-count w-full justify-center sm:w-auto">
               <CountUp value={file.rows.length} />&nbsp;accounts
             </span>
 
-            <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-section px-2.5 py-1 text-[14px] text-muted sm:w-auto sm:justify-start">
-              <CalendarDays size={12} className="text-gold" />
+            <span className="pill w-full justify-center text-ink2 sm:w-auto">
+              <CalendarDays size={12} className="text-ink2" />
               {formatShortDate(file.metadata?.periodEndDate)}
             </span>
 
@@ -178,12 +180,12 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                 initial={reduce ? false : { scale: 1.35, rotate: -8, opacity: 0 }}
                 animate={{ scale: 1, rotate: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 16 }}
-                className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[14px] font-semibold text-emerald-700 sm:w-auto sm:justify-start"
+                className="pill pill-status tone-good w-full justify-center sm:w-auto"
               >
                 <CheckCircle2 size={13} /> Balanced
               </motion.span>
             ) : (
-              <span className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-[#fdeeee] px-2.5 py-1 text-[14px] font-semibold text-danger sm:w-auto sm:justify-start">
+              <span className="pill pill-status tone-risk w-full justify-center sm:w-auto">
                 <AlertOctagon size={13} /> Out of balance
               </span>
             )}
@@ -201,7 +203,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                   onClick={() => setShowReview((s) => !s)}
                   aria-expanded={showReview}
                   title="Show the accounts that need review"
-                  className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-[#fff8e6] px-2.5 py-1 text-[14px] font-semibold text-[#7a5e00] transition-colors hover:bg-[#fdeec2] sm:w-auto sm:justify-start"
+                  className="pill pill-status tone-watch w-full cursor-pointer justify-center !h-auto py-1 text-[12px] hover:border-hair/[0.3] sm:w-auto sm:justify-start"
                 >
                   <AlertTriangle size={12} />{' '}
                   <span aria-live="polite">
@@ -229,10 +231,10 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                 initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
                 animate={reduce ? { opacity: 1 } : { opacity: 1, height: 'auto' }}
                 exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                className="overflow-hidden rounded-xl border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-3.5 py-3"
+                className="overflow-hidden border-l-2 border-watch bg-white py-2 pl-3.5 pr-1"
               >
                 {reviewCount > 0 && (
-                  <p className="text-[13px] leading-relaxed text-[#7a5e00]">
+                  <p className="text-[13px] leading-relaxed text-ink">
                     We don&rsquo;t know what these accounts are yet, so they&rsquo;re{' '}
                     <span className="font-semibold">left out of your statements</span> until
                     somebody says. Tell us once and every future upload knows:
@@ -257,13 +259,13 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                       }
                       mapAccounts(entries)
                     }}
-                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/50 bg-gold/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#7a5e00] transition-colors hover:border-gold hover:bg-gold/20"
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-hair bg-ink/[0.04] px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:border-hair/[0.3] hover:bg-ink/[0.06]"
                   >
                     Use all {suggestedCount} suggestions
                   </button>
                 )}
 
-                <div className="mt-1 divide-y divide-[#efdfa8]">
+                <div className="mt-1 divide-y divide-hair">
                   <AnimatePresence initial={false}>
                     {unmapped.map((r) => (
                       <motion.div
@@ -296,9 +298,9 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                     initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
                     animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700"
+                    className="flex items-center gap-1.5 text-[13px] font-semibold text-ink"
                   >
-                    <CheckCircle2 size={14} className="text-emerald-600" /> All accounts
+                    <CheckCircle2 size={14} className="text-ink" /> All accounts
                     categorized — they&rsquo;re now in your statements.
                   </motion.p>
                 )}
@@ -307,7 +309,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
           </AnimatePresence>
 
           {needsReview && (
-            <p className="flex items-center gap-1.5 text-[14px] font-medium text-[#7a5e00]">
+            <p className="flex items-center gap-1.5 text-[14px] font-medium text-ink">
               <AlertTriangle size={12} /> Confirm this file&rsquo;s role.
             </p>
           )}
@@ -328,7 +330,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
         <button
           type="button"
           onClick={() => removeFile(id)}
-          className="self-start rounded-lg border-2 border-border px-3 py-1.5 text-[14px] font-semibold text-navy transition-colors hover:border-gold"
+          className="btn btn-secondary btn-sm self-start"
         >
           Remove
         </button>

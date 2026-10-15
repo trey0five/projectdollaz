@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import '../styles/pending/b2-finance.css'
 import { Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { inferPeriod } from '@finrep/ingestion'
@@ -43,17 +44,17 @@ export default function PeriodControls() {
 
   if (collapsed) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-border bg-white px-4 py-3.5 shadow-card">
-        <p className="text-[14px] text-navy">
-          <span className="font-semibold uppercase tracking-[0.1em] text-muted">Period:</span>{' '}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-y border-hair py-3">
+        <p className="text-small text-ink">
+          <span className="font-semibold uppercase tracking-[0.1em] text-ink2">Period:</span>{' '}
           <span className="font-semibold">{TYPE_LABEL[periodType] || 'Full Fiscal Year'}</span>{' '}
           ending <span className="font-semibold">{formatShortDate(periodDate)}</span>
-          <span className="ml-2 text-muted">· auto-detected from {byRole.cy?.fileName}</span>
+          <span className="ml-2 text-ink2">· auto-detected from {byRole.cy?.fileName}</span>
         </p>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"
+          className="btn btn-quiet btn-sm"
         >
           <Pencil size={13} /> Change
         </button>
@@ -62,28 +63,28 @@ export default function PeriodControls() {
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-5 rounded-2xl border-2 border-border bg-white p-4 shadow-card">
+    <div className="flex flex-wrap items-end gap-5 border-y border-hair py-4">
       <div className="flex flex-col">
-        <span className="mb-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span className="b2-label">
           Period End Date
         </span>
         <DatePicker
           value={periodDate}
           onChange={(v) => setPeriodDate(v)}
-          className={`cursor-pointer rounded-xl border-2 bg-white px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-gold ${
-            periodDate ? 'border-border' : 'border-gold shadow-glow'
+          className={`b2-input w-auto cursor-pointer ${
+            periodDate ? 'border-hair/[0.18]' : 'border-watch/70 '
           }`}
         />
       </div>
 
       <div className="flex flex-col">
-        <span className="mb-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span className="b2-label">
           Reporting Period
         </span>
         <select
           value={periodType}
           onChange={(e) => setPeriodType(e.target.value)}
-          className="cursor-pointer appearance-none rounded-xl border-2 border-border bg-white px-4 py-3.5 text-sm text-ink outline-none transition-colors focus:border-gold"
+          className="sel h-9"
         >
           <option value="ytd">Year-to-Date (YTD)</option>
           <option value="mtd">Month-to-Date (MTD)</option>
@@ -91,14 +92,14 @@ export default function PeriodControls() {
         </select>
       </div>
 
-      <div className="flex flex-col pb-1 text-[14px] text-muted">
+      <div className="flex flex-col pb-1 text-small text-ink2">
         {autoFilled && (
           <span className="italic">
             Auto-filled from {byRole.cy?.fileName}
           </span>
         )}
         {!periodDate && (
-          <span className="italic text-[#7a5e00]">
+          <span className="italic text-ink">
             Set a period-end date to preview statements.
           </span>
         )}
@@ -106,7 +107,7 @@ export default function PeriodControls() {
           <button
             type="button"
             onClick={() => setPeriodDate(detectedDate)}
-            className="self-start text-left font-semibold text-gold underline-offset-2 hover:underline"
+            className="self-start text-left font-semibold text-ink2 underline-offset-2 hover:underline"
           >
             Use detected date
           </button>

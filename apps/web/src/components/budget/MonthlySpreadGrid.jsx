@@ -96,7 +96,7 @@ function moneyCell(n, opts = {}) {
   const v = n == null ? null : Number(n)
   const isNeg = v != null && v < 0
   return (
-    <td className={`dt-num whitespace-nowrap ${opts.bold ? 'font-semibold text-ink' : 'text-ink'} ${isNeg ? 'tone-risk' : ''}`}>
+    <td key={opts.key} className={`dt-num whitespace-nowrap ${opts.bold ? 'font-semibold text-ink' : 'text-ink'} ${isNeg ? 'tone-risk' : ''}`}>
       {fmt(v)}
     </td>
   )
@@ -177,7 +177,7 @@ function renderAccountRow(a, cols, idx = 0) {
           </Pill>
         )}
       </td>
-      {Array.from({ length: cols }, (_, i) => moneyCell(a.months[i]))}
+      {Array.from({ length: cols }, (_, i) => moneyCell(a.months[i], { key: i }))}
       {moneyCell(a.annual, { bold: true })}
     </tr>
   )
@@ -190,7 +190,7 @@ function renderSubtotalRow(label, total, annual, cols, opts = {}) {
       <td className={`sticky left-[64px] z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.06em] ${opts.section ? 'text-ink' : 'text-ink2'}`}>
         {label}
       </td>
-      {Array.from({ length: cols }, (_, i) => moneyCell(total[i], { bold: true }))}
+      {Array.from({ length: cols }, (_, i) => moneyCell(total[i], { bold: true, key: i }))}
       {moneyCell(annual, { bold: true })}
     </tr>
   )
@@ -261,7 +261,7 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
           <td className="sticky left-[64px] z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
             Surplus / (Deficit)
           </td>
-          {Array.from({ length: cols }, (_, i) => moneyCell(surplus[i], { bold: true }))}
+          {Array.from({ length: cols }, (_, i) => moneyCell(surplus[i], { bold: true, key: i }))}
           {moneyCell(surplusAnnual, { bold: true })}
         </tr>
       </tfoot>

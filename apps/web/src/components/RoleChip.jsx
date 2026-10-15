@@ -77,8 +77,8 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
   }
 
   const tone = needsReview || isUnknown
-    ? 'border-gold bg-[#fff8e6] text-[#7a5e00] shadow-glow'
-    : 'border-border bg-white text-navy hover:border-gold'
+    ? 'border-watch/70 bg-white text-ink '
+    : 'border-hair/[0.18] bg-white text-ink hover:border-hair/[0.3]'
 
   return (
     <div ref={wrapRef} className="relative">
@@ -90,9 +90,9 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
         aria-expanded={open}
         onClick={() => editable && setOpen((o) => !o)}
         onKeyDown={onKeyDown}
-        className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[14px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-gold ${tone} ${editable ? '' : 'cursor-default opacity-90'}`}
+        className={`inline-flex h-7 items-center gap-1.5 rounded-[4px] border px-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 ${tone} ${editable ? '' : 'cursor-default opacity-90'}`}
       >
-        {showAuto && <Sparkles size={13} className="text-gold" aria-hidden />}
+        {showAuto && <Sparkles size={13} className="text-ink2" aria-hidden />}
         <span>{label}</span>
         {editable && (
           <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -111,7 +111,7 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.12 }}
-            className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[180px] overflow-hidden rounded-xl border-2 border-border bg-white shadow-lift"
+            className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[180px] overflow-hidden rounded-[8px] border border-hair/[0.18] bg-white shadow-float"
           >
             {ROLE_OPTIONS.map((opt, i) => {
               const selected = opt.value === role
@@ -123,10 +123,10 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
                   onMouseEnter={() => setActive(i)}
                   onClick={() => select(opt.value)}
                   className={`flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
-                    i === active ? 'bg-section text-navy' : 'text-ink'
+                    i === active ? 'bg-ground text-ink' : 'text-ink'
                   }`}
                 >
-                  <span className="flex w-4 justify-center text-gold">
+                  <span className="flex w-4 justify-center text-ink2">
                     {selected && <Check size={15} />}
                   </span>
                   {opt.label}

@@ -6,73 +6,49 @@
 // Exposed as an ARIA tablist. Reduced-motion safe (color only, no motion needed).
 // ─────────────────────────────────────────────────────────────────────────────
 import { Check } from 'lucide-react'
+import '../../../styles/pending/b2-finance.css'
 
-const HUE = '#2563eb'
-
+// Premium UI P4 (plan sketch 5): the stepper is a row of 2px progress rules on
+// the hairline — filled for done + current — with the step label and hint
+// under each; no card. Each step stays a real tab (ids `readiness-tab-<key>`
+// are the Penny/e2e anchors) wired to the panel.
 export default function ReadinessStepper({ steps, current, onGoTo, panelId }) {
   const currentIdx = steps.findIndex((s) => s.key === current)
 
   return (
-    <div
-      role="tablist"
-      aria-label="Readiness steps"
-      className="card-soft flex gap-1 overflow-x-auto p-2.5 sm:gap-2 sm:p-3"
-    >
+    <div role="tablist" aria-label="Readiness steps" className="b2-steps bg-ground py-3">
       {steps.map((s, i) => {
         const active = i === currentIdx
         const done = s.done
-        const Icon = s.Icon
         return (
-          <div key={s.key} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-            <button
-              type="button"
-              role="tab"
-              id={`readiness-tab-${s.key}`}
-              aria-selected={active}
-              aria-current={active ? 'step' : undefined}
-              aria-controls={panelId}
-              onClick={() => onGoTo(s.key)}
-              className={`group flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 ${
-                active ? 'bg-[#2563eb]/[0.08]' : 'hover:bg-navy/[0.04]'
-              }`}
-            >
-              <span
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold transition-colors ${
-                  done
-                    ? 'bg-emerald-500 text-white'
-                    : active
-                      ? 'text-white'
-                      : 'bg-navy/[0.06] text-muted'
-                }`}
-                style={active && !done ? { backgroundColor: HUE } : undefined}
-              >
-                {done ? <Check size={15} /> : Icon ? <Icon size={15} /> : i + 1}
-              </span>
-              <span className="hidden min-w-0 flex-col sm:flex">
-                <span
-                  className={`truncate text-[12.5px] font-bold uppercase tracking-[0.04em] ${
-                    active ? 'text-[#2563eb]' : done ? 'text-navy' : 'text-muted'
-                  }`}
-                >
-                  {s.label}
-                </span>
-                <span
-                  className={`truncate text-[11px] font-medium ${
-                    done ? 'text-emerald-600' : active ? 'text-navy/60' : 'text-muted/70'
-                  }`}
-                >
-                  {done ? 'Complete' : s.hint || `Step ${i + 1}`}
-                </span>
-              </span>
-            </button>
-            {i < steps.length - 1 && (
-              <span
-                aria-hidden="true"
-                className="hidden h-0.5 w-4 shrink-0 rounded-full sm:block lg:w-6"
-                style={{ backgroundColor: done ? '#10b981' : 'rgba(16,28,61,0.12)' }}
+          <button
+            key={s.key}
+            type="button"
+            role="tab"
+            id={`readiness-tab-${s.key}`}
+            aria-selected={active}
+            aria-current={active ? 'step' : undefined}
+            aria-controls={panelId}
+            onClick={() => onGoTo(s.key)}
+            className="b2-step group"
+          >
+            <span className="b2-step-rule">
+              <i
+                style={{
+                  transform: `scaleX(${done || active ? 1 : 0})`,
+                  transition: 'transform .3s ease',
+                  background: done ? 'rgb(var(--c-good))' : undefined,
+                }}
               />
-            )}
-          </div>
+            </span>
+            <span className="b2-step-label flex items-center gap-1.5 group-hover:text-ink">
+              {done ? <Check size={12} aria-label="complete" className="shrink-0" /> : <span className="tabular-nums">{i + 1}</span>}
+              <span className="truncate">{s.label}</span>
+            </span>
+            <span className="hidden truncate text-[11px] text-ink2 sm:block">
+              {done ? 'Complete' : s.hint || `Step ${i + 1}`}
+            </span>
+          </button>
         )
       })}
     </div>

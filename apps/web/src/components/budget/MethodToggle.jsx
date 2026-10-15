@@ -1,13 +1,13 @@
 // Phase 4 — Projection-method segmented control for the FY-End Forecast.
 //
-// Navy/gold segmented toggle with a framer-motion sliding pill ("flashy but
-// on-theme"). Controlled by projectionMethod ('manual' | 'rollforward') via
+// The ledger segmented control (`.seg`: ink fill on the selected option, a
+// hairline frame) under a Section rule. Controlled by projectionMethod ('manual' | 'rollforward') via
 // onMethodChange. Module-scope (no in-render component defs). Disabled when the
 // user can't edit. The two modes:
 //   • manual     — type the returning roster directly (today's behavior).
 //   • rollforward — age this year's roster up one grade with retention.
-import { motion } from 'framer-motion'
 import { ClipboardList, ArrowUpRight } from 'lucide-react'
+import { Section } from '../ui/surface/index.js'
 
 const OPTIONS = [
   {
@@ -28,20 +28,17 @@ export default function MethodToggle({ projectionMethod, onMethodChange, disable
   const method = projectionMethod === 'rollforward' ? 'rollforward' : 'manual'
 
   return (
-    <div className="card-soft p-4">
-      <div className="mb-2.5 flex items-center gap-2">
-        <h4 className="font-serif text-[15px] font-semibold text-navy">Projection method</h4>
-        <span className="text-[12px] text-muted">
+    <Section
+      label="Projection method"
+      aside={
+        <span>
           {method === 'rollforward'
             ? 'Next year’s roster is computed from this year’s grades.'
             : 'You enter next year’s returning roster directly.'}
         </span>
-      </div>
-      <div
-        role="tablist"
-        aria-label="Projection method"
-        className="relative grid grid-cols-2 gap-1.5 rounded-xl border border-rule bg-cream/60 p-1.5"
-      >
+      }
+    >
+      <div role="tablist" aria-label="Projection method" className="seg !h-auto">
         {OPTIONS.map((opt) => {
           const active = method === opt.value
           const Icon = opt.Icon
@@ -52,29 +49,19 @@ export default function MethodToggle({ projectionMethod, onMethodChange, disable
               role="tab"
               aria-selected={active}
               disabled={disabled}
+              title={opt.hint}
               onClick={() => !active && onMethodChange(opt.value)}
-              className={`relative z-10 flex flex-col items-start gap-0.5 rounded-lg px-3.5 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                active ? 'text-white' : 'text-navy hover:text-gold'
-              }`}
+              className="seg-btn !h-auto flex-col !items-start gap-0.5 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {active && (
-                <motion.span
-                  layoutId="method-toggle-pill"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  className="absolute inset-0 -z-10 rounded-lg bg-navy-gradient shadow-glow"
-                />
-              )}
-              <span className="flex items-center gap-1.5 text-[13.5px] font-semibold">
-                <Icon size={15} className={active ? 'text-gold-light' : 'text-gold'} />
+              <span className="flex items-center gap-1.5 text-[13px]">
+                <Icon size={13} aria-hidden="true" />
                 {opt.label}
               </span>
-              <span className={`text-[11.5px] ${active ? 'text-gold-light/90' : 'text-muted'}`}>
-                {opt.hint}
-              </span>
+              <span className={`text-[11px] font-medium ${active ? 'text-white/75' : 'text-ink2'}`}>{opt.hint}</span>
             </button>
           )
         })}
       </div>
-    </div>
+    </Section>
   )
 }

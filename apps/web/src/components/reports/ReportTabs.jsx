@@ -2,7 +2,7 @@
 // SAME four statement components fed a STORED snapshot bundle via ReportViewProvider
 // (instead of the live intake-derived reports). No intake, no save — view + export.
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Maximize2 } from 'lucide-react'
 import { ReportViewProvider } from '../../context/AppContext.jsx'
 import { importsApi } from '../../lib/api.js'
@@ -21,6 +21,7 @@ const TABS = [
 ]
 
 export default function ReportTabs({ bundle, school, periodId = null, dateLabel = '', periodLabel = '' }) {
+  const reduce = useReducedMotion()
   const [tab, setTab] = useState('soa')
   // Period import summaries power the drill-down drawer's "Source" section. Read
   // -only, any-active-member; tolerates failure (the Source section degrades).
@@ -63,39 +64,38 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
   return (
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
       <LineageHost bundle={bundle} imports={imports} schoolId={schoolId} periodId={periodId}>
-      <div className="no-print border-b border-rule/60 bg-white">
-        <nav className="scrollbar-none mx-auto flex w-full max-w-page items-center justify-center gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-10">
+      {/* Ink tabs on the ground (Premium UI P4): the statement axis, a 2px rule
+          under the active statement. Scrolls inside its own wrapper on a phone. */}
+      <div className="no-print scrollbar-none overflow-x-auto">
+        <div role="tablist" aria-label="Statements" className="tabs-ink min-w-max">
           {TABS.map((t) => (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[12.5px] font-semibold uppercase tracking-wide outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/60 ${
-                tab === t.key ? 'text-white' : 'text-muted hover:bg-section/70 hover:text-navy'
-              }`}
+              className="tab-ink shrink-0"
             >
-              {/* Active pill UNDER the label via paint order (never -z-10 — it would
-                  fall behind the white bar and vanish). */}
-              {tab === t.key && (
-                <motion.span
-                  aria-hidden
-                  layoutId="history-tab-pill"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  className="absolute inset-0 rounded-full bg-gold-gradient shadow-glow"
-                />
-              )}
-              <span className="relative">{t.label}</span>
+              <span className="whitespace-nowrap">{t.label}</span>
+              {tab === t.key &&
+                (reduce ? (
+                  <span className="tab-ink-rule" aria-hidden="true" />
+                ) : (
+                  <motion.span layoutId="statements-tab-rule" className="tab-ink-rule" aria-hidden="true" />
+                ))}
             </button>
           ))}
-        </nav>
+        </div>
       </div>
 
-      <main className="mx-auto max-w-page px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
+      <div className="pb-16 pt-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 12 }}
+            initial={reduce ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
           >
             <div
@@ -109,16 +109,16 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
                   setExpanded(true)
                 }
               }}
-              className="group relative cursor-zoom-in rounded-2xl outline-none ring-gold/50 focus-visible:ring-2"
+              className="group relative cursor-zoom-in rounded-[8px] outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50"
             >
               <Active />
-              <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-navy/85 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-white shadow-lift transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                <Maximize2 size={12} /> Tap to zoom
+              <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-[4px] border border-hair bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
+                <Maximize2 size={12} aria-hidden="true" /> Tap to zoom
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
-      </main>
+      </div>
 
       {/* Full-screen pinch-zoom view of the active statement (no-print). */}
       <ReportExpandOverlay

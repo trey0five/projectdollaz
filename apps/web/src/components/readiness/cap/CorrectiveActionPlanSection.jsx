@@ -153,26 +153,20 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-start gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-            <ClipboardList size={19} />
-          </span>
+          <ClipboardList size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" />
           <div>
-            <h2 className="font-serif text-xl font-semibold text-navy">Corrective Action Plan</h2>
-            <p className="text-[15px] text-muted">
+            <h2 className="font-serif text-title font-medium text-ink">Corrective Action Plan</h2>
+            <p className="text-small text-ink2">
               {canEdit
                 ? 'Pre-filled remediation for each material / reportable exception. Edit, then save.'
                 : 'Read-only — only an owner or accountant can edit the plan.'}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canEdit && hasAny && (
-            <button
-              type="button"
-              onClick={autoFill}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
-            >
-              <Sparkles size={15} /> Auto-fill from findings
+            <button type="button" onClick={autoFill} className="btn btn-secondary">
+              <Sparkles size={14} aria-hidden="true" className="text-penny" /> Auto-fill from findings
             </button>
           )}
           <CapExportButton periodId={periodId} />
@@ -180,17 +174,17 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
       </div>
 
       {loading && !data ? (
-        <div className="card-soft p-8 text-center text-[16px] text-muted">
-          Loading the corrective action plan…
+        <div className="b2-note" aria-busy="true">
+          <p>Loading the corrective action plan…</p>
         </div>
       ) : error ? (
         <FormError>{error}</FormError>
       ) : !hasAny ? (
-        <div className="card-soft border-dashed px-6 py-10 text-center">
-          <p className="font-serif text-[16px] italic text-muted">
+        <div className="b2-note">
+          <p className="b2-note-title">
             No material or reportable exceptions — nothing to remediate for this period.
           </p>
-          <p className="mt-1 text-[14px] text-muted">
+          <p>
             If a finding becomes material or reportable, a pre-filled CAP card appears here.
           </p>
         </div>
@@ -199,10 +193,8 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
           {entries.length > 0 ? (
             <CapSummaryStrip summary={summary} />
           ) : (
-            <div className="card-soft border-dashed px-6 py-8 text-center">
-              <p className="font-serif text-[16px] italic text-muted">
-                No active exceptions — only dismissed items remain for this period.
-              </p>
+            <div className="b2-note">
+              <p>No active exceptions — only dismissed items remain for this period.</p>
             </div>
           )}
 
@@ -225,14 +217,15 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
               <button
                 type="button"
                 onClick={() => setShowResolved((s) => !s)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-rule/70 bg-section/50 px-4 py-2.5 text-left transition-colors hover:border-gold/40"
+                className="flex w-full items-center justify-between gap-2 border-b border-hair py-2.5 text-left transition-colors hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]/50"
               >
-                <span className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                   Resolved / self-healed ({resolved.length})
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-muted transition-transform ${showResolved ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                  className={`text-ink2 transition-transform ${showResolved ? 'rotate-180' : ''}`}
                 />
               </button>
               {showResolved &&
@@ -256,14 +249,15 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
               <button
                 type="button"
                 onClick={() => setShowDismissed((s) => !s)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-rule/70 bg-section/50 px-4 py-2.5 text-left transition-colors hover:border-gold/40"
+                className="flex w-full items-center justify-between gap-2 border-b border-hair py-2.5 text-left transition-colors hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]/50"
               >
-                <span className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                   Dismissed ({archived.length})
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-muted transition-transform ${showDismissed ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                  className={`text-ink2 transition-transform ${showDismissed ? 'rotate-180' : ''}`}
                 />
               </button>
               {showDismissed &&
@@ -290,7 +284,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
               dirty={dirty}
               error={!!err}
               onSaveNow={saveNow}
-              className="border-t border-rule/60 pt-4"
+              className="border-t border-hair pt-4"
             />
           )}
         </>

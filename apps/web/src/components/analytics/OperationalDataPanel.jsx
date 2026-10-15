@@ -15,9 +15,9 @@ import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 
 const labelCls =
-  'mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted sm:mb-1.5 sm:text-[14px] sm:tracking-[0.14em]'
+  'mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-ink2 sm:mb-1.5 sm:text-[14px] sm:tracking-[0.14em]'
 const inputCls =
-  'w-full rounded-lg border border-border bg-white px-3 py-2 text-[16px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted sm:px-4 sm:py-2.5 sm:text-[16px]'
+  'w-full rounded-lg border border-hair/[0.18] bg-white px-3 py-2 text-[16px] text-ink outline-none transition-all focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:cursor-not-allowed disabled:bg-ink/[0.04] disabled:text-ink2 sm:px-4 sm:py-2.5 sm:text-[16px]'
 
 const toStr = (v) => (v === null || v === undefined ? '' : String(v))
 
@@ -178,16 +178,16 @@ export default function OperationalDataPanel({
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      className="card-vital p-3 sm:p-4"
+      className="panel p-3 sm:p-4"
     >
       <div className="mb-1 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 sm:gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold sm:h-9 sm:w-9">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink/[0.04] text-ink2 sm:h-9 sm:w-9">
             <ClipboardList size={16} />
           </span>
           <div>
-            <h3 className="font-serif text-[16px] font-semibold text-navy sm:text-lg">Operational data</h3>
-            <p className="hidden text-[14px] text-muted sm:block">
+            <h3 className="font-serif text-[16px] font-semibold text-ink sm:text-lg">Operational data</h3>
+            <p className="hidden text-[14px] text-ink2 sm:block">
               {periodLabel ? `${periodLabel} · ` : ''}
               {canEdit
                 ? 'Enrollment & aid power the per-student metrics below.'
@@ -203,14 +203,14 @@ export default function OperationalDataPanel({
             transition={{ type: 'spring', stiffness: 320, damping: 20 }}
             className={`hidden shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold sm:inline-flex ${
               unlockCount === TIER2_TOTAL
-                ? 'border-gold/40 bg-gold/10 text-gold'
+                ? 'border-hair bg-ink/[0.04] text-ink2'
                 : unlockCount > 0
-                  ? 'border-gold/25 bg-gold/[0.06] text-navy'
-                  : 'border-border bg-section text-muted'
+                  ? 'border-hair bg-ink/[0.03] text-ink'
+                  : 'border-hair/[0.18] bg-ground text-ink2'
             }`}
             title="Per-student metrics unlocked by the current inputs"
           >
-            <Sparkles size={12} className={unlockCount > 0 ? 'text-gold' : 'text-muted'} />
+            <Sparkles size={12} className={unlockCount > 0 ? 'text-ink2' : 'text-ink2'} />
             {unlockCount}/{TIER2_TOTAL} metrics unlocked
           </motion.span>
         )}
@@ -228,7 +228,7 @@ export default function OperationalDataPanel({
       ) : (
         <>
           {!canEdit && empty && (
-            <p className="mt-3 text-[15px] italic text-muted">
+            <p className="mt-3 text-[15px] italic text-ink2">
               No operational data entered yet.
             </p>
           )}
@@ -244,7 +244,7 @@ export default function OperationalDataPanel({
                 onChange={(e) => setEnrollment(sanitizeInteger(e.target.value))}
                 placeholder="e.g. 850"
               />
-              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-ink2 sm:block">
                 Primary number; powers cost per pupil & per-student metrics.
               </p>
             </div>
@@ -270,7 +270,7 @@ export default function OperationalDataPanel({
                 placeholder="e.g. 300"
               />
               {crossFieldError && (
-                <p className="mt-1.5 text-[13px] font-semibold text-danger">
+                <p className="mt-1.5 text-[13px] font-semibold tone-risk">
                   {crossFieldError}
                 </p>
               )}
@@ -278,7 +278,7 @@ export default function OperationalDataPanel({
             <div>
               <label className={labelCls}>Financial aid total</label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted sm:left-4">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink2 sm:left-4">
                   $
                 </span>
                 <input
@@ -301,11 +301,11 @@ export default function OperationalDataPanel({
                 onChange={(e) => setTeachingFte(sanitizeDecimal(e.target.value))}
                 placeholder="e.g. 42.5"
               />
-              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-ink2 sm:block">
                 Staff FTE (instructional) — distinct from the student FTE above.
               </p>
               {staffCrossFieldError && (
-                <p className="mt-1.5 text-[13px] font-semibold text-danger">
+                <p className="mt-1.5 text-[13px] font-semibold tone-risk">
                   {staffCrossFieldError}
                 </p>
               )}
@@ -320,7 +320,7 @@ export default function OperationalDataPanel({
                 onChange={(e) => setTotalStaffFte(sanitizeDecimal(e.target.value))}
                 placeholder="e.g. 61"
               />
-              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-ink2 sm:block">
                 All staff FTE; drives the Teacher Ratio key indicator.
               </p>
             </div>

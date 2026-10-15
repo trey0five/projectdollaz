@@ -3,6 +3,7 @@
 // grade range) that shapes peer benchmarking. On save -> PATCH /schools/:id then
 // SchoolContext.reloadSchools() so the report preview + peer groups pick up the
 // change. Non-owners get a read-only view.
+import '../../styles/pending/b2-finance.css'
 import { useEffect, useState } from 'react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { schoolsApi, periodsApi, analyticsApi } from '../../lib/api.js'
@@ -17,9 +18,9 @@ import { monogramOf } from '../home/SchoolCrest.jsx'
 import { SCHOOL_TYPES, GRADE_KEYS, sizeBandOf, sizeBandLabel, gradeOrdinal } from '../../lib/peerVocab.js'
 
 const labelCls =
-  'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
+  'b2-label'
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 export default function SchoolSection() {
   const { activeSchool, activeId, reloadSchools } = useSchools()
@@ -78,7 +79,7 @@ export default function SchoolSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="School">
-        <p className="text-[16px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-ink2">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -283,13 +284,11 @@ function SchoolProfileCard({ activeSchool, activeId, isOwner, reloadSchools }) {
         </div>
         <div className="mb-5">
           <label className={labelCls}>Size band</label>
-          <div className="flex h-[54px] items-center gap-2 rounded-lg border-2 border-border bg-navy/[0.03] px-4">
+          <div className="flex min-h-[36px] items-center gap-2 border-b border-hair">
             {band ? (
-              <span className="inline-flex items-center rounded-full bg-navy/10 px-3 py-1 text-[14px] font-semibold text-navy">
-                {band}
-              </span>
+              <span className="text-[14px] font-semibold text-ink">{band}</span>
             ) : (
-              <span className="text-[13.5px] text-muted">Set enrollment under Data → Operational.</span>
+              <span className="text-[13.5px] text-ink2">Set enrollment under Data → Operational.</span>
             )}
           </div>
         </div>
@@ -357,7 +356,7 @@ function SchoolProfileCard({ activeSchool, activeId, isOwner, reloadSchools }) {
       {err && <FormError>{err}</FormError>}
 
       {isOwner && missing.length > 0 && (
-        <p className="mt-1 rounded-lg bg-navy/[0.04] px-3.5 py-2.5 text-[13px] text-muted">
+        <p className="mt-1 rounded-lg bg-ink/[0.04] px-3.5 py-2.5 text-[13px] text-ink2">
           Add {missing[0]} to unlock {missing[0] === 'grade range' ? 'grade-range' : missing[0]} peer comparisons.
         </p>
       )}
@@ -429,13 +428,13 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
     >
       <div className="flex flex-wrap items-center gap-5">
         <span
-          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-navy/10 bg-white"
+          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-[8px] border border-hair bg-white"
           aria-hidden="true"
         >
           {logo ? (
             <img src={logo} alt="" className="h-full w-full object-contain p-1.5" />
           ) : (
-            <span className="font-serif text-[20px] font-semibold text-navy/45">
+            <span className="font-serif text-[20px] font-semibold text-ink/45">
               {monogramOf(activeSchool?.name)}
             </span>
           )}
@@ -444,7 +443,7 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
         <div className="min-w-0">
           {/* Says what the reader sees when there is no logo, so the monogram
               beside it reads as a deliberate stand-in rather than a failure. */}
-          <p className="text-[13.5px] text-muted">
+          <p className="text-[13.5px] text-ink2">
             {logo
               ? 'This logo is in use across the app.'
               : `No logo yet — the briefing shows “${monogramOf(activeSchool?.name)}”, built from the school name.`}
@@ -453,7 +452,7 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
           {isOwner ? (
             <div className="mt-3 flex flex-wrap items-center gap-2.5">
               <label
-                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-navy/15 px-3.5 py-2 text-[13px] font-semibold text-navy transition-colors hover:bg-navy/[0.04] ${
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-hair/[0.18] px-3.5 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-ink/[0.04] ${
                   busy ? 'pointer-events-none opacity-60' : ''
                 }`}
               >
@@ -475,16 +474,16 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
                   type="button"
                   onClick={remove}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-navy/15 px-3 py-2 text-[13px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-hair/[0.18] px-3 py-2 text-[13px] font-semibold text-ink2 transition-colors hover:text-[rgb(var(--c-risk))] disabled:opacity-60"
                 >
                   <Trash2 size={14} /> Remove
                 </button>
               ) : null}
-              {busy ? <span className="text-[12.5px] text-muted">Saving…</span> : null}
+              {busy ? <span className="text-[12.5px] text-ink2">Saving…</span> : null}
             </div>
           ) : null}
 
-          {err ? <p className="mt-2 text-[12.5px] font-semibold text-danger">{err}</p> : null}
+          {err ? <p className="mt-2 text-[12.5px] font-semibold tone-risk">{err}</p> : null}
         </div>
       </div>
     </SettingsCard>

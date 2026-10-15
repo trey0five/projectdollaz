@@ -6,7 +6,6 @@
 // component definitions). The parser runs in a try/catch so a malformed file
 // shows a friendly inline error instead of crashing the page.
 import { useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { UploadCloud, FileSpreadsheet, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { parseBudgetSpread } from '@finrep/ingestion'
 import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
@@ -14,6 +13,8 @@ import BudgetSpreadPreview from './BudgetSpreadPreview.jsx'
 import SufficiencyPanel from './SufficiencyPanel.jsx'
 import ResolveUnmatched from './ResolveUnmatched.jsx'
 import { useBudgetAssessment } from '../../hooks/useBudgetAssessment.js'
+import { Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 
 function readBytes(file) {
   return new Promise((resolve, reject) => {
@@ -108,24 +109,23 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
 
   if (!canEdit) {
     return (
-      <div className="card-soft px-6 py-10 text-center">
-        <p className="font-serif text-lg italic text-muted">
-          Importing a budget is available to owners and accountants.
-        </p>
+      <div className="b2-note">
+        <p>Importing a budget is available to owners and accountants.</p>
       </div>
     )
   }
 
   if (!periodId) {
     return (
-      <div className="card-soft border-dashed px-6 py-10 text-center">
-        <p className="font-serif text-lg italic text-muted">Select a period to import a budget.</p>
+      <div className="b2-note">
+        <p>Select a period to import a budget.</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
+      {/* The dropzone keeps its dashed affordance (an upload is an action). */}
       <label
         htmlFor="budget-spread-file"
         onDragOver={(e) => {
@@ -134,25 +134,19 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-          dragging ? 'border-gold bg-gold/10' : 'border-rule bg-cream/40 hover:border-gold/50'
-        }`}
+        data-active={dragging ? 'true' : undefined}
+        className="b2-drop py-10"
       >
-        <motion.span
-          animate={{ y: dragging ? -4 : 0 }}
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-        >
-          <UploadCloud size={26} />
-        </motion.span>
+        <span className="b2-drop-icon">
+          <UploadCloud size={28} aria-hidden="true" />
+        </span>
         <div>
-          <div className="font-serif text-lg font-semibold text-navy">
-            Drop your budget spreadsheet
-          </div>
-          <p className="mt-0.5 text-[13px] text-muted">
+          <div className="text-heading font-semibold text-ink">Drop your budget spreadsheet</div>
+          <p className="mt-0.5 text-small text-ink2">
             .xlsx · a standard template or a generic accounts-down / months-across layout
           </p>
         </div>
-        <span className="btn-ghost mt-1 text-[12px]">Browse files</span>
+        <span className="btn btn-secondary btn-sm mt-1">Browse files</span>
         <input
           ref={inputRef}
           id="budget-spread-file"
@@ -164,26 +158,19 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
       </label>
 
       {fileName && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-rule bg-white px-3.5 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <FileSpreadsheet size={18} className="shrink-0 text-gold" />
-            <span className="truncate text-[13px] font-medium text-ink">{fileName}</span>
-          </div>
-          <button
-            type="button"
-            onClick={reset}
-            aria-label="Clear selected file"
-            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-rule/30 hover:text-navy"
-          >
-            <X size={16} />
-          </button>
+        <div className="fig">
+          <span className="fig-label min-w-0">
+            <FileSpreadsheet size={16} aria-hidden="true" className="shrink-0 text-ink2" />
+            <span className="truncate font-medium text-ink">{fileName}</span>
+          </span>
+          <Button variant="quiet" size="sm" onClick={reset} aria-label="Clear selected file" icon={<X size={14} />} />
         </div>
       )}
 
       {parseError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+        <p className="b2-callout" data-tone="risk" role="alert">
           {parseError}
-        </div>
+        </p>
       )}
 
       {spread && (
@@ -199,32 +186,25 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
           />
 
           {saveError && (
-            <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+            <p className="b2-callout" data-tone="risk" role="alert">
               {saveError}
-            </div>
+            </p>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <button type="button" onClick={reset} className="btn-ghost" disabled={saving}>
-              Cancel
-            </button>
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.97 }}
-              onClick={onConfirm}
-              disabled={saving}
-              className="btn-primary inline-flex items-center gap-2 disabled:opacity-60"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={15} /> Confirm import
-                </>
-              )}
-            </motion.button>
+          <div className="b2-actions">
+            <div className="b2-actions-end">
+              <Button variant="quiet" onClick={reset} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={onConfirm}
+                disabled={saving}
+                icon={saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              >
+                {saving ? 'Saving…' : 'Confirm import'}
+              </Button>
+            </div>
           </div>
         </>
       )}

@@ -13,9 +13,9 @@ export default function BoardPacketExportButton({ periodId, className = '' }) {
       to={`/board-packet/print?period=${encodeURIComponent(periodId)}`}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-4 py-2 text-[13px] font-semibold text-gold-light transition-all hover:border-gold/70 ${className}`}
+      className={`btn btn-secondary ${className}`}
     >
-      <FileText size={15} /> Board packet
+      <FileText size={14} aria-hidden="true" /> Board packet
     </Link>
   )
 }

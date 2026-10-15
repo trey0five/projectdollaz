@@ -12,7 +12,8 @@
 // nothing outstanding reads as "all clear". Live+cached from QuickBooks; the
 // header Refresh button forces a fresh pull.
 //
-// School-scoped (no period selector). LIGHT navy/gold theme, EB Garamond title.
+// School-scoped (no period selector). The ledger: DomainCommandCenter's PageHeader +
+// StatStrip + register, ruled notes for the non-data states.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -35,6 +36,8 @@ import AgingBars from '../components/cash/AgingBars.jsx'
 import AgingRegisterTable from '../components/cash/AgingRegisterTable.jsx'
 import CashFlowSection from '../components/cash/CashFlowSection.jsx'
 import ReconcileBadge from '../components/cash/ReconcileBadge.jsx'
+import { PageHeader, Pill, Button } from '../components/ui/surface/index.js'
+import '../styles/pending/b2-finance.css'
 import PennyAvatar from '../components/penny/PennyAvatar.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
@@ -64,31 +67,24 @@ function bucketCounts(items) {
 }
 
 // ── Full-page state panels (module-level so they're never re-defined in render) ──
+// The non-data states (loading / error / org-fed / not connected): the page
+// header on its hairline, then a ruled note on the ground — no card.
 function PagePanel({ children }) {
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        {children}
-      </div>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
+      <BackLink className="mb-2" />
+      <PageHeader eyebrow="Finance · Cash & Collections" title="Cash & Collections" hue="37 99 235" />
+      <div className="b2-note mt-8 flex flex-col items-center gap-2">{children}</div>
     </div>
-  )
-}
-
-function HandCoinsBadge() {
-  return (
-    <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-      <HandCoins size={26} />
-    </span>
   )
 }
 
 function LoadingPanel() {
   return (
     <PagePanel>
-      <HandCoinsBadge />
-      <h2 className="font-serif text-xl font-semibold text-navy">Reading your cash position…</h2>
-      <p className="max-w-md text-[15px] text-muted">
+      <HandCoins size={24} aria-hidden="true" className="text-ink2" />
+      <h2 className="b2-note-title">Reading your cash position…</h2>
+      <p className="max-w-md" aria-busy="true">
         Pulling aged receivables and payables from QuickBooks.
       </p>
     </PagePanel>
@@ -98,15 +94,9 @@ function LoadingPanel() {
 function ErrorPanel() {
   return (
     <PagePanel>
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-danger/10 text-danger">
-        <AlertTriangle size={26} />
-      </span>
-      <h2 className="font-serif text-xl font-semibold text-navy">
-        We couldn&apos;t load Cash &amp; Collections
-      </h2>
-      <p className="max-w-md text-[15px] text-muted">
-        Something interrupted the connection. Try again in a moment.
-      </p>
+      <AlertTriangle size={24} aria-hidden="true" className="tone-risk" />
+      <h2 className="b2-note-title">We couldn&apos;t load Cash &amp; Collections</h2>
+      <p className="max-w-md">Something interrupted the connection. Try again in a moment.</p>
     </PagePanel>
   )
 }
@@ -114,9 +104,9 @@ function ErrorPanel() {
 function OrgFedPanel() {
   return (
     <PagePanel>
-      <HandCoinsBadge />
-      <h2 className="font-serif text-xl font-semibold text-navy">Consolidated at the org level</h2>
-      <p className="max-w-md text-[15px] text-muted">
+      <HandCoins size={24} aria-hidden="true" className="text-ink2" />
+      <h2 className="b2-note-title">Consolidated at the org level</h2>
+      <p className="max-w-md">
         This school&apos;s books are consolidated in one organization-wide QuickBooks company.
         Per-school aging is coming soon.
       </p>
@@ -128,21 +118,14 @@ function ConnectNudge({ onGoToData }) {
   return (
     <PagePanel>
       <PennyAvatar size={64} />
-      <h2 className="font-serif text-xl font-semibold text-navy">
-        Connect QuickBooks to see your cash
-      </h2>
-      <p className="max-w-md text-[15px] text-muted">
+      <h2 className="b2-note-title">Connect QuickBooks to see your cash</h2>
+      <p className="max-w-md">
         Once QuickBooks is connected, KYRO shows who owes the school and what the school owes — aged into
         buckets, with a one-click jump into each invoice and bill.
       </p>
-      <button
-        type="button"
-        onClick={onGoToData}
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[14px] font-semibold transition"
-      >
-        <Database size={16} /> Connect QuickBooks
-        <ArrowRight size={15} />
-      </button>
+      <Button variant="primary" onClick={onGoToData} icon={<Database size={14} />} className="mt-1">
+        Connect QuickBooks <ArrowRight size={14} aria-hidden="true" />
+      </Button>
     </PagePanel>
   )
 }
@@ -308,30 +291,29 @@ function CashCollectionsWorkspace() {
     <div className="flex flex-wrap items-center gap-2">
       {cf?.reconciliation ? <ReconcileBadge reconciliation={cf.reconciliation} stale={!!cf.stale} /> : null}
       {data.asOf ? (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-rule/60 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted">
-          <Clock size={13} className="opacity-70" />
+        <Pill>
+          <Clock size={11} aria-hidden="true" />
           as of {formatShortDate(data.asOf)}
-        </span>
+        </Pill>
       ) : null}
       {/* Only show the age badge when we actually have an as-of date (a connected-but-
           never-captured degrade has asOf:null → the note below explains it instead). */}
       {data.stale && data.asOf ? (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#7a5e00]">
-          <AlertTriangle size={13} />
+        <Pill variant="status" tone="watch">
           {staleDays} day{staleDays === 1 ? '' : 's'} old
-        </span>
+        </Pill>
       ) : null}
       {/* Non-org-fed notes (e.g. the stale-degrade note) stay a compact header pill.
           The org-fed aging note is surfaced instead as a fuller banner above the bars
           (see beforeBody) so the same note is never shown twice. */}
       {data.note && !orgFed ? (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[12.5px] font-medium text-[#7a5e00]">
-          <AlertTriangle size={13} />
+        <Pill variant="status" tone="watch" className="!h-auto min-h-[20px] whitespace-normal py-0.5">
           {data.note}
-        </span>
+        </Pill>
       ) : null}
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => {
           refresh()
           // Re-verify the reconciliation badge too (it's a separate hook) — a trust
@@ -339,11 +321,10 @@ function CashCollectionsWorkspace() {
           cashFlow.refresh()
         }}
         disabled={refreshing || cashFlow.refreshing}
-        className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition disabled:opacity-60"
+        icon={<RefreshCw size={13} className={refreshing || cashFlow.refreshing ? 'animate-spin' : ''} />}
       >
-        <RefreshCw size={14} className={refreshing || cashFlow.refreshing ? 'animate-spin' : ''} />
         {refreshing || cashFlow.refreshing ? 'Refreshing…' : 'Refresh'}
-      </button>
+      </Button>
     </div>
   )
 
@@ -375,8 +356,8 @@ function CashCollectionsWorkspace() {
               tagged items in the org-wide QuickBooks company, so interlocation and
               untagged items may not appear. Soft amber banner above the bars. */}
           {orgFed && data.note ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[13.5px] font-medium text-[#7a5e00]">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div className="b2-callout b2-watch">
+              <AlertTriangle size={14} aria-hidden="true" />
               <p>{data.note}</p>
             </div>
           ) : null}

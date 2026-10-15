@@ -1,22 +1,17 @@
 import ByProgramDonut from './ByProgramDonut.jsx'
 import ByMonthBars from './ByMonthBars.jsx'
+import { Section } from '../../ui/surface/index.js'
 
-/** Side-by-side per-program donut + per-month bars, on-theme cards. */
+/** Side-by-side per-program split + per-month bars, as Sections on the ground. */
 export default function ReconciliationBreakdowns({ result }) {
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div className="card-flashy p-5">
-        <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-          By program
-        </p>
+    <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
+      <Section label="By program" className="!mt-0 min-w-0">
         <ByProgramDonut byProgram={result.byProgram} totalDisbursed={result.totalDisbursed} />
-      </div>
-      <div className="card-flashy p-5">
-        <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-          By month
-        </p>
+      </Section>
+      <Section label="By month" className="!mt-0 min-w-0">
         <ByMonthBars byMonth={result.byMonth} />
-      </div>
+      </Section>
     </div>
   )
 }

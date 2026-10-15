@@ -9,8 +9,9 @@
 import { useState } from 'react'
 import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
 import { boardReportApi } from '../../../../lib/api.js'
-import { money, overUnder, pct, ragColor } from '../boardReportUtils.js'
+import { money, overUnder, pct } from '../boardReportUtils.js'
 import WizardNav from './WizardNav.jsx'
+import { Pill } from '../../../ui/surface/index.js'
 
 export default function Step3Variance({ ctx }) {
   const { data, draft, dispatch, goTo, canEdit, saving, saveError, schoolId } = ctx
@@ -40,30 +41,28 @@ export default function Step3Variance({ ctx }) {
   return (
     <div>
       <header className="mb-5">
-        <h2 className="font-serif text-2xl font-semibold text-navy">
+        <h2 className="font-serif text-title font-medium text-ink">
           Statement of operations &amp; narrative
         </h2>
-        <p className="mt-1 text-[13.5px] text-muted">
+        <p className="mt-1 text-[13.5px] text-ink2">
           Review the budget-vs-actual variance, add a short explanation per line, and draft the
           management discussion. Everything saves automatically.
         </p>
       </header>
 
       {!ops ? (
-        <p className="rounded-xl border border-dashed border-border bg-section px-4 py-8 text-center text-[13.5px] italic text-muted">
-          No operations data for this period.
-        </p>
+        <p className="b2-note">No operations data for this period.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-rule/60">
-          <table className="w-full text-[13px]">
+        <div className="dt-wrap">
+          <table className="dt">
             <thead>
-              <tr className="border-b border-rule bg-section text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
-                <th className="py-2.5 pl-3 pr-2 text-left">Line</th>
-                <th className="px-2 py-2.5 text-right">Actual</th>
-                <th className="px-2 py-2.5 text-right">Budget</th>
-                <th className="px-2 py-2.5 text-right">Over (Under)</th>
-                <th className="px-2 py-2.5 text-right">%</th>
-                <th className="px-2 py-2.5 text-left">Explanation</th>
+              <tr>
+                <th scope="col">Line</th>
+                <th scope="col" className="dt-num">Actual</th>
+                <th scope="col" className="dt-num">Budget</th>
+                <th scope="col" className="dt-num">Over (Under)</th>
+                <th scope="col" className="dt-num">%</th>
+                <th scope="col">Explanation</th>
               </tr>
             </thead>
             <tbody>
@@ -84,37 +83,31 @@ export default function Step3Variance({ ctx }) {
       {/* ── MD&A editor ─────────────────────────────────────────────────────── */}
       <section className="mt-7">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 font-serif text-lg font-semibold text-navy">
-            <Sparkles size={17} className="text-gold" /> Management discussion &amp; analysis
+          <h3 className="flex items-center gap-2 text-heading font-semibold text-ink">
+            <Sparkles size={16} aria-hidden="true" className="text-penny" /> Management discussion &amp; analysis
           </h3>
           {canEdit && (
             <div className="flex items-center gap-2">
               {draft.mdaSource && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                    draft.mdaSource === 'user'
-                      ? 'bg-navy/10 text-navy'
-                      : draft.mdaSource === 'llm'
-                        ? 'bg-gold/20 text-gold'
-                        : 'bg-emerald-100 text-emerald-700'
-                  }`}
+                <Pill
                   title={mdaMeta?.configured === false ? 'AI not configured — deterministic baseline' : undefined}
                 >
+                  {draft.mdaSource === 'llm' ? <Sparkles size={10} aria-hidden="true" className="text-penny" /> : null}
                   {draft.mdaSource === 'user' ? 'Edited' : draft.mdaSource === 'llm' ? 'AI draft' : 'Auto draft'}
-                </span>
+                </Pill>
               )}
               <button
                 type="button"
                 onClick={draftMda}
                 disabled={drafting}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-3 py-1.5 text-[12.5px] font-semibold text-navy transition-colors hover:bg-gold/20 disabled:opacity-50"
+                className="btn btn-secondary btn-sm"
               >
                 {drafting ? (
-                  <RefreshCw size={13} className="animate-spin text-gold" />
+                  <RefreshCw size={13} aria-hidden="true" className="animate-spin text-penny" />
                 ) : draft.mdaText ? (
-                  <RefreshCw size={13} className="text-gold" />
+                  <RefreshCw size={13} aria-hidden="true" className="text-penny" />
                 ) : (
-                  <Sparkles size={13} className="text-gold" />
+                  <Sparkles size={13} aria-hidden="true" className="text-penny" />
                 )}
                 {drafting ? 'Drafting…' : draft.mdaText ? 'Regenerate' : 'Draft with AI'}
               </button>
@@ -123,8 +116,8 @@ export default function Step3Variance({ ctx }) {
         </div>
 
         {mdaErr && (
-          <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-rose-600">
-            <AlertCircle size={14} /> {mdaErr}
+          <p className="b2-callout b2-risk mb-2" role="alert">
+            <AlertCircle size={14} aria-hidden="true" /> {mdaErr}
           </p>
         )}
 
@@ -136,11 +129,11 @@ export default function Step3Variance({ ctx }) {
           }
           placeholder="Draft a short narrative for the committee — operating results, what drove the variances, and your outlook. Use “Draft with AI” to start from a baseline."
           rows={7}
-          className="w-full resize-y rounded-xl border border-border bg-white px-3.5 py-3 text-[13.5px] leading-relaxed text-ink outline-none transition-colors focus:border-gold read-only:bg-section"
+          className="w-full resize-y rounded-[6px] border border-hair/[0.18] bg-white px-3.5 py-3 text-[13.5px] leading-relaxed text-ink outline-none transition-colors focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 read-only:bg-ground"
         />
-        <p className="mt-1 text-[11px] text-muted">
-          The narrative always fills from a deterministic baseline first; AI upgrades it when
-          configured. Your edits are kept and marked “Edited.”
+        <p className="mt-1 text-[11px] text-ink2">
+          KYRO drafts this from your variances; edit it before it goes in the packet. Your edits
+          are kept and marked “Edited.”
         </p>
       </section>
 
@@ -152,7 +145,7 @@ export default function Step3Variance({ ctx }) {
         saved={!saving && !saveError}
       />
       {saveError && (
-        <p className="mt-2 text-right text-[12px] text-rose-600">{saveError}</p>
+        <p className="b2-callout b2-risk mt-2" role="alert">{saveError}</p>
       )}
     </div>
   )
@@ -162,40 +155,51 @@ export default function Step3Variance({ ctx }) {
 
 function sectionHeader(label) {
   return (
-    <tr key={`hdr-${label}`}>
-      <td colSpan={6} className="bg-white pt-3 pl-3 pb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+    <tr key={`hdr-${label}`} className="dt-section">
+      <td colSpan={6} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
         {label}
       </td>
     </tr>
   )
 }
 
+// Variance tone (the RAG rule the packet prints): a 2px mark beside the ink
+// figure — never coloured text on screen.
+function ragTone(favorable, variancePct) {
+  if (favorable == null) return null
+  if (favorable) return 'good'
+  return Math.abs(variancePct ?? 0) > 10 ? 'risk' : 'watch'
+}
+function varianceCell(value, tone, extra = '') {
+  return (
+    <td className={`dt-num whitespace-nowrap ${extra}`}>
+      {tone && value !== '—' ? <i className={`mark tone-${tone} mr-1.5`} aria-label={tone === 'good' ? 'favorable' : 'unfavorable'} /> : null}
+      {value}
+    </td>
+  )
+}
+
 function renderRow(r, type, { canEdit, draft, dispatch }) {
-  const color = ragColor(r.favorable, r.variancePct)
+  const tone = ragTone(r.favorable, r.variancePct)
   const value = draft.explanations?.[type]?.[r.key] ?? ''
   return (
-    <tr key={`${type}-${r.key}`} className="border-b border-rule/40 align-top">
-      <td className="py-2 pl-3 pr-2 text-ink">{r.label}</td>
-      <td className="px-2 py-2 text-right tabular-nums text-navy">{money(r.actual)}</td>
-      <td className="px-2 py-2 text-right tabular-nums text-muted">
-        {r.budget == null ? '—' : money(r.budget)}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums" style={{ color: r.variance == null ? undefined : color }}>
-        {r.variance == null ? '—' : overUnder(r.variance)}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums text-[12px]" style={{ color: r.variancePct == null ? undefined : color }}>
-        {pct(r.variancePct)}
-      </td>
-      <td className="px-2 py-1.5">
+    <tr key={`${type}-${r.key}`}>
+      <td>{r.label}</td>
+      <td className="dt-num">{money(r.actual)}</td>
+      <td className="dt-num text-ink2">{r.budget == null ? '—' : money(r.budget)}</td>
+      {varianceCell(r.variance == null ? '—' : overUnder(r.variance), tone)}
+      <td className="dt-num text-[12px] text-ink2">{pct(r.variancePct)}</td>
+      <td className="py-1">
         <textarea
           value={value}
           readOnly={!canEdit}
+          aria-label={`Explanation for ${r.label}`}
           onChange={(e) =>
             dispatch({ type: 'setExplanation', categoryType: type, key: r.key, text: e.target.value })
           }
           placeholder={canEdit ? 'Add a comment…' : '—'}
           rows={1}
-          className="min-h-[34px] w-full min-w-[140px] resize-y rounded-md border border-border bg-white px-2 py-1.5 text-[12px] leading-snug text-ink outline-none transition-colors focus:border-gold read-only:border-transparent read-only:bg-transparent"
+          className="block min-h-[28px] w-full min-w-[140px] resize-y rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-[12px] leading-snug text-ink outline-none transition-colors focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 read-only:border-transparent read-only:bg-transparent"
         />
       </td>
     </tr>
@@ -204,21 +208,15 @@ function renderRow(r, type, { canEdit, draft, dispatch }) {
 
 function renderTotal(label, t, isNet = false) {
   if (!t) return null
-  const color = ragColor(t.favorable, t.variancePct)
+  const tone = ragTone(t.favorable, t.variancePct)
   return (
-    <tr key={label} className={`border-t-2 ${isNet ? 'border-navy/30' : 'border-rule'} font-semibold`}>
-      <td className="py-2.5 pl-3 pr-2 text-navy">{label}</td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-navy">{money(t.actual)}</td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-navy">
-        {t.budget == null ? '—' : money(t.budget)}
-      </td>
-      <td className="px-2 py-2.5 text-right tabular-nums" style={{ color: t.variance == null ? undefined : color }}>
-        {t.variance == null ? '—' : overUnder(t.variance)}
-      </td>
-      <td className="px-2 py-2.5 text-right tabular-nums text-[12px]" style={{ color: t.variancePct == null ? undefined : color }}>
-        {pct(t.variancePct)}
-      </td>
-      <td className="px-2 py-2.5" />
+    <tr key={label} className={isNet ? 'dt-section-total' : 'dt-subtotal'}>
+      <td className="font-semibold">{label}</td>
+      <td className="dt-num font-semibold">{money(t.actual)}</td>
+      <td className="dt-num">{t.budget == null ? '—' : money(t.budget)}</td>
+      {varianceCell(t.variance == null ? '—' : overUnder(t.variance), tone, 'font-semibold')}
+      <td className="dt-num text-[12px] text-ink2">{pct(t.variancePct)}</td>
+      <td />
     </tr>
   )
 }

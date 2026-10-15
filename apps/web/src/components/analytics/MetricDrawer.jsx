@@ -1,4 +1,5 @@
 import { explainUnusableInput } from '@finrep/analytics'
+import '../../styles/pending/b2-finance.css'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, Receipt, Loader2, Building2 } from 'lucide-react'
@@ -57,7 +58,7 @@ export function TargetBandBar({ metric }) {
 
   return (
     <div className="mt-1">
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-section">
+      <div className="relative h-2.5 w-full overflow-hidden rounded-[2px] bg-ink/[0.06]">
         {segments.map((s) => {
           const left = pos(s.from)
           const width = pos(s.to) - left
@@ -72,18 +73,18 @@ export function TargetBandBar({ metric }) {
         })}
         {/* current-value marker */}
         <span
-          className="absolute -top-0.5 h-3.5 w-[3px] rounded bg-navy-deep shadow"
+          className="absolute -top-0.5 h-3.5 w-[3px] rounded-[1px] bg-ink"
           style={{ left: `calc(${pos(metric.value)}% - 1.5px)` }}
           aria-hidden
         />
       </div>
-      <div className="mt-1.5 flex justify-between text-[12px] text-muted">
+      <div className="mt-1.5 flex justify-between text-[12px] text-ink2">
         <span>
           {higher
             ? `Risk < ${formatMetricValue(bands.risk, fmt)}`
             : `Good ≤ ${formatMetricValue(bands.good, fmt)}`}
         </span>
-        <span className="font-semibold text-navy">Now {formatMetricValue(metric.value, fmt)}</span>
+        <span className="font-semibold text-ink">Now {formatMetricValue(metric.value, fmt)}</span>
         <span>
           {higher
             ? `Good ≥ ${formatMetricValue(bands.good, fmt)}`
@@ -153,7 +154,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="absolute inset-0 bg-navy-deep/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#0A1628]/30"
             aria-hidden
           />
           {/* panel */}
@@ -167,21 +168,21 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
             animate={reduce ? { opacity: 1 } : { x: 0 }}
             exit={reduce ? { opacity: 0 } : { x: '100%' }}
             transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-            className="relative flex h-full w-full max-w-[440px] flex-col overflow-y-auto bg-cream shadow-lift outline-none"
+            className="relative flex h-full w-full max-w-[440px] flex-col overflow-y-auto border-l border-hair bg-white shadow-float outline-none"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-rule/50 bg-white px-5 py-4">
+            <div className="flex items-start justify-between gap-3 border-b border-hair bg-white px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-ink/[0.04] text-ink2">
                   <MetricIcon metricKey={metric.key} size={19} />
                 </span>
                 <div>
-                  <h2 className="font-serif text-lg font-semibold text-navy">{metric.label}</h2>
+                  <h2 className="text-heading font-semibold text-ink">{metric.label}</h2>
                   {isBandedStatus(metric.status) ? (
                     <div className="mt-1">
                       <StatusChip status={metric.status} />
                     </div>
                   ) : (
-                    <p className="mt-0.5 text-[13px] italic text-muted">
+                    <p className="mt-0.5 text-[13px] italic text-ink2">
                       Contextual — no universal target
                     </p>
                   )}
@@ -190,7 +191,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-rule/60 p-1.5 text-muted transition-colors hover:border-gold hover:text-navy"
+                className="rounded-lg border border-hair p-1.5 text-ink2 transition-colors hover:border-hair/[0.3] hover:text-ink"
                 aria-label="Close details"
               >
                 <X size={16} />
@@ -202,11 +203,11 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               {metric.available ? (
                 <div>
                   <div className="flex items-end gap-3">
-                    <span className="gold-text font-serif text-[44px] font-semibold leading-none">
+                    <span className="font-serif text-[44px] font-medium leading-none tabular-nums text-ink">
                       <AnimatedMetricValue value={metric.value} format={fmt} />
                     </span>
                     {isMix && (
-                      <span className="pb-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
+                      <span className="pb-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-ink2">
                         Total
                       </span>
                     )}
@@ -220,7 +221,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-border bg-section px-4 py-3 text-[15px] text-muted">
+                <div className="b2-callout">
                   {/* See HeroVitalTile: a namespaced token is a present-but-
                       unusable input, and gets the semantic layer's sentence. */}
                   {metric.inputsMissing?.length
@@ -234,10 +235,10 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   list IS the story for revenue_mix / expense_mix. */}
               {isMix && metric.available && metric.components && (
                 <div>
-                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     Composition
                   </p>
-                  <div className="card-soft p-3">
+                  <div className="border-y border-hair py-3">
                     <MixDonut metric={metric} />
                   </div>
                 </div>
@@ -246,7 +247,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               {/* target band */}
               {metric.bands && metric.available && (
                 <div>
-                  <p className="mb-1 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     Target band
                   </p>
                   <TargetBandBar metric={metric} />
@@ -256,16 +257,16 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               {/* formula + description */}
               {(metric.formula || metric.description) && (
                 <div>
-                  <p className="mb-1 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     How it's calculated
                   </p>
                   {metric.formula && (
-                    <p className="rounded-lg border border-rule/50 bg-white px-3 py-2 font-serif text-[16px] text-navy">
+                    <p className="rounded-lg border border-hair bg-white px-3 py-2 font-serif text-[16px] text-ink">
                       {metric.formula}
                     </p>
                   )}
                   {metric.description && (
-                    <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
+                    <p className="mt-1.5 text-[14.5px] leading-relaxed text-ink2">
                       {metric.description}
                     </p>
                   )}
@@ -275,19 +276,19 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               {/* named inputs */}
               {metric.inputs?.length > 0 && (
                 <div>
-                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     Inputs
                   </p>
-                  <ul className="divide-y divide-rule/40 overflow-hidden rounded-lg border border-rule/50 bg-white">
+                  <ul className="divide-y divide-hair border-y border-hair">
                     {metric.inputs.map((inp) => (
                       <li
                         key={inp.key}
-                        className="flex items-center justify-between gap-3 px-3 py-2 text-[15px]"
+                        className="flex items-center justify-between gap-3 py-2 text-[13px]"
                       >
                         <span className="text-ink">{inp.label}</span>
                         <span
                           className={`font-semibold ${
-                            inp.value == null ? 'italic text-danger' : 'text-navy'
+                            inp.value == null ? 'italic tone-risk' : 'text-ink'
                           }`}
                         >
                           {inp.value == null
@@ -301,10 +302,10 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
               )}
 
               {/* QuickBooks transaction drill — "what's in this?" (secondary).
-                  Lazy: no fetch until the gold button is clicked. */}
+                  Lazy: no fetch until the button is clicked. */}
               {canDrill && (
                 <div className="no-print">
-                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     What&apos;s in this?
                   </p>
 
@@ -312,7 +313,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                     <button
                       type="button"
                       onClick={() => drill.run({ periodId, metricKey })}
-                      className="btn-gold w-full"
+                      className="btn btn-primary w-full"
                     >
                       <Receipt size={15} />
                       View the transactions
@@ -320,26 +321,26 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   )}
 
                   {drill.status === 'loading' && (
-                    <div className="rounded-lg border border-rule/50 bg-white p-3">
-                      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-navy">
-                        <Loader2 size={15} className="animate-spin text-gold" />
+                    <div className="rounded-lg border border-hair bg-white p-3">
+                      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-ink">
+                        <Loader2 size={15} className="animate-spin text-ink2" />
                         Pulling the transactions behind this number…
                       </div>
                       <div className="space-y-2">
                         {[0, 1, 2, 3].map((i) => (
-                          <div key={i} className="h-6 animate-pulse rounded bg-section" />
+                          <div key={i} className="h-6 animate-pulse rounded bg-ground" />
                         ))}
                       </div>
                     </div>
                   )}
 
                   {drill.status === 'error' && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[14px] text-amber-700">
+                    <div className="b2-callout b2-watch flex-col !gap-1" role="alert">
                       <p className="font-semibold">Couldn&apos;t load transactions.</p>
                       <button
                         type="button"
                         onClick={() => drill.run({ periodId, metricKey })}
-                        className="mt-1.5 text-[13px] font-semibold text-navy underline decoration-gold underline-offset-2 hover:text-gold"
+                        className="dt-link"
                       >
                         Try again
                       </button>
@@ -351,8 +352,8 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                       {/* Diocesan (Topology B) drill: the rows come from the shared
                           org-wide QuickBooks company, filtered to this school. */}
                       {drillResult.source?.topology === 'org' && (
-                        <p className="mb-2 flex items-center gap-1.5 text-[12.5px] italic text-muted">
-                          <Building2 size={13} className="shrink-0 text-gold/80" />
+                        <p className="mb-2 flex items-center gap-1.5 text-[12.5px] italic text-ink2">
+                          <Building2 size={13} className="shrink-0 text-ink2/80" />
                           From your organization&apos;s QuickBooks company.
                         </p>
                       )}
@@ -363,7 +364,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   {/* Ratio → drill each component line instead of one misleading list. */}
                   {drill.status === 'done' && components.length > 0 && (
                     <div>
-                      <p className="mb-2 text-[14px] italic text-muted">
+                      <p className="mb-2 text-[14px] italic text-ink2">
                         This is a ratio — drill its component lines:
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -374,9 +375,9 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                             onClick={() =>
                               drill.run({ periodId, statement, variant: 'cy', lineKey })
                             }
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-white px-3 py-1.5 text-[13px] font-semibold text-navy transition-colors hover:border-gold hover:bg-gold/10"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-hair bg-white px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:border-hair/[0.3] hover:bg-ink/[0.04]"
                           >
-                            <Receipt size={13} className="text-gold" />
+                            <Receipt size={13} className="text-ink2" />
                             {lineKey}
                           </button>
                         ))}
@@ -385,7 +386,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   )}
 
                   {drill.status === 'done' && drillReason && components.length === 0 && (
-                    <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                    <p className="rounded-lg border border-hair bg-ground px-3 py-3 text-[14px] italic text-ink2">
                       {DRILL_STATE_COPY[drillReason] ?? 'Transaction detail is unavailable for this metric.'}
                     </p>
                   )}
@@ -409,12 +410,12 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
 
               {/* trend */}
               <div>
-                <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                   Trend across periods
                 </p>
-                <div className="card-soft p-3">
+                <div className="border-y border-hair py-3">
                   <Suspense
-                    fallback={<div className="h-52 animate-pulse rounded-lg bg-section sm:h-64" />}
+                    fallback={<div className="h-52 animate-pulse rounded-lg bg-ground sm:h-64" />}
                   >
                     <TrendChart trend={trend} />
                   </Suspense>

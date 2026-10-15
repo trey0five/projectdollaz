@@ -19,12 +19,12 @@ export default function ColumnMappingPanel({
   const amountMapped = !!mapping.amount
 
   return (
-    <div className="space-y-4 rounded-2xl border border-gold/30 bg-white p-5">
+    <div className="panel space-y-4 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-serif text-base font-semibold text-navy">Map columns</p>
-          <p className="text-[14px] text-muted">
-            From <span className="font-semibold text-navy">{fileName}</span> · {headers.length} columns,{' '}
+          <p className="text-heading font-semibold text-ink">Map columns</p>
+          <p className="text-small text-ink2">
+            From <span className="font-semibold text-ink">{fileName}</span> · {headers.length} columns,{' '}
             {disbursements.length} rows
           </p>
         </div>
@@ -33,16 +33,14 @@ export default function ColumnMappingPanel({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {MAPPING_FIELDS.map((f) => (
           <label key={f.key} className="block">
-            <span className="mb-1 flex items-center gap-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <span className="b2-label flex items-center gap-1">
               {f.label}
-              {f.required && <span className="text-danger">*</span>}
+              {f.required && <span className="tone-risk">*</span>}
             </span>
             <select
               value={mapping[f.key] ?? ''}
               onChange={(e) => setMapping({ ...mapping, [f.key]: e.target.value })}
-              className={`w-full rounded-lg border bg-white px-2.5 py-2 text-[15px] text-navy focus:outline-none focus:ring-2 focus:ring-gold/40 ${
-                f.required && !mapping[f.key] ? 'border-danger/50' : 'border-border'
-              }`}
+              className={`sel h-9 w-full !max-w-none ${f.required && !mapping[f.key] ? '!border-risk/50' : ''}`}
             >
               <option value="">— not mapped —</option>
               {headers.map((h) => (
@@ -56,24 +54,24 @@ export default function ColumnMappingPanel({
       </div>
 
       <div>
-        <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">Preview</p>
+        <p className="b2-label">Preview</p>
         <MappingPreview disbursements={disbursements} />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-hair pt-4">
         <button
           type="button"
           onClick={onConfirm}
           disabled={!amountMapped || saving}
-          className="btn-primary disabled:opacity-50"
+          className="btn btn-primary"
         >
           {saving ? 'Saving…' : 'Import disbursements'}
         </button>
-        <button type="button" onClick={onCancel} className="btn-ghost" disabled={saving}>
+        <button type="button" onClick={onCancel} className="btn btn-quiet" disabled={saving}>
           Cancel
         </button>
         {!amountMapped && (
-          <span className="text-[14px] text-danger">Map the Amount column to continue.</span>
+          <span className="b2-callout b2-risk py-1">Map the Amount column to continue.</span>
         )}
       </div>
     </div>

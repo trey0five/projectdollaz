@@ -27,8 +27,8 @@
 //   • The preview is DERIVED via useMemo — no preview state, no setState in render.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Sparkles, UploadCloud, ListChecks, ArrowLeft } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { UploadCloud, ListChecks, ArrowLeft } from 'lucide-react'
 import { computeDriverBudget } from '@finrep/analytics'
 import { analyticsApi } from '../../../lib/api.js'
 import DriverAssumptionsForm from '../DriverAssumptionsForm.jsx'
@@ -38,6 +38,7 @@ import SufficiencyPanel from '../SufficiencyPanel.jsx'
 import { useBudgetAssessment } from '../../../hooks/useBudgetAssessment.js'
 import { seedAssumptions, toDriverPriorContext, programSplitSum } from '../driverModel.js'
 import { WizardProgress, MiniPreview, WizardStep, WizardNav, OverwriteNotice } from './WizardChrome.jsx'
+import { Section, Tile, Button } from '../../ui/surface/index.js'
 
 // One topic per question step. `section` selects the matching DriverAssumptionsForm
 // slice; `splitGate` marks the step whose Next is gated on the program split === 100.
@@ -76,6 +77,7 @@ export default function BudgetWizard({
   priorSource,
   onApplied,
 }) {
+  const reduce = useReducedMotion()
   const [path, setPath] = useState(null) // null | 'upload' | 'questions'
   const [stepIdx, setStepIdx] = useState(0)
 
@@ -198,76 +200,60 @@ export default function BudgetWizard({
   }, [])
   const goNext = useCallback(() => setStepIdx((i) => i + 1), [])
 
-  // ── Step 0: choose how to start ─────────────────────────────────────────────
+  // ── Step 0: choose how to start — two Tiles (the wizard-choose card family)
   const renderStart = () => (
     <motion.div
       key="start"
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-5"
     >
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <Sparkles size={20} />
-        </span>
-        <div>
-          <h3 className="font-serif text-lg font-semibold text-navy">Let&rsquo;s set up your budget</h3>
-          <p className="text-[13px] text-muted">Pick how you&rsquo;d like to start — you can always switch.</p>
-        </div>
-      </div>
+      <Section label="Let’s set up your budget" className="!mt-0">
+        <p className="mb-4 text-small text-ink2">Pick how you&rsquo;d like to start — you can always switch.</p>
 
-      {!canEdit && (
-        <div className="card-soft border-dashed px-4 py-3 text-center">
-          <p className="text-[13px] italic text-muted">
+        {!canEdit && (
+          <p className="b2-callout mb-4">
             Setting up a budget is available to owners and accountants. You can still explore below.
           </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Tile
+            icon={<ListChecks size={22} aria-hidden="true" />}
+            title="Answer a few questions"
+            body="We’ll ask about students, tuition, and staff, then calculate the budget for you. No spreadsheet needed."
+            hue="37 99 235"
+            locked={!canEdit}
+            arrow={canEdit}
+            aria-label="Answer a few questions"
+            onClick={
+              canEdit
+                ? () => {
+                    setPath('questions')
+                    setStepIdx(0)
+                  }
+                : undefined
+            }
+          />
+          <Tile
+            icon={<UploadCloud size={22} aria-hidden="true" />}
+            title="Upload what I have"
+            body="Drop an .xlsx budget spreadsheet — monthly, annual-only, or just labels — and we’ll pull in the numbers."
+            hue="37 99 235"
+            locked={!canEdit}
+            arrow={canEdit}
+            aria-label="Upload what I have"
+            onClick={
+              canEdit
+                ? () => {
+                    setPath('upload')
+                    setStepIdx(0)
+                  }
+                : undefined
+            }
+          />
         </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => {
-            setPath('questions')
-            setStepIdx(0)
-          }}
-          className="card-soft group flex flex-col items-start gap-3 p-5 text-left transition-shadow hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-            <ListChecks size={24} />
-          </span>
-          <div>
-            <p className="font-serif text-[16px] font-semibold text-navy">Answer a few questions</p>
-            <p className="mt-0.5 text-[13px] text-muted">
-              We&rsquo;ll ask about students, tuition, and staff, then calculate the budget for you. No
-              spreadsheet needed.
-            </p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => {
-            setPath('upload')
-            setStepIdx(0)
-          }}
-          className="card-soft group flex flex-col items-start gap-3 p-5 text-left transition-shadow hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-            <UploadCloud size={24} />
-          </span>
-          <div>
-            <p className="font-serif text-[16px] font-semibold text-navy">Upload what I have</p>
-            <p className="mt-0.5 text-[13px] text-muted">
-              Drop an .xlsx budget spreadsheet — monthly, annual-only, or just labels — and we&rsquo;ll
-              pull in the numbers.
-            </p>
-          </div>
-        </button>
-      </div>
+      </Section>
     </motion.div>
   )
 
@@ -275,17 +261,17 @@ export default function BudgetWizard({
   const renderUpload = () => (
     <motion.div
       key="upload"
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
       className="space-y-4"
     >
-      <button type="button" onClick={() => setPath(null)} className="btn-ghost inline-flex items-center gap-2 text-[13px]">
-        <ArrowLeft size={15} /> Start over
-      </button>
+      <Button variant="quiet" size="sm" onClick={() => setPath(null)} icon={<ArrowLeft size={14} />}>
+        Start over
+      </Button>
       <div>
-        <h3 className="font-serif text-lg font-semibold text-navy">Upload your budget spreadsheet</h3>
-        <p className="text-[13px] text-muted">
+        <h3 className="font-serif text-title font-medium text-ink">Upload your budget spreadsheet</h3>
+        <p className="mt-1 text-small text-ink2">
           Confirming the preview below sets it as this period&rsquo;s budget.
         </p>
       </div>
@@ -302,24 +288,27 @@ export default function BudgetWizard({
         title={step.title}
         hint={step.hint}
         preview={<MiniPreview result={result} />}
+        nav={
+          <WizardNav
+            onBack={goBack}
+            onNext={goNext}
+            nextLabel={stepIdx === QUESTION_STEPS.length - 1 ? 'Review' : 'Next'}
+            nextDisabled={step.splitGate && !splitOk}
+          />
+        }
       >
         <DriverAssumptionsForm
           assumptions={assumptions}
           onChange={onAssumptionsChange}
           disabled={!canEdit}
           sections={[step.section]}
+          bare
         />
         {step.splitGate && !splitOk && (
-          <p className="text-[12px] font-medium text-amber-700">
+          <p className="b2-callout" data-tone="watch" role="status">
             These need to add up to 100% before you can continue.
           </p>
         )}
-        <WizardNav
-          onBack={goBack}
-          onNext={goNext}
-          nextLabel={stepIdx === QUESTION_STEPS.length - 1 ? 'Review' : 'Next'}
-          nextDisabled={step.splitGate && !splitOk}
-        />
       </WizardStep>
     )
   }
@@ -328,6 +317,18 @@ export default function BudgetWizard({
     <WizardStep
       title="Review your budget"
       hint="Here's what we calculated. Tweak any line, then apply it as this period's budget."
+      nav={
+        <WizardNav
+          onBack={goBack}
+          onNext={onApply}
+          nextLabel="Apply this budget"
+          isApply
+          nextDisabled={!canEdit || !splitOk || result == null || applyState === 'saving'}
+          applyState={applyState}
+          applyError={applyError}
+          showApplyHint={!canEdit}
+        />
+      }
     >
       <OverwriteNotice priorSource={priorSource} nextKind="driver" />
       <DriverPreview
@@ -337,16 +338,6 @@ export default function BudgetWizard({
         disabled={!canEdit}
       />
       <SufficiencyPanel assessment={assessment} loading={assessLoading} />
-      <WizardNav
-        onBack={goBack}
-        onNext={onApply}
-        nextLabel="Apply this budget"
-        isApply
-        nextDisabled={!canEdit || !splitOk || result == null || applyState === 'saving'}
-        applyState={applyState}
-        applyError={applyError}
-        showApplyHint={!canEdit}
-      />
     </WizardStep>
   )
 
@@ -357,9 +348,7 @@ export default function BudgetWizard({
   // Questions path: progress rail + the active step (or Review).
   return (
     <div className="space-y-5">
-      <div className="card-soft p-3.5">
-        <WizardProgress steps={PROGRESS_LABELS} current={Math.min(stepIdx, REVIEW_IDX)} />
-      </div>
+      <WizardProgress steps={PROGRESS_LABELS} current={Math.min(stepIdx, REVIEW_IDX)} />
       {stepIdx >= REVIEW_IDX ? renderReview() : renderQuestionStep()}
     </div>
   )

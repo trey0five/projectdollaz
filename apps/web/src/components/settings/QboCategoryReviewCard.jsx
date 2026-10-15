@@ -73,22 +73,22 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
       >
         {/* Progress header */}
         {allDone ? (
-          <p className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-navy">
-            <CheckCircle2 size={17} className="shrink-0 text-gold" />
+          <p className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-ink">
+            <CheckCircle2 size={17} className="shrink-0 text-ink2" />
             All {summary.total} QuickBooks accounts categorized
           </p>
         ) : (
-          <p className="mb-2 text-[15px] font-semibold text-navy">
+          <p className="mb-2 text-[15px] font-semibold text-ink">
             {summary.needsReview} of {summary.total} accounts still on the automatic category
           </p>
         )}
-        <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-navy/[0.08]">
+        <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.08]">
           <div
-            className="h-full rounded-full bg-gold transition-all duration-500"
+            className="h-full rounded-full bg-[#2563EB] transition-all duration-500"
             style={{ width: `${summary.total ? (reviewed / summary.total) * 100 : 0}%` }}
           />
         </div>
-        <p className="mb-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <p className="mb-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink2">
           Revenue {summary.revenue} · Expenses {summary.expense}
         </p>
 
@@ -101,10 +101,10 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
             <button
               key={p.key}
               onClick={() => setFilterChoice(p.key)}
-              className={`rounded-full border-2 px-4 py-1.5 text-[13.5px] font-semibold transition-colors ${
+              className={`rounded-full border px-4 py-1.5 text-[13.5px] font-semibold transition-colors ${
                 activeFilter === p.key
-                  ? 'border-gold bg-gold/15 text-navy'
-                  : 'border-border bg-white text-muted hover:border-gold/50 hover:text-navy'
+                  ? 'border-[#2563EB]/60 bg-[#2563EB]/[0.06] text-ink'
+                  : 'border-hair/[0.18] bg-white text-ink2 hover:border-hair hover:text-ink'
               }`}
             >
               {p.label}
@@ -121,18 +121,18 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
               (a) => a.isDefault && a.suggestion && drafts[a.acct] === undefined
             )
             return (
-              <div key={section} className="rounded-lg border border-border bg-section/40 px-3.5 py-3">
+              <div key={section} className="rounded-lg border border-hair/[0.18] bg-ground px-3.5 py-3">
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  <p className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink2">
                     {head}
                   </p>
                   {suggestible.length >= 2 && (
                     <button
                       onClick={() => acceptSuggestions(suggestible)}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 text-[13px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-[13px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline disabled:opacity-50"
                     >
-                      <Sparkles size={13} className="text-gold" /> Accept all suggestions
+                      <Sparkles size={13} className="text-ink2" /> Accept all suggestions
                     </button>
                   )}
                 </div>
@@ -148,7 +148,7 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.18 }}
                         className={`overflow-hidden border-l-2 pl-3 ${
-                          draft !== undefined ? 'border-gold' : 'border-transparent'
+                          draft !== undefined ? 'border-[#2563EB]' : 'border-transparent'
                         }`}
                       >
                         <MappingCategorySelect
@@ -163,7 +163,7 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
                             {untouchedDefault && (
                               <span
                                 title="Default category — assigned automatically from the QuickBooks account type"
-                                className="rounded-full border border-gold/50 bg-gold/10 px-2 py-0.5 font-bold uppercase tracking-[0.06em] text-[#5a4400]"
+                                className="rounded-full border border-hair bg-ink/[0.04] px-2 py-0.5 font-bold uppercase tracking-[0.06em] text-ink2"
                               >
                                 Auto
                               </span>
@@ -174,14 +174,14 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
                                   setDrafts((d) => ({ ...d, [a.acct]: a.suggestion }))
                                 }
                                 disabled={saving}
-                                className="inline-flex items-center gap-1 rounded-full border border-gold bg-gold/15 px-2 py-0.5 font-semibold text-navy transition-colors hover:bg-gold/30 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 rounded-full border border-hair/[0.3] bg-white px-2 py-0.5 font-semibold text-ink transition-colors hover:bg-ink/[0.04] disabled:opacity-50"
                               >
-                                <Sparkles size={11} className="text-gold" />
+                                <Sparkles size={11} className="text-ink2" />
                                 Suggest: {labelFor(a.suggestion)}
                               </button>
                             )}
                             {a.periodLabel && (
-                              <span className="text-muted">as of {a.periodLabel}</span>
+                              <span className="text-ink2">as of {a.periodLabel}</span>
                             )}
                           </div>
                         )}
@@ -201,15 +201,15 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-3 rounded-lg border border-gold/40 bg-gold/10 px-4 py-3"
+            className="mt-3 rounded-lg border border-hair bg-ink/[0.04] px-4 py-3"
           >
-            <p className="flex items-center gap-2 text-[14.5px] font-semibold text-navy">
-              <CheckCircle2 size={15} className="shrink-0 text-gold" />
+            <p className="flex items-center gap-2 text-[14.5px] font-semibold text-ink">
+              <CheckCircle2 size={15} className="shrink-0 text-ink2" />
               Saved {result.merged} categories · statements rebuilt for {result.statements.rebuilt}{' '}
               periods · {result.monthly.rebuilt} monthly snapshots refreshed
             </p>
             {(result.statements.failed.length > 0 || result.monthly.failed.length > 0) && (
-              <p className="mt-1 text-[13px] text-muted">
+              <p className="mt-1 text-[13px] text-ink2">
                 Some rebuilds didn’t finish and will pick up the new categories on the next sync:
                 {result.statements.failed.length > 0 &&
                   ` ${result.statements.failed.length} period${result.statements.failed.length === 1 ? '' : 's'}`}
@@ -223,19 +223,19 @@ export default function QboCategoryReviewCard({ schoolId, review, canEdit, onSav
         )}
 
         {/* Sticky save bar */}
-        <div className="sticky bottom-0 mt-4 flex flex-wrap items-center gap-3 border-t border-border bg-white pt-3.5">
+        <div className="sticky bottom-0 mt-4 flex flex-wrap items-center gap-3 border-t border-hair/[0.18] bg-white pt-3.5">
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={save}
             disabled={saving || draftCount === 0}
-            className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 size={15} className="animate-spin" />}
             {saving
               ? 'Rebuilding statements…'
               : `Save ${draftCount} categor${draftCount === 1 ? 'y' : 'ies'}`}
           </motion.button>
-          <p className="text-[13px] text-muted">
+          <p className="text-[13px] text-ink2">
             Rebuilds your statements and monthly numbers with the new categories.
           </p>
         </div>

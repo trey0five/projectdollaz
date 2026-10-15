@@ -27,6 +27,8 @@ import {
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import { PageHeader, Section, Panel, Pill } from '../components/ui/surface/index.js'
+import '../styles/pending/b2-finance.css'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useScope } from '../context/ScopeContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -357,34 +359,25 @@ export default function DataHubPage() {
     : null
 
   return (
-    <div className="min-h-screen bg-section">
+    <div className="min-h-screen">
       <BillingBanner />
-      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
-        {/* Header */}
-        <motion.header
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-        >
-          <div className="max-w-2xl">
-            <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Data</p>
-            <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Get your numbers in</h1>
-            <p className="mt-1.5 text-[16px] leading-relaxed text-muted">
-              This is the one place to bring your school&apos;s data into KYRO. Add what you have —
-              we&apos;ll turn it into your statements, board reports, and readiness checks. KYRO AI will
-              walk you through it. Most schools finish the essentials in a few minutes.
-            </p>
-          </div>
-
-          {!noPeriods && (
-            <div className="flex shrink-0 flex-col items-start gap-2.5 sm:items-end">
-              <label className="flex items-center gap-2 text-[14px] font-semibold text-muted">
-                <span className="uppercase tracking-[0.1em]">Working on:</span>
+      <main className="mx-auto max-w-page px-4 py-6 sm:px-10">
+        {/* Header (Premium UI P4): PageHeader on the hairline; the period select,
+            the readiness Pill and the tour live in its actions. */}
+        <PageHeader
+          eyebrow={['Data', activeSchool?.name].filter(Boolean).join(' · ')}
+          title="Get your numbers in"
+          meta="This is the one place to bring your school's data into KYRO. Add what you have — we'll turn it into your statements, board reports, and readiness checks. KYRO AI will walk you through it. Most schools finish the essentials in a few minutes."
+          hue="37 99 235"
+          actions={!noPeriods ? (
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <label className="flex items-center gap-2">
+                <span className="toolbar-label">Working on</span>
                 <select
                   id="datahub-period-select"
                   value={periodId || ''}
                   onChange={(e) => setPeriodId(e.target.value)}
-                  className="rounded-lg border-2 border-gold/40 bg-white px-3 py-1.5 text-[15px] font-semibold text-navy outline-none ring-gold/40 focus-visible:ring-2"
+                  className="sel"
                 >
                   {(periods || []).map((p) => (
                     <option key={p.id} value={p.id}>
@@ -394,36 +387,31 @@ export default function DataHubPage() {
                 </select>
               </label>
 
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[14px] font-bold ${
-                    allReady
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'border border-gold/40 bg-gold/10 text-amber-700'
-                  }`}
-                >
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill variant="status" tone={allReady ? 'good' : 'watch'}>
                   {allReady ? (
                     <>
-                      <CircleCheck size={14} /> All set
+                      <CircleCheck size={11} aria-hidden="true" /> All set
                     </>
                   ) : (
                     <>
                       {needsYou} need you · {inProgress} in progress
                     </>
                   )}
-                </span>
+                </Pill>
                 <button
                   id="datahub-tour-button"
                   type="button"
                   onClick={() => penny.runTour(tourSteps)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3 py-1 text-[14px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"
+                  className="btn btn-quiet btn-sm"
                 >
-                  <Sparkles size={13} /> Show me around
+                  <Sparkles size={13} aria-hidden="true" className="text-penny" /> Show me around
                 </button>
               </div>
             </div>
-          )}
-        </motion.header>
+          ) : null}
+        />
+        <div className="mt-6" />
 
         {noPeriods ? (
           <NoPeriodCard onAdd={() => setModalKey('trialBalances')} />
@@ -436,7 +424,7 @@ export default function DataHubPage() {
             {data ? (
               <QuickBooksCard quickbooks={data.quickbooks} />
             ) : (
-              <div className="mb-6 h-28 animate-pulse rounded-2xl border-2 border-gold/40 bg-white/60" />
+              <div className="mb-6 h-28 animate-pulse rounded-[8px] bg-ink/[0.04]" />
             )}
 
             {/* Guided checklist. Show the skeleton whenever we have no `sources`
@@ -444,35 +432,31 @@ export default function DataHubPage() {
                 where data-status is null — so we never flash the empty "all
                 optional / 0 need you" cards for a school that actually has data. */}
             {notEntitled ? (
-              <div className="rounded-2xl border-2 border-rule/60 bg-white px-6 py-10 text-center">
-                <p className="font-serif text-lg text-navy">Your subscription is paused</p>
-                <p className="mt-1 text-[15px] text-muted">
+              <div className="b2-note">
+                <p className="b2-note-title">Your subscription is paused</p>
+                <p>
                   Reactivate your plan to load and review your data — see the banner above to manage billing.
                 </p>
               </div>
             ) : error ? (
-              <div className="rounded-2xl border-2 border-rule/60 bg-white px-6 py-10 text-center">
-                <p className="font-serif text-lg text-navy">Couldn’t load your data status</p>
-                <p className="mt-1 text-[15px] text-muted">{error}</p>
-                <button
-                  type="button"
-                  onClick={refetch}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:bg-gold/20"
-                >
-                  Try again
-                </button>
+              <div className="b2-note">
+                <p className="b2-note-title">Couldn’t load your data status</p>
+                <p>{error}</p>
+                <div className="pt-2">
+                  <button type="button" onClick={refetch} className="btn btn-secondary">
+                    Try again
+                  </button>
+                </div>
               </div>
             ) : !sources ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleSources.map((s) => (
-                  <div
-                    key={s.key}
-                    className="h-44 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60"
-                  />
+                  <div key={s.key} className="h-44 animate-pulse rounded-[8px] bg-ink/[0.04]" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
+              <Section label="Your data, step by step" className="!mt-8">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleSources.map((s) => (
                   <SourceCard
                     key={s.key}
@@ -483,6 +467,7 @@ export default function DataHubPage() {
                   />
                 ))}
               </div>
+              </Section>
             )}
           </>
         )}
@@ -596,11 +581,7 @@ function DataEmbedModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div
-            className="absolute inset-0 bg-navy/40 backdrop-blur-sm"
-            onClick={onClose}
-            aria-hidden="true"
-          />
+          <div className="absolute inset-0 bg-[#0A1628]/30" onClick={onClose} aria-hidden="true" />
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -609,17 +590,12 @@ function DataEmbedModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isForecast ? 'max-w-page' : isWide ? 'max-w-page' : 'max-w-[760px]'}`}
+            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[8px] border border-hair bg-ground shadow-float ${isForecast ? 'max-w-page' : isWide ? 'max-w-page' : 'max-w-[760px]'}`}
           >
-            <div className="flex items-center justify-between border-b border-rule/60 bg-white px-5 py-3.5">
-              <h2 className="font-serif text-lg font-semibold text-navy">{title}</h2>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-section hover:text-navy"
-              >
-                <X size={18} />
+            <div className="flex items-center justify-between border-b border-hair bg-white px-5 py-3">
+              <h2 className="text-heading font-semibold text-ink">{title}</h2>
+              <button type="button" onClick={onClose} aria-label="Close" className="btn btn-quiet btn-sm">
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
             <div className={`overflow-y-auto ${isTb ? 'p-0' : 'p-5'}`}>
@@ -662,22 +638,18 @@ function DataEmbedModal({
                 // Deep-link landing (/data?open=budget — e.g. the Facilities budget
                 // CTA) on a school with NO fiscal periods yet: a budget lives inside
                 // a reporting period, so point at period setup instead of a blank body.
-                <div className="rounded-xl border border-rule/60 bg-white p-6 text-center">
-                  <p className="font-serif text-lg font-semibold text-navy">
-                    First, add a fiscal year
-                  </p>
-                  <p className="mx-auto mt-1.5 max-w-sm text-[14.5px] leading-relaxed text-muted">
+                <div className="b2-note">
+                  <p className="b2-note-title">First, add a fiscal year</p>
+                  <p className="mx-auto max-w-sm leading-relaxed">
                     A budget lives inside a reporting period. Import a trial balance and
                     we&apos;ll create your first fiscal year automatically — then come back
                     here to set up the budget.
                   </p>
-                  <button
-                    type="button"
-                    onClick={onOpenTb}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13.5px] font-bold uppercase tracking-[0.08em] transition-transform"
-                  >
-                    Add a trial balance
-                  </button>
+                  <div className="pt-2">
+                    <button type="button" onClick={onOpenTb} className="btn btn-primary">
+                      Add a trial balance
+                    </button>
+                  </div>
                 </div>
               )}
               {openKey === 'forecast' && periodId && (
@@ -726,32 +698,24 @@ function DataEmbedModal({
   )
 }
 
-// Render-helper (not a nested component def): no reporting period yet.
+// Render-helper (not a nested component def): no reporting period yet. The one
+// action on the page, so it is the one Panel.
 function NoPeriodCard({ onAdd }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border-2 border-gold/40 bg-white p-7 text-center shadow-card"
-    >
-      <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold">
-        <FileSpreadsheet size={24} />
-      </span>
-      <h2 className="font-serif text-xl font-semibold text-navy">
-        Let&apos;s create your first reporting period
-      </h2>
-      <p className="mx-auto mt-1.5 max-w-md text-[15.5px] leading-relaxed text-muted">
-        Start by adding a trial balance — we&apos;ll set up the period and turn it into your financial
-        statements automatically.
-      </p>
-      <button
-        id="datahub-noperiod-cta"
-        type="button"
-        onClick={onAdd}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
-      >
-        Add a trial balance
-      </button>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
+      <Panel>
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <FileSpreadsheet size={24} aria-hidden="true" className="text-ink2" />
+          <h2 className="font-serif text-title font-medium text-ink">Let&apos;s create your first reporting period</h2>
+          <p className="mx-auto max-w-md text-small leading-relaxed text-ink2">
+            Start by adding a trial balance — we&apos;ll set up the period and turn it into your financial
+            statements automatically.
+          </p>
+          <button id="datahub-noperiod-cta" type="button" onClick={onAdd} className="btn btn-primary mt-2">
+            Add a trial balance
+          </button>
+        </div>
+      </Panel>
     </motion.div>
   )
 }

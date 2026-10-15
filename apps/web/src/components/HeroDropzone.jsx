@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import '../styles/pending/b2-finance.css'
 import { UploadCloud } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 
@@ -42,21 +43,18 @@ export default function HeroDropzone() {
       onKeyDown={onKeyDown}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
-      className="group flex cursor-pointer flex-col items-center gap-5 rounded-2xl border-2 border-dashed border-gold/60 bg-section px-5 py-10 text-center outline-none transition-all hover:border-gold hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow sm:px-8 sm:py-16"
+      className="b2-drop gap-5 px-5 py-10 sm:px-8 sm:py-16"
     >
-      <motion.span
-        className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-        animate={reduce ? undefined : { y: [0, -10, 0] }}
-        transition={reduce ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <UploadCloud size={36} />
-      </motion.span>
+      {/* Static icon stroke (the old infinite bob is gone — motion is one-shot). */}
+      <span className="b2-drop-icon">
+        <UploadCloud size={36} aria-hidden="true" />
+      </span>
 
       <div>
-        <h2 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
+        <h2 className="font-serif text-title font-medium text-ink">
           Start with this year’s trial balance
         </h2>
-        <p className="mx-auto mt-2 max-w-md font-serif text-base italic text-muted">
+        <p className="mx-auto mt-2 max-w-md text-small text-ink2">
           Drop it here — that’s all you need to preview statements. You can add last
           year’s files afterward. Accepts .xlsx, .xls, and .csv.
         </p>
@@ -64,7 +62,7 @@ export default function HeroDropzone() {
 
       <button
         type="button"
-        className="btn-primary"
+        className="btn btn-primary"
         onClick={(e) => {
           e.stopPropagation()
           openDialog()

@@ -21,11 +21,11 @@ export default function BillingBanner() {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="no-print border-b border-red-200 bg-red-50"
+          className="no-print border-b border-hair bg-white"
         >
           <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-10">
-            <div className="flex items-start gap-2 text-[15px] font-medium text-red-700">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div className="b2-callout b2-risk font-medium">
+              <AlertTriangle size={14} aria-hidden="true" />
               <span>
                 Generation is paused — your{' '}
                 {status === 'past_due' ? 'payment is past due' : 'trial has ended'}.
@@ -36,7 +36,7 @@ export default function BillingBanner() {
             </div>
             <Link
               to="/settings/billing"
-              className="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-[14px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-700"
+              className="btn btn-primary shrink-0"
             >
               {isOwner ? 'Subscribe now' : 'View billing'}
             </Link>
@@ -49,10 +49,10 @@ export default function BillingBanner() {
   // Active trial → informational countdown.
   if (isTrial) {
     return (
-      <div className="no-print border-b border-gold/30 bg-gold/10">
+      <div className="no-print border-b border-hair bg-ink/[0.04]">
         <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-10">
-          <div className="flex items-center gap-2 text-[15px] font-medium text-navy">
-            <Clock size={15} className="shrink-0 text-gold" />
+          <div className="flex items-center gap-2 text-[15px] font-medium text-ink">
+            <Clock size={15} className="shrink-0 text-ink2" />
             <span>
               {typeof daysLeft === 'number'
                 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your trial`
@@ -62,7 +62,7 @@ export default function BillingBanner() {
           {isOwner && (
             <Link
               to="/settings/billing"
-              className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-gold/50 px-3 py-1.5 text-[14px] font-semibold uppercase tracking-wide text-navy transition-colors hover:bg-gold/20"
+              className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-hair px-3 py-1.5 text-[14px] font-semibold uppercase tracking-wide text-ink transition-colors hover:bg-ink/[0.06]"
             >
               Subscribe
             </Link>

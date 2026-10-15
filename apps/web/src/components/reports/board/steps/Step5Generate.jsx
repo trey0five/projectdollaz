@@ -53,38 +53,35 @@ export default function Step5Generate({ ctx }) {
   return (
     <div>
       <header className="mb-5">
-        <h2 className="font-serif text-2xl font-semibold text-navy">Generate the packet</h2>
-        <p className="mt-1 text-[13.5px] text-muted">
+        <h2 className="font-serif text-title font-medium text-ink">Generate the packet</h2>
+        <p className="mt-1 text-[13.5px] text-ink2">
           Here&apos;s what your board report will include. Generate to stamp it and open the print
           view, or preview first.
         </p>
       </header>
 
-      <ul className="mb-6 divide-y divide-rule/40 rounded-xl border border-rule/60">
+      <ul className="mb-6 border-t border-hair">
         {sections.map((s) => (
-          <li key={s.label} className="flex items-center gap-2.5 px-4 py-2.5 text-[13.5px]">
-            <span
-              className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                s.on ? 'bg-emerald-100 text-emerald-700' : 'bg-section text-muted/60'
-              }`}
-            >
+          <li key={s.label} className="fig !justify-start !gap-2.5">
+            <i className={`mark ${s.on ? 'tone-good' : 'tone-neutral'}`} aria-hidden="true" />
+            <span className={s.on ? 'text-ink2' : 'text-ink2/60'} aria-label={s.on ? 'included' : 'not available'}>
               {s.on ? <Check size={13} /> : <Minus size={13} />}
             </span>
-            <span className={s.on ? 'text-ink' : 'text-muted/70'}>{s.label}</span>
-            {!s.on && <span className="ml-auto text-[11px] italic text-muted/70">not available</span>}
+            <span className={s.on ? 'text-ink' : 'text-ink2/70'}>{s.label}</span>
+            {!s.on && <span className="ml-auto text-[11px] italic text-ink2/70">not available</span>}
           </li>
         ))}
       </ul>
 
       {!hasMda && (
-        <p className="mb-4 text-[12.5px] italic text-muted">
+        <p className="mb-4 text-[12.5px] italic text-ink2">
           Tip: you haven&apos;t drafted an MD&amp;A narrative yet — the section will show a placeholder.
         </p>
       )}
 
       {err && (
-        <p className="mb-3 flex items-center gap-1.5 text-[13px] text-rose-600">
-          <AlertCircle size={15} /> {err}
+        <p className="b2-callout b2-risk mb-3" role="alert">
+          <AlertCircle size={14} aria-hidden="true" /> {err}
         </p>
       )}
 
@@ -93,17 +90,17 @@ export default function Step5Generate({ ctx }) {
           type="button"
           onClick={() => goPrint(true)}
           disabled={busy || !draft.periodId}
-          className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+          className="btn btn-primary"
         >
-          <Printer size={16} /> {busy ? 'Preparing…' : 'Generate & print'}
+          <Printer size={14} aria-hidden="true" /> {busy ? 'Preparing…' : 'Generate & print'}
         </button>
         <button
           type="button"
           onClick={() => goPrint(false)}
           disabled={busy || !draft.periodId}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-[13.5px] font-semibold text-navy transition-colors hover:border-gold/50 hover:text-gold disabled:opacity-50"
+          className="btn btn-secondary"
         >
-          <Eye size={16} /> Preview in browser
+          <Eye size={14} aria-hidden="true" /> Preview in browser
         </button>
       </div>
 

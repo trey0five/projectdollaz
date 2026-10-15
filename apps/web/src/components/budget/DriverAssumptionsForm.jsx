@@ -2,7 +2,7 @@
 // render-helper functions only (React-Compiler safe — no in-render component
 // defs, no setState during render). Every numeric field rejects letters via
 // sanitizeDecimal / sanitizeInteger and reports a parsed Number to the parent.
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Users, DollarSign, PieChart, Briefcase, TrendingUp } from 'lucide-react'
 import { sanitizeDecimal, sanitizeInteger } from '../../lib/numericInput.js'
 import {
@@ -14,6 +14,7 @@ import {
   PROGRAM_LABELS,
   programSplitSum,
 } from './driverModel.js'
+import { Pill } from '../ui/surface/index.js'
 
 // Parse a sanitized string to a Number for state; blank/partial → 0.
 function num(v) {
@@ -27,12 +28,12 @@ function NumberField({ label, value, onChange, integer = false, disabled, prefix
   return (
     <label className="block">
       {label != null && (
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink2">
           {label}
         </span>
       )}
-      <span className="flex items-center rounded-lg border border-rule bg-white focus-within:border-gold focus-within:ring-1 focus-within:ring-gold/40">
-        {prefix && <span className="pl-2.5 text-[13px] text-muted">{prefix}</span>}
+      <span className="flex h-9 items-center rounded-md border border-hair/[0.18] bg-white focus-within:border-[#2563EB] focus-within:ring-2 focus-within:ring-[#2563EB]/25">
+        {prefix && <span className="pl-2.5 text-[13px] text-ink2">{prefix}</span>}
         <input
           type="text"
           inputMode={integer ? 'numeric' : 'decimal'}
@@ -43,24 +44,34 @@ function NumberField({ label, value, onChange, integer = false, disabled, prefix
           onChange={(e) => onChange(num(sanitize(e.target.value)))}
           className="w-full bg-transparent px-2.5 py-1.5 text-right text-[14px] tabular-nums text-ink outline-none disabled:opacity-50"
         />
-        {suffix && <span className="pr-2.5 text-[13px] text-muted">{suffix}</span>}
+        {suffix && <span className="pr-2.5 text-[13px] text-ink2">{suffix}</span>}
       </span>
     </label>
   )
 }
 
-// ── Section shell ────────────────────────────────────────────────────────────
-function Section({ icon, title, hint, children, badge }) {
+// ── Group shell — a titled group ON THE GROUND (the wizard step around it is
+// the one Panel; a card per group would nest boxes). Icon stroke + ink title +
+// ink-2 hint on a hairline, the badge (a Pill) at the end of the row.
+// `bare` — the budget wizard already titles the step with the same words (one
+// topic per step), so the group drops its own title/hint and keeps only the badge.
+function Section({ icon, title, hint, children, badge, bare = false }) {
   const Icon = icon
+  if (bare) {
+    return (
+      <div className="space-y-3">
+        {badge ? <div className="flex justify-end">{badge}</div> : null}
+        {children}
+      </div>
+    )
+  }
   return (
-    <div className="card-soft p-4">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Icon size={16} />
-        </span>
-        <div className="flex-1">
-          <h4 className="font-serif text-[15px] font-semibold text-navy">{title}</h4>
-          {hint && <p className="text-[12px] text-muted">{hint}</p>}
+    <div className="space-y-3">
+      <div className="flex items-start gap-2.5 border-b border-hair pb-2">
+        <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-ink2" />
+        <div className="min-w-0 flex-1">
+          <h4 className="text-[15px] font-semibold leading-snug text-ink">{title}</h4>
+          {hint && <p className="text-small text-ink2">{hint}</p>}
         </div>
         {badge}
       </div>
@@ -74,7 +85,7 @@ function Section({ icon, title, hint, children, badge }) {
 function renderEnrollmentCell(grade, value, onCell, disabled) {
   return (
     <div key={`enr-${grade}`} className="flex flex-col">
-      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[11px] font-semibold leading-tight text-muted">
+      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[11px] font-semibold leading-tight text-ink2">
         {GRADE_LABELS[grade] ?? grade}
       </span>
       <input
@@ -84,7 +95,8 @@ function renderEnrollmentCell(grade, value, onCell, disabled) {
         value={value === 0 ? '' : String(value)}
         placeholder="0"
         onChange={(e) => onCell(grade, num(sanitizeInteger(e.target.value)))}
-        className="w-full rounded-md border border-rule bg-white px-1.5 py-1.5 text-center text-[13px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+        aria-label={`Students in ${GRADE_LABELS[grade] ?? grade}`}
+        className="h-9 w-full rounded-md border border-hair/[0.18] bg-white px-1.5 text-center text-[13px] tabular-nums text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
       />
     </div>
   )
@@ -95,7 +107,8 @@ function renderEnrollmentCell(grade, value, onCell, disabled) {
 // passes nothing and gets all sections (default), so it keeps working unchanged.
 export const ASSUMPTION_SECTIONS = ['enrollment', 'tuition', 'split', 'staffing', 'inflation']
 
-export default function DriverAssumptionsForm({ assumptions, onChange, disabled, sections }) {
+export default function DriverAssumptionsForm({ assumptions, onChange, disabled, sections, bare = false }) {
+  const reduce = useReducedMotion()
   const a = assumptions
   // `sections` undefined → show all (backward compatible). Otherwise only the ids listed.
   const show = (id) => sections == null || sections.includes(id)
@@ -125,21 +138,18 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-4"
+      className="space-y-6"
     >
       {show('enrollment') && (
       <Section
+        bare={bare}
         icon={Users}
         title="Students in each grade"
         hint="How many students you expect per grade. This sets your tuition."
-        badge={
-          <span className="rounded-full bg-navy/[0.06] px-2.5 py-1 text-[12px] font-semibold tabular-nums text-navy">
-            {enrollTotal} students
-          </span>
-        }
+        badge={<Pill variant="count">{enrollTotal} students</Pill>}
       >
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {GRADE_ROW.map((g) => renderEnrollmentCell(g, a.enrollmentByGrade[g] ?? 0, setEnrollment, disabled))}
@@ -148,7 +158,7 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
       )}
 
       {show('tuition') && (
-      <Section icon={DollarSign} title="Tuition price per grade" hint="The yearly tuition you charge each grade group.">
+      <Section bare={bare} icon={DollarSign} title="Tuition price per grade" hint="The yearly tuition you charge each grade group.">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {bands.map((b) => (
             <NumberField
@@ -175,19 +185,14 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
 
       {show('split') && (
       <Section
+        bare={bare}
         icon={PieChart}
         title="How tuition gets paid"
         hint="Split your tuition by who pays. Must add up to 100%."
         badge={
-          <span
-            className={`rounded-full px-2.5 py-1 text-[12px] font-semibold tabular-nums ${
-              splitOk
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-amber-100 text-amber-700'
-            }`}
-          >
+          <Pill variant="status" tone={splitOk ? 'good' : 'watch'} className="tabular-nums">
             sums to {splitSum.toFixed(splitSum % 1 === 0 ? 0 : 1)}%
-          </span>
+          </Pill>
         }
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -202,13 +207,13 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
             />
           ))}
         </div>
-        <p className="mt-2 text-[11.5px] leading-snug text-muted">
-          <strong className="text-navy">Parent / FACTS</strong> = families paying directly ·{' '}
-          <strong className="text-navy">SUFS / FTC</strong> = Step Up (Florida Tax Credit) scholarship ·{' '}
-          <strong className="text-navy">FES-UA</strong> = Step Up (Family Empowerment) scholarship.
+        <p className="mt-2 text-[12px] leading-snug text-ink2">
+          <strong className="text-ink">Parent / FACTS</strong> = families paying directly ·{' '}
+          <strong className="text-ink">SUFS / FTC</strong> = Step Up (Florida Tax Credit) scholarship ·{' '}
+          <strong className="text-ink">FES-UA</strong> = Step Up (Family Empowerment) scholarship.
         </p>
         {!splitOk && (
-          <p className="mt-2 text-[12px] font-medium text-amber-700">
+          <p className="b2-callout mt-2" data-tone="watch">
             These need to add up to 100% before you can apply the budget.
           </p>
         )}
@@ -216,7 +221,7 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
       )}
 
       {show('staffing') && (
-      <Section icon={Briefcase} title="Staff & pay" hint="How many staff in each role and their average pay. We add benefits on top.">
+      <Section bare={bare} icon={Briefcase} title="Staff & pay" hint="How many staff in each role and their average pay. We add benefits on top.">
         <div className="space-y-3">
           {ROLE_ORDER.map((role) => (
             <div key={`role-${role}`} className="grid grid-cols-2 items-end gap-3">
@@ -249,6 +254,7 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled,
 
       {show('inflation') && (
       <Section
+        bare={bare}
         icon={TrendingUp}
         title="Everything else"
         hint="We grow all your other budget lines from last year by this amount."

@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-// Tiny inline-SVG sparkline for the value-history section — gold stroke on a
-// navy-tinted ground, matching the "flashy but on-theme" house style. No new
+// Tiny inline-SVG sparkline for the value-history section — a 2px primary-blue
+// stroke on the ground (Premium UI: no tinted box, no gold off-KYRO). No new
 // charting dep. The line draws itself in with framer-motion `pathLength`;
 // under useReducedMotion it renders fully drawn (no animation). Screen-only —
 // the caller wraps the history section in `no-print`.
@@ -38,12 +38,12 @@ export default function Sparkline({ values, width = 236, height = 44 }) {
       preserveAspectRatio="none"
       role="img"
       aria-label="Value trend across snapshots"
-      className="block max-w-full overflow-visible rounded-lg bg-navy/[0.06]"
+      className="block max-w-full overflow-visible"
     >
       <motion.path
         d={d}
         fill="none"
-        stroke="#b89650"
+        stroke="#2563EB"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -51,7 +51,7 @@ export default function Sparkline({ values, width = 236, height = 44 }) {
         animate={reduce ? false : { pathLength: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
       />
-      <circle cx={lastX} cy={lastY} r={3} fill="#b89650" />
+      <circle cx={lastX} cy={lastY} r={3} fill="#2563EB" />
     </svg>
   )
 }

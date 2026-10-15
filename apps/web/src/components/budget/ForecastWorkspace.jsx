@@ -22,16 +22,8 @@
 // vs-synced-baseline pattern so simply OPENING the tab writes nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  TrendingUp,
-  Save,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  Sparkles,
-  Clock,
-} from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { TrendingUp, Save, CheckCircle2, AlertTriangle, Loader2, Clock } from 'lucide-react'
 import {
   computeDriverBudget,
   REVENUE_LINE_KEYS,
@@ -50,6 +42,9 @@ import CurrentRosterGrid, { seedCurrentRoster } from './CurrentRosterGrid.jsx'
 import RetentionControl from './RetentionControl.jsx'
 import ProjectedRosterGrid from './ProjectedRosterGrid.jsx'
 import { seedAssumptions, toDriverPriorContext, GRADE_ROW } from './driverModel.js'
+import { Section, StatStrip, Stat, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
+import { statMoney } from './StatFigure.jsx'
 
 // computeDriverBudget is shared with the API; if it's not yet a function in the
 // consumed build, degrade gracefully (no throw) — server save still authoritative.
@@ -92,40 +87,42 @@ function clampExplanation(s) {
   return typeof s === 'string' ? s.slice(0, 2000) : ''
 }
 
+// Variance tone → the 2px mark beside the figure (the figure itself stays ink).
+function varianceTone(kind, variance, vp, budget) {
+  if (budget == null) return null
+  if (isFavorable(kind, variance)) return 'good'
+  return Math.abs(vp ?? 0) > 10 ? 'risk' : 'watch'
+}
+function VarianceCell({ tone, children, bold }) {
+  return (
+    <td className={`dt-num whitespace-nowrap ${bold ? 'font-semibold' : ''}`}>
+      {tone ? <i className={`mark tone-${tone} mr-1.5`} aria-label={tone === 'good' ? 'favorable' : 'unfavorable'} /> : null}
+      {children}
+    </td>
+  )
+}
+
 // ── Live Forecast-vs-Budget row (module scope — editable comment cell) ─────────
 function ForecastRow({ kind, label, forecast, budget, explanation, onExplain, disabled }) {
   const variance = round2((forecast ?? 0) - (budget ?? 0))
   const vp = variancePct(variance, budget)
-  const fav = isFavorable(kind, variance)
-  const varTone =
-    budget == null
-      ? 'text-ink'
-      : fav
-        ? 'text-emerald-600'
-        : Math.abs(vp ?? 0) > 10
-          ? 'text-rose-600'
-          : 'text-amber-700'
+  const tone = varianceTone(kind, variance, vp, budget)
   return (
-    <tr className="border-t border-rule/50 hover:bg-gold/[0.04]">
-      <td className="px-3 py-1.5 text-[13px] text-ink">{label}</td>
-      <td className="px-3 py-1.5 text-right text-[13px] font-semibold tabular-nums text-navy">
-        {money(forecast)}
-      </td>
-      <td className="px-3 py-1.5 text-right text-[13px] tabular-nums text-muted">
-        {budget == null ? '—' : money(budget)}
-      </td>
-      <td className={`px-3 py-1.5 text-right text-[13px] tabular-nums ${varTone}`}>
-        {budget == null ? '—' : signed(variance)}
-      </td>
-      <td className={`px-3 py-1.5 text-right text-[12px] tabular-nums ${varTone}`}>{pctText(vp)}</td>
-      <td className="px-2 py-1.5">
+    <tr>
+      <td>{label}</td>
+      <td className="dt-num font-semibold">{money(forecast)}</td>
+      <td className="dt-num text-ink2">{budget == null ? '—' : money(budget)}</td>
+      <VarianceCell tone={tone}>{budget == null ? '—' : signed(variance)}</VarianceCell>
+      <td className="dt-num text-[12px] text-ink2">{pctText(vp)}</td>
+      <td className="py-1">
         <input
           type="text"
           disabled={disabled}
           value={explanation ?? ''}
           placeholder={disabled ? '' : 'Comment…'}
+          aria-label={`Comment on ${label}`}
           onChange={(e) => onExplain(clampExplanation(e.target.value))}
-          className="w-full min-w-[140px] rounded-md border border-rule bg-white px-2 py-1 text-[12.5px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="h-7 w-full min-w-[140px] rounded-[4px] border border-hair/[0.18] bg-white px-2 text-[12.5px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
     </tr>
@@ -135,8 +132,8 @@ function ForecastRow({ kind, label, forecast, budget, explanation, onExplain, di
 // ── Group header + totals rows ────────────────────────────────────────────────
 function GroupHeader({ title }) {
   return (
-    <tr className="bg-navy-gradient">
-      <td colSpan={6} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold-light">
+    <tr className="dt-section">
+      <td colSpan={6} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
         {title}
       </td>
     </tr>
@@ -147,19 +144,14 @@ function TotalRow({ kind, label, forecast, budget, net }) {
   const variance = round2((forecast ?? 0) - (budget ?? 0))
   const vp = variancePct(variance, budget)
   const fav = net ? variance >= 0 : isFavorable(kind, variance)
-  const tone =
-    budget == null ? 'text-navy' : fav ? 'text-emerald-600' : 'text-rose-600'
+  const tone = budget == null ? null : fav ? 'good' : 'risk'
   return (
-    <tr className={net ? 'border-t-2 border-gold/60 bg-gold/10' : 'border-t border-rule bg-cream/60'}>
-      <td className="px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">{label}</td>
-      <td className="px-3 py-2 text-right text-[14px] font-semibold tabular-nums text-navy">{money(forecast)}</td>
-      <td className="px-3 py-2 text-right text-[13px] tabular-nums text-muted">
-        {budget == null ? '—' : money(budget)}
-      </td>
-      <td className={`px-3 py-2 text-right text-[13px] font-semibold tabular-nums ${tone}`}>
-        {budget == null ? '—' : signed(variance)}
-      </td>
-      <td className={`px-3 py-2 text-right text-[12px] tabular-nums ${tone}`}>{pctText(vp)}</td>
+    <tr className={net ? 'dt-section-total' : 'dt-subtotal'}>
+      <td className="text-[11px] font-semibold uppercase tracking-[0.06em]">{label}</td>
+      <td className="dt-num font-semibold">{money(forecast)}</td>
+      <td className="dt-num text-ink2">{budget == null ? '—' : money(budget)}</td>
+      <VarianceCell tone={tone} bold>{budget == null ? '—' : signed(variance)}</VarianceCell>
+      <td className="dt-num text-[12px] text-ink2">{pctText(vp)}</td>
       <td />
     </tr>
   )
@@ -257,6 +249,7 @@ function serializeDraft({ method, assumptions, feeder, rollForward, explanations
 }
 
 export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget, budgetContext, onSaved }) {
+  const reduce = useReducedMotion()
   const {
     forecast: savedForecast,
     feederEnrollmentByGrade: savedFeeder,
@@ -502,66 +495,52 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   // ── Render helpers (NOT components) ───────────────────────────────────────
   const renderKpiStrip = () => {
     const k = projected?.kpis ?? {}
-    const cards = [
-      {
-        label: 'Projected students',
-        value: (k.enrollmentTotal ?? 0).toLocaleString('en-US'),
-        hint: isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder',
-      },
-      { label: 'Forecast revenue', value: money(k.totalRevenue), hint: 'Total projected revenue' },
-      { label: 'Forecast expense', value: money(k.totalExpense), hint: 'Total projected expense' },
-      {
-        label: 'Net surplus / (deficit)',
-        value: signed(k.netIncome),
-        tone: (k.netIncome ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600',
-        hint: 'Forecast revenue − expense',
-      },
-    ]
     return (
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.label} className="card-soft p-3.5" title={c.hint}>
-            <div className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-              {c.label}
-            </div>
-            <div className={`font-serif text-lg font-semibold tabular-nums ${c.tone ?? 'text-navy'}`}>
-              {c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <StatStrip cols={4} className="stats-compact">
+        <Stat
+          label="Projected students"
+          value={Math.round(k.enrollmentTotal ?? 0)}
+          title={isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder'}
+        />
+        <Stat label="Forecast revenue" value={statMoney(k.totalRevenue)} title="Total projected revenue" />
+        <Stat label="Forecast expense" value={statMoney(k.totalExpense)} title="Total projected expense" />
+        <Stat
+          label="Net surplus / (deficit)"
+          value={signed(k.netIncome)}
+          status={!k.netIncome ? 'neutral' : k.netIncome > 0 ? 'good' : 'risk'}
+          title="Forecast revenue − expense"
+        />
+      </StatStrip>
     )
   }
 
   const renderTable = () => (
-    <div className="card-soft overflow-hidden p-0">
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <TrendingUp size={16} />
-        </span>
-        <div className="flex-1">
-          <h4 className="font-serif text-[15px] font-semibold text-navy">Forecast vs. Budget</h4>
-          <p className="text-[12px] text-muted">
-            Where the year lands under your revised assumptions, compared to the active budget. Add a
-            comment per line for the board packet.
-          </p>
-        </div>
-        {savedAt && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[11px] font-medium text-muted">
-            <Clock size={12} /> Saved {new Date(savedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+    <Section
+      label="Forecast vs. budget"
+      className="!mt-0 min-w-0"
+      aside={
+        savedAt ? (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <Clock size={12} aria-hidden="true" /> Saved{' '}
+            {new Date(savedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
           </span>
-        )}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
+        ) : null
+      }
+    >
+      <p className="mb-3 text-small text-ink2">
+        Where the year lands under your revised assumptions, compared to the active budget. Add a comment
+        per line for the board packet.
+      </p>
+      <div className="dt-wrap">
+        <table className="dt">
           <thead>
-            <tr className="bg-cream">
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Line</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">Forecast</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Budget</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Variance</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">%</th>
-              <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">Comment</th>
+            <tr>
+              <th scope="col">Line</th>
+              <th scope="col" className="dt-num">Forecast</th>
+              <th scope="col" className="dt-num">Budget</th>
+              <th scope="col" className="dt-num">Variance</th>
+              <th scope="col" className="dt-num">%</th>
+              <th scope="col">Comment</th>
             </tr>
           </thead>
           <tbody>
@@ -604,69 +583,52 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
           </tbody>
         </table>
       </div>
-    </div>
+    </Section>
   )
 
+  // The save bar is the one raised surface here (an action): a Panel pinned to
+  // the bottom of the viewport while the form scrolls — solid white, no glass.
   const renderSaveBar = () => (
-    <div
-      key="forecast-save-bar"
-      className="card-soft sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 border-gold/40 bg-white/95 p-4 shadow-glow backdrop-blur"
-    >
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-gradient text-white">
-          <Sparkles size={17} />
-        </span>
-        <div>
-          <p className="font-serif text-[15px] font-semibold text-navy">Save forecast</p>
-          <p className="text-[12px] text-muted">
+    <div key="forecast-save-bar" className="panel sticky bottom-4 z-10">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold text-ink">Save forecast</p>
+          <p className="hidden text-small text-ink2 sm:block">
             Re-projects on the server and stores it for the board report. Your active budget is left
             unchanged.
           </p>
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        {saving && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted">
-            <Loader2 size={16} className="animate-spin" /> Saving…
-          </span>
-        )}
-        {!saving && saveError && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-rose-600">
-            <AlertTriangle size={16} /> {saveError}
-          </span>
-        )}
-        {!saving && !saveError && !dirty && savedAt && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-600">
-            <CheckCircle2 size={16} /> Saved
-          </span>
-        )}
-        {!canEdit && (
-          <span className="text-[12px] italic text-muted">View-only — owner/accountant can save.</span>
-        )}
-        <button
-          type="button"
-          onClick={saveNow}
-          disabled={!canEdit || !dirty || saving}
-          className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Saving…
-            </>
-          ) : (
-            <>
-              <Save size={16} /> Save forecast
-            </>
+        <div className="flex flex-wrap items-center gap-3">
+          {!saving && saveError && (
+            <span className="b2-callout py-1" data-tone="risk" role="alert">
+              <AlertTriangle size={14} aria-hidden="true" /> {saveError}
+            </span>
           )}
-        </button>
+          {!saving && !saveError && !dirty && savedAt && (
+            <span className="b2-callout py-1" data-tone="good" role="status">
+              <CheckCircle2 size={14} aria-hidden="true" /> Saved
+            </span>
+          )}
+          {!canEdit && (
+            <span className="text-small italic text-ink2">View-only — owner/accountant can save.</span>
+          )}
+          <Button
+            variant="primary"
+            onClick={saveNow}
+            disabled={!canEdit || !dirty || saving}
+            icon={saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          >
+            {saving ? 'Saving…' : 'Save forecast'}
+          </Button>
+        </div>
       </div>
     </div>
   )
 
   if (loading) {
     return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Loading the forecast…</p>
+      <div className="b2-note" aria-busy="true">
+        <p>Loading the forecast…</p>
       </div>
     )
   }
@@ -675,18 +637,16 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
     <motion.div
       id="forecast-workspace"
       key="forecast"
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-5"
+      className="space-y-6"
     >
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <TrendingUp size={20} />
-        </span>
+      <div className="flex items-start gap-2.5">
+        <TrendingUp size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" />
         <div>
-          <h3 className="font-serif text-lg font-semibold text-navy">Fiscal-year-end forecast</h3>
-          <p className="text-[13px] text-muted">
+          <h3 className="font-serif text-title font-medium text-ink">Fiscal-year-end forecast</h3>
+          <p className="mt-0.5 text-small text-ink2">
             {isRollforward
               ? 'Roll this year’s roster forward a grade with retention, add new entrants, then compare where the year lands to the budget you set.'
               : 'Revise your assumptions and add anticipated feeder students to project where the year lands — then compare it to the budget you set.'}
@@ -695,25 +655,21 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
       </div>
 
       {!hasBaseBudget && (
-        <div className="card-soft border-amber-300 bg-amber-50/60 px-4 py-3">
-          <p className="flex items-start gap-2 text-[12.5px] text-amber-800">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-            <span>
-              <strong>No base budget yet.</strong> Build a budget on the <em>Budget</em> tab first —
-              until then there&rsquo;s nothing to compare against, so the variance columns stay blank.
-            </span>
-          </p>
-        </div>
+        <p className="b2-callout" data-tone="watch">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <span>
+            <strong>No base budget yet.</strong> Build a budget on the <em>Budget</em> tab first —
+            until then there&rsquo;s nothing to compare against, so the variance columns stay blank.
+          </span>
+        </p>
       )}
 
       {projected == null && (
-        <div className="card-soft border-dashed border-amber-300 bg-amber-50/50 px-4 py-3">
-          <p className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
-            <AlertTriangle size={13} />
-            Live preview pending — the compute engine is finishing integration. Your assumptions still
-            re-project server-side on save.
-          </p>
-        </div>
+        <p className="b2-callout" data-tone="watch">
+          <AlertTriangle size={14} aria-hidden="true" />
+          Live preview pending — the compute engine is finishing integration. Your assumptions still
+          re-project server-side on save.
+        </p>
       )}
 
       {renderKpiStrip()}
@@ -724,9 +680,9 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
         disabled={!canEdit}
       />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,420px)_1fr]">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-8 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         {/* id anchors Penny's "add your feeder students" glide. */}
-        <div id="forecast-feeder-input" className="space-y-4">
+        <div id="forecast-feeder-input" className="min-w-0 space-y-6">
           {isRollforward ? (
             <>
               <CurrentRosterGrid
@@ -776,13 +732,13 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
             </>
           )}
         </div>
-        <div className="space-y-4">{renderTable()}</div>
+        <div className="min-w-0">{renderTable()}</div>
       </div>
 
       {renderSaveBar()}
 
       {feederTotal > 0 && (
-        <p className="text-[12px] text-muted">
+        <p className="text-[12px] text-ink2">
           {isRollforward ? (
             <>
               {feederTotal} new entrant{feederTotal === 1 ? '' : 's'} included in the projected roster

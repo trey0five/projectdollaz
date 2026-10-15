@@ -146,16 +146,16 @@ export default function MappingCategorySelect({
 
   return (
     <div className="flex flex-col gap-1.5 py-1.5 sm:flex-row sm:items-center sm:gap-3">
-      <div className="flex min-w-0 flex-1 items-baseline justify-between gap-3 text-[13px] text-[#5a4400]">
+      <div className="flex min-w-0 flex-1 items-baseline justify-between gap-3 text-[13px] text-ink">
         <span className="min-w-0 truncate">
           <span className="font-semibold">{row.acct}</span> — {row.desc}
           {suggested ? (
-            <span className="ml-2 whitespace-nowrap text-[11.5px] font-semibold text-[#7a5e00]/70">
+            <span className="ml-2 whitespace-nowrap text-[11.5px] font-semibold text-ink/70">
               looks like {suggestion.reason}
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 font-mono">{fmt(Math.abs(row.total))}</span>
+        <span className="num shrink-0">{fmt(Math.abs(row.total))}</span>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -164,7 +164,7 @@ export default function MappingCategorySelect({
           disabled={busy || disabled}
           {...(controlled ? { value } : { defaultValue: suggested ?? '' })}
           onChange={handleChange}
-          className="w-full rounded-lg border-2 border-gold/40 bg-white px-2.5 py-1.5 text-[13px] text-navy transition-colors focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-60 sm:w-56"
+          className="w-full rounded-lg border border-hair bg-white px-2.5 py-1.5 text-[13px] text-ink transition-colors focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25 disabled:cursor-not-allowed disabled:opacity-60 sm:w-56"
         >
           {!controlled && (
             <option value="" disabled>
@@ -229,13 +229,13 @@ export default function MappingCategorySelect({
             type="button"
             disabled={disabled}
             onClick={() => onPick(row.acct, suggested)}
-            className="shrink-0 rounded-lg border-2 border-gold/50 bg-gold/10 px-2.5 py-1.5 text-[12px] font-semibold text-[#7a5e00] transition-colors hover:border-gold hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="shrink-0 rounded-lg border border-hair bg-ink/[0.04] px-2.5 py-1.5 text-[12px] font-semibold text-ink transition-colors hover:border-hair/[0.3] hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Use this
           </button>
         ) : null}
         {busy && (
-          <Loader2 size={15} className="shrink-0 animate-spin text-gold" aria-hidden="true" />
+          <Loader2 size={15} className="shrink-0 animate-spin text-ink2" aria-hidden="true" />
         )}
       </div>
     </div>

@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { UploadCloud } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 
 /**
- * Full-window gold-glow drag overlay. Subscribes to window-level drag
+ * Full-window drag overlay (a light ground wash + one dashed primary drop target). Subscribes to window-level drag
  * events with a depth counter (so moving over child elements doesn't
  * flicker). Hidden + pointer-events-none unless a drag is active.
  */
 export default function DragOverlay() {
   const { loadFiles, canEdit } = useApp()
-  const reduce = useReducedMotion()
   const [active, setActive] = useState(false)
   const depth = useRef(0)
 
@@ -73,25 +72,21 @@ export default function DragOverlay() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-navy-deep/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-ground/90"
         >
           <motion.div
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0.95 }}
-            className="flex flex-col items-center gap-5 rounded-3xl border-2 border-dashed border-gold bg-navy/40 px-16 py-14 text-center shadow-glow-lg"
+            className="flex flex-col items-center gap-4 rounded-[8px] border-2 border-dashed border-[#2563EB] bg-white px-16 py-14 text-center shadow-float"
           >
-            <motion.span
-              className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-              animate={reduce ? undefined : { y: [0, -10, 0] }}
-              transition={reduce ? undefined : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <UploadCloud size={44} />
-            </motion.span>
-            <h2 className="font-serif text-3xl font-semibold text-gold-light">
+            <span className="flex text-[#2563EB]">
+              <UploadCloud size={44} aria-hidden="true" />
+            </span>
+            <h2 className="font-serif text-display font-medium text-ink">
               Release to import trial balances
             </h2>
-            <p className="text-sm uppercase tracking-[0.16em] text-white/70">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
               .xlsx · .xls · .csv
             </p>
           </motion.div>

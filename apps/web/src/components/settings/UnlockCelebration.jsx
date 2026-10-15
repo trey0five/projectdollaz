@@ -1,14 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // UnlockCelebration — the "module unlocked" moment fired from the Membership
-// Modules manager. Pure framer-motion (NO new deps): a confetti burst built
-// from motion particles in the module's hue + the premium gold accents, a
-// one-shot conic gold shimmer behind the module art, then a serif thank-you
-// and an "Open <module>" CTA. Gold stays Penny-only chrome elsewhere — this
-// is the one sanctioned gold-gradient MOMENT (a moment, not chrome).
+// Modules manager. Pure framer-motion (NO new deps): a one-shot confetti burst
+// in the module's hue + the primary blues, the module art on a white square
+// framed by a 2px hue rule that draws once, then a serif thank-you and an
+// "Open <module>" CTA. No gold — gold is KYRO's alone.
 // Page-less modules (hr/planning — route:null) get "See it in Analytics"
 // instead, since their value surfaces inside Analytics and the briefing.
-// Reduced motion: no particles, no shimmer — a calm static thank-you card
-// with a static gold tint IS the fallback.
+// Reduced motion: no particles, no draw — a calm static thank-you card IS the
+// fallback.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -16,13 +15,10 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { TILE_BY_KEY, tileLabel } from '../home/tileRegistry.jsx'
 
-const GOLD = '#C9A227'
-const GOLD_LIGHT = '#F6D67C'
-
 // Module-scope particle factory — called ONLY inside a useState initializer
 // (never in a render body) so the burst is generated once per scene mount.
 function makeParticles(hue, n = 32) {
-  const colors = [hue, GOLD, GOLD_LIGHT, '#ffffff', '#1f3d72']
+  const colors = [hue, '#2563EB', '#93C5FD', '#ffffff', '#1f3d72']
   return Array.from({ length: n }, (_, i) => ({
     id: i,
     color: colors[i % colors.length],
@@ -99,7 +95,7 @@ function CelebrationScene({ tile, onClose }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0A1628]/40 p-4 "
       onClick={onClose}
     >
       {/* Confetti layer — skipped entirely under reduced motion. */}
@@ -131,64 +127,53 @@ function CelebrationScene({ tile, onClose }) {
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-        className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl"
+        className="w-full max-w-sm rounded-[8px] bg-white p-8 text-center shadow-float"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* The gold MOMENT: static radial halo + (motion only) a one-shot conic shimmer. */}
-        <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
-          <div
-            aria-hidden="true"
-            className="absolute inset-[-18px]"
-            style={{
-              background: 'radial-gradient(circle, rgba(201,162,39,.28), transparent 70%)',
-              borderRadius: '9999px',
-            }}
-          />
-          {!reduce && (
-            <motion.div
-              aria-hidden="true"
-              className="absolute inset-[-10px] rounded-full"
-              style={{
-                background: `conic-gradient(from 0deg, transparent, ${GOLD_LIGHT}, transparent 30%, ${GOLD}, transparent 65%)`,
-              }}
-              initial={{ rotate: 0, opacity: 0.35 }}
-              animate={{ rotate: 360, opacity: 0 }}
-              transition={{ duration: 1.4, ease: 'easeOut' }}
-            />
-          )}
+        {/* The module art on a white square: a 2px hue frame, a hue icon stroke,
+            and a 2px hue rule underneath that draws once (no gold, no fill). */}
+        <div className="relative mx-auto flex w-28 flex-col items-center gap-3">
           <motion.span
             aria-hidden="true"
-            className="relative flex h-[72px] w-[72px] items-center justify-center rounded-2xl"
-            style={{ background: `color-mix(in srgb, ${hue} 14%, white)`, color: hue }}
+            className="relative flex h-[72px] w-[72px] items-center justify-center rounded-[8px] border-2 bg-white"
+            style={{ borderColor: hue, color: hue }}
             initial={reduce ? { opacity: 0 } : { scale: 0 }}
             animate={reduce ? { opacity: 1 } : { scale: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.15 }}
           >
             <Art width={44} height={44} />
           </motion.span>
+          <motion.span
+            aria-hidden="true"
+            className="block h-[2px] w-full"
+            style={{ background: hue, transformOrigin: 'left center' }}
+            initial={reduce ? false : { scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.48, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          />
         </div>
 
         <h2
           id="unlock-celebration-title"
-          className="mt-5 font-serif text-[24px] font-semibold leading-snug text-navy"
+          className="mt-5 font-serif text-[24px] font-semibold leading-snug text-ink"
         >
           {label} is unlocked
         </h2>
-        <p className="mt-1 text-[15px] text-muted">— thank you for growing with us.</p>
+        <p className="mt-1 text-[15px] text-ink2">— thank you for growing with us.</p>
         {pageLess && (
-          <p className="mt-2 text-[13.5px] leading-snug text-muted">
+          <p className="mt-2 text-[13.5px] leading-snug text-ink2">
             It&apos;s live inside Analytics and your briefing.
           </p>
         )}
 
         <div className="mt-6 flex flex-col items-center gap-2">
-          <button ref={ctaRef} type="button" onClick={open} className="btn-primary w-full">
+          <button ref={ctaRef} type="button" onClick={open} className="btn btn-primary w-full">
             {pageLess ? 'See it in Analytics' : `Open ${label}`}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-4 py-2 text-[14px] font-semibold text-muted transition-colors hover:bg-navy/[0.05] hover:text-navy"
+            className="rounded-[8px] px-4 py-2 text-[14px] font-semibold text-ink2 transition-colors hover:bg-ink/[0.05] hover:text-ink"
           >
             Back to membership
           </button>

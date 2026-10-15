@@ -18,7 +18,6 @@
 // clear) we call the host's onSaved?.() in addition to our own reloadBudget(), so
 // the embedding hub can re-pull its data-status and flip the Budget card to Done.
 import { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { Sparkles, Table2 } from 'lucide-react'
 import MonthlySpreadGrid from './MonthlySpreadGrid.jsx'
 import BudgetWizard from './wizard/BudgetWizard.jsx'
@@ -27,6 +26,7 @@ import BudgetSummary from './BudgetSummary.jsx'
 import { describeBudgetSource } from './budgetSource.js'
 import { useBudget, useBudgetContext } from '../../hooks/useAnalytics.js'
 import { analyticsApi } from '../../lib/api.js'
+import '../../styles/pending/b2-finance.css'
 
 // Guided ⇄ Advanced segmented control options (module-scope so the React Compiler
 // treats them as stable; the control itself is rendered via a render-helper).
@@ -141,13 +141,10 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
 
   // ── Render helpers (NOT components) ─────────────────────────────────────────
 
-  // The Guided/Advanced segmented control.
+  // The Guided/Advanced segmented control — the ledger `.seg` (ink fill on the
+  // selected option, hairline frame, no navy band / gold pill).
   const renderModeToggle = () => (
-    <div
-      role="tablist"
-      aria-label="Budget view mode"
-      className="inline-flex items-center gap-1 rounded-2xl border border-gold/25 bg-navy-gradient p-1 shadow-navy-glow"
-    >
+    <div role="tablist" aria-label="Budget view mode" className="seg">
       {MODE_OPTIONS.map((opt) => {
         const isActive = opt.id === mode
         const Icon = opt.Icon
@@ -158,21 +155,10 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => setMode(opt.id)}
-            className={`relative flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
-              isActive ? 'text-navy' : 'text-white/70 hover:text-white'
-            }`}
+            className="seg-btn"
           >
-            {isActive && (
-              <motion.span
-                layoutId="budget-mode-pill"
-                className="absolute inset-0 rounded-xl bg-gold-gradient shadow-glow"
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-              />
-            )}
-            <span className="relative z-10 flex items-center gap-1.5">
-              <Icon size={14} />
-              {opt.label}
-            </span>
+            <Icon size={13} aria-hidden="true" />
+            {opt.label}
           </button>
         )
       })}
@@ -184,8 +170,8 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
   const renderAdvanced = () => {
     if (budgetLoading) {
       return (
-        <div className="card-soft animate-pulse px-6 py-14 text-center">
-          <p className="font-serif text-base italic text-muted">Loading the monthly spread…</p>
+        <div className="b2-note" aria-busy="true">
+          <p>Loading the monthly spread…</p>
         </div>
       )
     }
@@ -195,26 +181,18 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
       // appears. Read-only members get the pointer back to Guided instead.
       if (!canEdit) {
         return (
-          <div className="card-soft border-dashed px-6 py-12 text-center">
-            <p className="font-serif text-lg italic text-muted">
-              No spreadsheet view for this budget yet.
-            </p>
-            <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
-              Importing a budget is available to owners and accountants.
-            </p>
+          <div className="b2-note">
+            <p className="b2-note-title">No spreadsheet view for this budget yet.</p>
+            <p className="mx-auto max-w-md">Importing a budget is available to owners and accountants.</p>
           </div>
         )
       }
       return (
         <div className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="font-serif text-lg font-semibold text-navy">Import a budget spreadsheet</h3>
-            <button
-              type="button"
-              onClick={() => setMode('guided')}
-              className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted transition-colors hover:text-gold"
-            >
-              <Sparkles size={14} /> Prefer to answer a few questions? Go to Guided
+            <h3 className="text-heading font-semibold text-ink">Import a budget spreadsheet</h3>
+            <button type="button" onClick={() => setMode('guided')} className="dt-link">
+              <Sparkles size={13} aria-hidden="true" /> Prefer to answer a few questions? Go to Guided
             </button>
           </div>
           <BudgetImport
@@ -241,8 +219,8 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
   const renderGuided = () => {
     if (budgetLoading) {
       return (
-        <div className="card-soft animate-pulse px-6 py-14 text-center">
-          <p className="font-serif text-base italic text-muted">Loading your budget…</p>
+        <div className="b2-note" aria-busy="true">
+          <p>Loading your budget…</p>
         </div>
       )
     }
@@ -278,8 +256,8 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
   // belt-and-suspenders for a standalone use of the component.
   if (!periodId) {
     return (
-      <div className="card-soft border-dashed px-6 py-14 text-center">
-        <p className="font-serif text-lg italic text-muted">Select a period to set up its budget.</p>
+      <div className="b2-note">
+        <p className="b2-note-title">Select a period to set up its budget.</p>
       </div>
     )
   }
@@ -290,7 +268,7 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
           the wizard/import flow; the toggle row is the stable always-present anchor. */}
       <div id="budget-save-button" className="flex flex-wrap items-center justify-between gap-3">
         {renderModeToggle()}
-        <p className="max-w-md text-[12px] text-muted">
+        <p className="max-w-md text-small text-ink2">
           {mode === 'guided'
             ? 'A friendly, step-by-step setup — answer a few questions or upload what you have.'
             : 'The full accounts-by-month spread for accountants and power users.'}

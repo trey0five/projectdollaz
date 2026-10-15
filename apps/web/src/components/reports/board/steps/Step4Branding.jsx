@@ -144,8 +144,8 @@ export default function Step4Branding({ ctx }) {
   return (
     <div>
       <header className="mb-5">
-        <h2 className="font-serif text-2xl font-semibold text-navy">Branding &amp; cover</h2>
-        <p className="mt-1 text-[13.5px] text-muted">
+        <h2 className="font-serif text-title font-medium text-ink">Branding &amp; cover</h2>
+        <p className="mt-1 text-[13.5px] text-ink2">
           Personalize the cover page. The logo &amp; accent color are saved for your school; the
           title &amp; committee are per report.
         </p>
@@ -156,26 +156,26 @@ export default function Step4Branding({ ctx }) {
         <div className="space-y-5">
           {/* Logo */}
           <div>
-            <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
-              School logo {!isOwner && <span className="normal-case text-muted/70">(owner only)</span>}
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+              School logo {!isOwner && <span className="normal-case text-ink2/70">(owner only)</span>}
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-rule/60 bg-section">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-hair bg-ground">
                 {logo ? (
                   <img src={logo} alt="School logo" className="max-h-full max-w-full object-contain" />
                 ) : (
-                  <Building2 size={22} className="text-muted/50" />
+                  <Building2 size={22} className="text-ink2/50" />
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {isOwner && (
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-[12.5px] font-semibold text-navy transition-colors hover:bg-gold/20">
-                    <ImageUp size={14} className="text-gold" />
+                  <label className="btn btn-secondary btn-sm cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[#2563EB]/50">
+                    <ImageUp size={14} aria-hidden="true" />
                     {logo ? 'Replace' : 'Upload logo'}
                     <input
                       type="file"
                       accept={ACCEPT}
-                      className="hidden"
+                      className="sr-only"
                       disabled={busy}
                       onChange={(e) => {
                         onLogoFile(e.target.files?.[0])
@@ -189,19 +189,19 @@ export default function Step4Branding({ ctx }) {
                     type="button"
                     onClick={() => patchBranding({ logoBase64: null })}
                     disabled={busy}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12.5px] font-semibold text-muted transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"
+                    className="btn btn-quiet btn-sm"
                   >
                     <Trash2 size={14} /> Remove
                   </button>
                 )}
               </div>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted">
+            <p className="mt-1.5 text-[11px] text-ink2">
               PNG, JPG, or SVG. Large images are resized automatically to a web-friendly size.
             </p>
             {logoErr && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-rose-600">
-                <AlertCircle size={14} /> {logoErr}
+              <p className="b2-callout b2-risk mt-1.5" role="alert">
+                <AlertCircle size={14} aria-hidden="true" /> {logoErr}
               </p>
             )}
           </div>
@@ -209,7 +209,7 @@ export default function Step4Branding({ ctx }) {
           {/* Accent color */}
           {isOwner && (
             <div>
-              <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                 Accent color
               </label>
               <div className="flex items-center gap-2">
@@ -218,17 +218,17 @@ export default function Step4Branding({ ctx }) {
                   value={brandColor || '#0B1F3A'}
                   disabled={busy}
                   onChange={(e) => onPickColor(e.target.value)}
-                  className="h-9 w-12 cursor-pointer rounded border border-border bg-white"
+                  className="h-9 w-12 cursor-pointer rounded border border-hair bg-white"
                   aria-label="Brand accent color"
                 />
-                <span className="text-[12.5px] tabular-nums text-muted">{brandColor || '#0B1F3A'}</span>
+                <span className="text-[12.5px] tabular-nums text-ink2">{brandColor || '#0B1F3A'}</span>
               </div>
             </div>
           )}
 
           {/* Report title */}
           <div>
-            <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
               Report title
             </label>
             <input
@@ -238,13 +238,13 @@ export default function Step4Branding({ ctx }) {
               maxLength={160}
               onChange={(e) => dispatch({ type: 'setField', field: 'reportTitle', value: e.target.value })}
               placeholder={DEFAULT_TITLE}
-              className="w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-gold read-only:bg-section"
+              className="b2-input read-only:bg-ground"
             />
           </div>
 
           {/* Committee */}
           <div>
-            <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
               Committee name
             </label>
             <input
@@ -254,7 +254,7 @@ export default function Step4Branding({ ctx }) {
               maxLength={120}
               onChange={(e) => dispatch({ type: 'setField', field: 'committeeName', value: e.target.value })}
               placeholder={DEFAULT_COMMITTEE}
-              className="w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors focus:border-gold read-only:bg-section"
+              className="b2-input read-only:bg-ground"
             />
           </div>
         </div>
@@ -272,29 +272,29 @@ function renderCoverPreview({ data, school, logo, brandColor, titleValue, commit
   const accent = brandColor || '#0B1F3A'
   return (
     <div className="lg:sticky lg:top-24">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-gold">Cover preview</p>
-      <div className="overflow-hidden rounded-xl border border-rule/60 bg-white shadow-card">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">Cover preview</p>
+      <div className="overflow-hidden rounded-[8px] border border-hair bg-white">
         <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
         <div className="flex flex-col items-center px-6 py-9 text-center">
           {logo ? (
             <img src={logo} alt="" className="mb-4 max-h-[72px] max-w-[180px] object-contain" />
           ) : (
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-section">
-              <Building2 size={24} className="text-muted/50" />
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[8px] bg-ground">
+              <Building2 size={24} className="text-ink2/50" />
             </div>
           )}
-          <h3 className="font-serif text-xl font-semibold text-navy">
+          <h3 className="font-serif text-xl font-semibold text-ink">
             {school?.name || data?.branding?.schoolName || 'Your School'}
           </h3>
           <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.1em]" style={{ color: accent }}>
             {data?.label || ''}
           </p>
-          <p className="mt-4 max-w-[260px] font-serif text-[15px] text-navy">
+          <p className="mt-4 max-w-[260px] font-serif text-[15px] text-ink">
             {titleValue.trim() || DEFAULT_TITLE}
           </p>
-          <p className="mt-1 text-[12.5px] text-muted">{committeeValue.trim() || DEFAULT_COMMITTEE}</p>
+          <p className="mt-1 text-[12.5px] text-ink2">{committeeValue.trim() || DEFAULT_COMMITTEE}</p>
           {data?.periodEndDate && (
-            <p className="mt-3 text-[11px] text-muted">For the year ending {longDate(data.periodEndDate)}</p>
+            <p className="mt-3 text-[11px] text-ink2">For the year ending {longDate(data.periodEndDate)}</p>
           )}
         </div>
       </div>

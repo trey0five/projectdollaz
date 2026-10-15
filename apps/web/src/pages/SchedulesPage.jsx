@@ -12,11 +12,13 @@
 // React-Compiler safety: tab + period selection are read at render, set only from
 // handlers; the period sync is the established microtask-deferred sync-on-key.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, Landmark, Banknote, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { PageHeader } from '../components/ui/surface/index.js'
+import '../styles/pending/b2-finance.css'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import CapitalScheduleWorkspace from '../components/reports/schedules/CapitalScheduleWorkspace.jsx'
@@ -71,66 +73,82 @@ export default function SchedulesPage() {
 
   const [tab, setTab] = useState('capital')
 
+  const reduce = useReducedMotion()
+  const tabRefs = useRef([])
+  const onTabKey = (e, i) => {
+    let next = null
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = TABS.length - 1
+    if (next == null) return
+    e.preventDefault()
+    setTab(TABS[next].id)
+    tabRefs.current[next]?.focus()
+  }
+
   return (
-    <div className="min-h-screen bg-section">
+    <div className="min-h-screen">
       <BillingBanner />
-      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
-        <Link
-          to="/reports"
-          className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-        >
-          <ArrowLeft size={15} /> All reports
+      <main className="mx-auto max-w-page px-4 py-6 sm:px-10">
+        <Link to="/reports" className="back-link mb-2">
+          <ArrowLeft size={15} aria-hidden="true" /> All reports
         </Link>
 
-        <motion.header initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
-          <h1 className="mt-1 font-serif text-3xl font-semibold text-navy">Supporting schedules</h1>
-          <p className="mt-1.5 max-w-2xl text-[16px] text-muted">
-            Capital projects and cash &amp; investment accounts that flow into your board packet. Pick a
-            period, fill in the tables, and the next board report picks up the totals automatically.
-          </p>
-        </motion.header>
+        <PageHeader
+          eyebrow={['Reports', activeSchool?.name, 'Supporting schedules'].filter(Boolean).join(' · ')}
+          title="Supporting schedules"
+          meta="Capital projects and cash & investment accounts that flow into your board packet. Pick a period, fill in the tables, and the next board report picks up the totals automatically."
+          hue="37 99 235"
+          actions={
+            pickerPeriods.length > 0 ? (
+              <div className="flex min-w-0 max-w-full flex-col gap-1">
+                <span className="toolbar-label">Period</span>
+                <PeriodSelector periods={pickerPeriods} activeId={periodId} onSelect={setPeriodId} light />
+              </div>
+            ) : null
+          }
+        />
 
         {pickerPeriods.length === 0 ? (
-          <div className="card-soft px-6 py-12 text-center">
-            <p className="font-serif text-base italic text-muted">
-              No periods yet — import a trial balance to get started.
-            </p>
+          <div className="b2-note mt-8">
+            <p>No periods yet — import a trial balance to get started.</p>
           </div>
         ) : (
           <>
-            <div className="mb-5">
-              <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
-                Period
-              </p>
-              <PeriodSelector
-                periods={pickerPeriods}
-                activeId={periodId}
-                onSelect={setPeriodId}
-                light
-              />
-            </div>
-
-            <div className="mb-6 flex flex-wrap gap-2">
-              {TABS.map((t) => {
-                const Icon = t.Icon
-                const active = tab === t.id
-                return (
-                  <button
-                    key={t.id}
-                    id={t.id === 'capital' ? 'schedules-capital-tab' : undefined}
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[15px] font-semibold transition-all ${
-                      active
-                        ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
-                        : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
-                    }`}
-                  >
-                    <Icon size={16} /> {t.label}
-                  </button>
-                )
-              })}
+            <div className="scrollbar-none mb-6 mt-4 overflow-x-auto">
+              <div role="tablist" aria-label="Schedules" className="tabs-ink min-w-max">
+                {TABS.map((t, i) => {
+                  const Icon = t.Icon
+                  const active = tab === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      ref={(el) => {
+                        tabRefs.current[i] = el
+                      }}
+                      id={t.id === 'capital' ? 'schedules-capital-tab' : undefined}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      tabIndex={active ? 0 : -1}
+                      onClick={() => setTab(t.id)}
+                      onKeyDown={(e) => onTabKey(e, i)}
+                      className="tab-ink shrink-0"
+                    >
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <Icon size={14} aria-hidden="true" className="text-ink2" /> {t.label}
+                      </span>
+                      {active &&
+                        (reduce ? (
+                          <span className="tab-ink-rule" aria-hidden="true" />
+                        ) : (
+                          <motion.span layoutId="schedules-tab-rule" className="tab-ink-rule" aria-hidden="true" />
+                        ))}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {tab === 'capital' && (

@@ -8,7 +8,8 @@
 import { useMemo, useState } from 'react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
-import MonthlyActualsPanel from './MonthlyActualsPanel.jsx'
+import MonthlyActualsPanel, { MONTHLY_BLURB } from './MonthlyActualsPanel.jsx'
+import { PageHeader } from '../ui/surface/index.js'
 
 export default function MonthlyActualsSection({ periods = [], initialPeriodId = null }) {
   const { activeSchool } = useSchools()
@@ -28,35 +29,41 @@ export default function MonthlyActualsSection({ periods = [], initialPeriodId = 
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <label
-          htmlFor="monthly-period"
-          className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted"
-        >
-          Fiscal period
-        </label>
-        {periodOptions.length === 0 ? (
-          <span className="text-[15px] italic text-muted">No saved periods yet.</span>
-        ) : (
-          <select
-            id="monthly-period"
-            value={periodId}
-            onChange={(e) => setPeriodId(e.target.value)}
-            className="rounded-xl border border-rule bg-white px-3.5 py-2 text-[16px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
-          >
-            {periodOptions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {periodLabel(p)}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Reports · Monthly actuals"
+        title="Monthly actuals"
+        meta={MONTHLY_BLURB}
+        hue="37 99 235"
+        actions={
+          periodOptions.length === 0 ? (
+            <span className="text-small italic text-ink2">No saved periods yet.</span>
+          ) : (
+            <label className="flex items-center gap-2">
+              <span className="toolbar-label">Fiscal period</span>
+              <select
+                id="monthly-period"
+                value={periodId}
+                onChange={(e) => setPeriodId(e.target.value)}
+                className="sel h-9 w-auto"
+                // .sel caps at 16rem, which clipped "… · Jun 30, 2026" mid-date.
+                style={{ maxWidth: 'min(24rem, 100%)' }}
+              >
+                {periodOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {periodLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        }
+      />
 
       <MonthlyActualsPanel
         schoolId={activeSchool?.id ?? null}
         periodId={periodId || null}
         canEdit={canEdit}
+        hosted
       />
     </div>
   )

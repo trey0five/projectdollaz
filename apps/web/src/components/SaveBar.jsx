@@ -18,7 +18,7 @@ export default function SaveBar() {
 
   if (saved) {
     return (
-      <span className="inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl bg-emerald-50 px-4 py-2 text-[15px] font-semibold uppercase tracking-[0.12em] text-emerald-700 sm:w-[120px]">
+      <span className="inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-[8px] bg-white px-4 py-2 text-[15px] font-semibold uppercase tracking-[0.12em] text-ink sm:w-[120px]">
         <Check size={14} /> Saved
       </span>
     )
@@ -29,43 +29,31 @@ export default function SaveBar() {
     return (
       <Link
         to="/settings/billing"
-        className="inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-[14px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-red-700 sm:min-w-[120px]"
+        className="btn btn-primary w-full shrink-0 sm:w-auto"
       >
         <Lock size={14} /> Subscribe to generate
       </Link>
     )
   }
 
-  // Unsaved work the user can persist → nudge them to press Save with a gold
-  // "radar-ping" glow + gentle breath so it's obvious the click is required.
-  const shouldPulse = canGenerate && dirty && !busy && !reduce
+  // Unsaved work the user can persist → the Save button turns primary (a flat
+  // fill is the cue; the old infinite gold "radar-ping" is gone — motion is
+  // one-shot). A single 2px primary ring blooms once when it becomes savable.
+  const savable = canGenerate && dirty && !busy
 
   return (
     <motion.button
       type="button"
       onClick={save}
       disabled={busy || !canGenerate || !dirty}
+      initial={false}
       animate={
-        shouldPulse
-          ? {
-              boxShadow: [
-                '0 0 0 0 rgba(201,162,39,0.55)',
-                '0 0 0 10px rgba(201,162,39,0)',
-              ],
-              scale: [1, 1.035, 1],
-            }
-          : { boxShadow: '0 0 0 0 rgba(201,162,39,0)', scale: 1 }
+        savable && !reduce
+          ? { boxShadow: ['0 0 0 0 rgba(37,99,235,0.45)', '0 0 0 8px rgba(37,99,235,0)'] }
+          : { boxShadow: '0 0 0 0 rgba(37,99,235,0)' }
       }
-      transition={
-        shouldPulse
-          ? { duration: 1.5, repeat: Infinity, ease: 'easeOut' }
-          : { duration: 0.2 }
-      }
-      className={`inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl px-4 py-2 text-[15px] font-semibold uppercase tracking-[0.12em] transition-colors disabled:cursor-not-allowed sm:w-[120px] ${
-        canGenerate && dirty && !busy
-          ? 'bg-gold-gradient text-white hover:opacity-90'
-          : 'border-2 border-border text-muted'
-      }`}
+      transition={{ duration: 0.9, ease: 'easeOut' }}
+      className={`btn w-full shrink-0 sm:w-auto ${savable ? 'btn-primary' : 'btn-secondary'}`}
     >
       {busy ? (
         <>

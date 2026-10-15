@@ -1,0 +1,287 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENDING — slice b2-finance (Premium UI P4, Finance depth). Classes the
+   Finance-depth surfaces need that surface.css does not have yet. Imported by
+   the b2 pages/components that use them; to be consolidated into surface.css
+   (and this file deleted) in the P4-C CSS pass. Screen-only by construction:
+   nothing here targets .ui-v1 or @media print.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* A note ON THE GROUND (empty / loading / "nothing here yet"): ruled above and
+   below, ink-2 text, centred. Replaces the dashed `card-soft` empty boxes. */
+.b2-note {
+  padding: 2rem 0.5rem;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.b2-note-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  text-wrap: balance;
+}
+.b2-note > * + * {
+  margin-top: 0.5rem;
+}
+.b2-note[aria-busy='true'] {
+  opacity: 0.7;
+}
+
+/* An inline status line: a 2px semantic mark on the left, INK text (never
+   coloured text). data-tone = good | watch | risk | neutral. */
+.b2-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  border-left: 2px solid rgb(var(--c-ink-2));
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink));
+}
+.b2-callout[data-tone='good'] { border-left-color: rgb(var(--c-good)); }
+.b2-callout[data-tone='watch'] { border-left-color: rgb(var(--c-watch)); }
+.b2-callout[data-tone='risk'] { border-left-color: rgb(var(--c-risk)); }
+.b2-callout > svg {
+  flex: none;
+  margin-top: 1px;
+  color: rgb(var(--c-ink-2));
+}
+
+/* A dropzone keeps its dashed affordance at the one panel radius. */
+.b2-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1rem;
+  border: 1px dashed rgb(var(--hair) / 0.3);
+  border-radius: var(--r-panel);
+  background: #ffffff;
+  text-align: center;
+  color: rgb(var(--c-ink-2));
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.b2-drop:hover,
+.b2-drop[data-active='true'] {
+  border-color: #2563eb;
+  background: rgb(37 99 235 / 0.03);
+}
+.b2-drop:focus-within,
+.b2-drop:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.b2-drop[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.b2-drop-icon {
+  display: inline-flex;
+  color: rgb(var(--c-module, 37 99 235));
+}
+
+/* A step rail for a wizard on the hairline: a 2px progress rule per step with
+   the label underneath (no card, no gold). */
+.b2-steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.375rem;
+}
+.b2-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-family: var(--font-body);
+}
+.b2-step-rule {
+  display: block;
+  height: 2px;
+  background: rgb(var(--hair) / 0.12);
+  overflow: hidden;
+}
+.b2-step-rule > i {
+  display: block;
+  height: 100%;
+  background: rgb(var(--c-module, 37 99 235));
+  transform-origin: left center;
+}
+.b2-step-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.b2-step[aria-current='step'] .b2-step-label { color: rgb(var(--c-ink)); }
+button.b2-step { cursor: pointer; }
+button.b2-step:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 3px;
+  border-radius: var(--r-ctl);
+}
+
+/* The footer of a wizard step / form: actions on a hairline, no floating card. */
+.b2-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+.b2-actions-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+/* A sheet input inside a .dt cell (driver/roster/feeder grids). */
+.b2-cell-input {
+  width: 100%;
+  min-width: 4.5rem;
+  height: 28px;
+  padding: 0 0.5rem;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: var(--r-ctl);
+  background: #ffffff;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: rgb(var(--c-ink));
+}
+.b2-cell-input:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+.b2-cell-input:disabled {
+  background: rgb(var(--c-ground));
+  color: rgb(var(--c-ink-2));
+}
+
+/* A plain form control on the ledger: 36px, hairline, radius 6. */
+.b2-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 0.75rem;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: 6px;
+  background: #ffffff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgb(var(--c-ink));
+}
+.b2-input:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+textarea.b2-input {
+  height: auto;
+  min-height: 5rem;
+  padding: 0.5rem 0.75rem;
+  line-height: 1.45;
+}
+.b2-label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+
+/* ColumnChart (analytics/charts): the chart never lends its drawn width to the
+   page. `contain: inline-size` stops the svg's explicit width from becoming the
+   min-content of whatever grid/flex item holds it (the /academics/network
+   phone overflow: a 560px fallback svg widened its Section, which re-measured
+   at 560, forever). The scroller inside keeps the real width. */
+.fr-col {
+  contain: inline-size;
+}
+.b2-hscroll-fade {
+  position: relative;
+}
+.b2-hscroll-fade[data-overflow='x']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5rem;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgb(var(--c-ground) / 0), rgb(var(--c-ground)));
+  transition: opacity 0.15s ease;
+}
+.b2-hscroll-fade[data-overflow='x'][data-at-end='true']::after {
+  opacity: 0;
+}
+
+/* Class-only tone hooks for .b2-callout (when a data-attribute is awkward). */
+.b2-callout.b2-good { border-left-color: rgb(var(--c-good)); }
+.b2-callout.b2-watch { border-left-color: rgb(var(--c-watch)); }
+.b2-callout.b2-risk { border-left-color: rgb(var(--c-risk)); }
+
+/* A selectable chip (period / month / quarter / option pickers): hairline at
+   rest, primary-blue frame + wash when chosen, the primary focus ring. */
+.b2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 36px;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(var(--c-ink-2));
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.b2-chip:hover:not(:disabled) {
+  border-color: rgb(var(--hair) / 0.3);
+  color: rgb(var(--c-ink));
+}
+.b2-chip[aria-pressed='true'],
+.b2-chip[aria-selected='true'],
+.b2-chip.is-active {
+  border-color: rgb(37 99 235 / 0.6);
+  background: rgb(37 99 235 / 0.06);
+  color: rgb(var(--c-ink));
+}
+.b2-chip:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.b2-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

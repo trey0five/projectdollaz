@@ -49,9 +49,9 @@ const TRIGGER_ICON = {
 function TriggerIcon({ trigger }) {
   const Icon = TRIGGER_ICON[trigger]
   if (!Icon) {
-    return <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-gold/70" aria-hidden />
+    return <span className="mt-1.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-ink2/50" aria-hidden />
   }
-  return <Icon size={13} className="mt-0.5 shrink-0 text-gold" aria-hidden />
+  return <Icon size={13} className="mt-0.5 shrink-0 text-ink2" aria-hidden />
 }
 
 /** "by {label} · {actor} · {date}" — em-dash for a missing actor. */
@@ -87,39 +87,36 @@ export default function ValueHistory({
 
   return (
     <div className="no-print">
-      <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-        History — how it changed
-      </p>
+      <div className="sec-head">
+        <h3 className="sec-label">History — how it changed</h3>
+        <span className="sec-rule" aria-hidden="true" />
+      </div>
 
       {status === 'idle' && (
-        <button type="button" onClick={() => run(selection)} className="btn-gold w-full">
-          <History size={15} />
+        <button type="button" onClick={() => run(selection)} className="btn btn-secondary w-full">
+          <History size={14} aria-hidden="true" />
           How this {noun} changed
         </button>
       )}
 
       {status === 'loading' && (
-        <div className="rounded-lg border border-rule/50 bg-white p-3">
-          <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-navy">
-            <Loader2 size={15} className="animate-spin text-gold" />
+        <div aria-busy="true">
+          <p className="mb-3 flex items-center gap-2 text-small font-semibold text-ink">
+            <Loader2 size={14} aria-hidden="true" className="animate-spin text-ink2" />
             Tracing how this number moved…
-          </div>
+          </p>
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-8 animate-pulse rounded bg-section" />
+              <div key={i} className="h-8 animate-pulse rounded-[4px] bg-ground" />
             ))}
           </div>
         </div>
       )}
 
       {status === 'error' && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[14px] text-amber-700">
+        <div className="b2-callout b2-watch flex-col !gap-1" role="alert">
           <p className="font-semibold">Couldn&apos;t load the history.</p>
-          <button
-            type="button"
-            onClick={() => run(selection)}
-            className="mt-1.5 text-[13px] font-semibold text-navy underline decoration-gold underline-offset-2 hover:text-gold"
-          >
+          <button type="button" onClick={() => run(selection)} className="dt-link">
             Try again
           </button>
         </div>
@@ -145,18 +142,18 @@ function HistoryBody({ result, noun, unit, goodDirection, fmtVal }) {
   const isEmpty = versions.length <= 1
 
   return (
-    <div className="space-y-3 rounded-xl border border-rule/50 bg-white p-4">
+    <div className="space-y-3">
       {/* header: first → latest + net-change chip */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {!isEmpty && result.first != null && (
           <>
-            <span className="font-serif text-[17px] font-semibold text-muted">
+            <span className="font-serif text-[17px] font-medium tabular-nums text-ink2">
               {fmtVal(result.first)}
             </span>
-            <ArrowRight size={15} className="text-muted" aria-hidden />
+            <ArrowRight size={15} className="text-ink2" aria-hidden />
           </>
         )}
-        <span className="gold-text font-serif text-[26px] font-semibold leading-none">
+        <span className="font-serif text-[26px] font-medium leading-none tabular-nums text-ink">
           {fmtVal(result.latest)}
         </span>
         {!isEmpty && (
@@ -167,32 +164,32 @@ function HistoryBody({ result, noun, unit, goodDirection, fmtVal }) {
       {!isEmpty && <Sparkline values={result.sparkline} />}
 
       {isEmpty ? (
-        <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+        <p className="text-small italic text-ink2">
           {result.collapsed > 0
             ? `Value held steady across ${result.collapsed + 1} snapshots — no change to report.`
             : 'No prior versions yet — this is the first snapshot for this period.'}
         </p>
       ) : (
-        <ul className="divide-y divide-rule/30 overflow-hidden rounded-lg border border-rule/40 bg-white">
+        <ul className="border-t border-hair">
           {versions.map((v) => (
-            <li key={v.snapshotId} className="flex items-start gap-2.5 px-3 py-2.5">
+            <li key={v.snapshotId} className="flex items-start gap-2.5 border-b border-hair py-2">
               <TriggerIcon trigger={v.source?.trigger} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   {v.absent ? (
-                    <span className="text-[14px] italic text-muted">
+                    <span className="text-small italic text-ink2">
                       {noun === 'metric'
                         ? 'metric not available in this version'
                         : 'line not present in this version'}
                     </span>
                   ) : (
-                    <span className="font-semibold tabular-nums text-navy">{fmtVal(v.value)}</span>
+                    <span className="font-semibold tabular-nums text-ink">{fmtVal(v.value)}</span>
                   )}
                   {!v.absent && v.delta != null && (
                     <DeltaChip delta={v.delta} format={unit} goodDirection={goodDirection} />
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-[12.5px] text-muted" title={v.source?.sourceName || ''}>
+                <p className="mt-0.5 truncate text-[12px] text-ink2" title={v.source?.sourceName || ''}>
                   by {attributionLine(v.source, v.at)}
                 </p>
               </div>
@@ -203,7 +200,7 @@ function HistoryBody({ result, noun, unit, goodDirection, fmtVal }) {
 
       {/* The empty state already explains a steady value; only footnote when a list is shown. */}
       {!isEmpty && result.collapsed > 0 && (
-        <p className="text-[12px] italic text-muted">
+        <p className="text-[12px] italic text-ink2">
           {result.collapsed} unchanged{' '}
           {result.collapsed === 1 ? 'sync' : 'syncs'} hidden
         </p>

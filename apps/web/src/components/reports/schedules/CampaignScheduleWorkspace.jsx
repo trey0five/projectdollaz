@@ -13,7 +13,7 @@
 //   (2) a top-level campaignName that participates in the autosave baseline.
 //   (3) difference = budget − estimate (NBOA "Difference to Budget"); positive =
 //       UNDER budget = FAVORABLE, so the sign coloring is INVERTED vs capital's
-//       overUnder = actual − budget (diff>0 → emerald, diff<0 → rose).
+//       overUnder = actual − budget (diff>0 → good mark, diff<0 → risk mark).
 //
 // AUTOSAVE INVARIANT (mirrors CapitalScheduleWorkspace EXACTLY — this is the
 // no-op-PUT bug-fix): ONE normalized object spanning BOTH campaignName AND rows
@@ -33,20 +33,15 @@
 // microtask-deferred sync-on-key effect (no synchronous setState in the body).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  Target,
-  Plus,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
-  Clock,
-} from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Target, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
 import { useCampaignSchedule } from '../../../hooks/useSchedules.js'
 import { useAutosave } from '../../../hooks/useAutosave.js'
 import { schedulesApi } from '../../../lib/api.js'
 import { CAMPAIGN_GROUP_SUGGESTIONS } from './scheduleEnums.js'
-import { ScheduleSaveBar } from './CapitalScheduleWorkspace.jsx'
+import { ScheduleSaveBar, ScheduleHeading, AddRowButton } from './CapitalScheduleWorkspace.jsx'
+import { Section, StatStrip, Stat } from '../../ui/surface/index.js'
+import { statMoney, signedMoney } from '../../budget/StatFigure.jsx'
 
 // Stable datalist id for the free-text group suggestions.
 const GROUP_DATALIST_ID = 'campaign-group-suggestions'
@@ -89,71 +84,79 @@ function money(n) {
   return r < 0 ? `(${s})` : s
 }
 
-// Difference color: INVERTED vs capital. diff>0 (under budget / favorable) is
-// emerald; diff<0 (over budget) is rose; 0 is muted/navy.
-function diffClass(diff, neutral = 'text-muted') {
-  if (diff > 0) return 'text-emerald-600'
-  if (diff < 0) return 'text-rose-600'
-  return neutral
+// Difference tone: INVERTED vs capital. diff>0 (under budget / favorable) is
+// good; diff<0 (over budget) is risk; 0 carries no mark. A 2px mark beside the
+// ink figure — never coloured text.
+function diffTone(diff) {
+  if (diff > 0) return 'good'
+  if (diff < 0) return 'risk'
+  return null
+}
+function DiffCell({ diff, bold }) {
+  const tone = diffTone(diff)
+  return (
+    <td className={`dt-num whitespace-nowrap ${bold ? 'font-semibold' : ''}`}>
+      {tone ? <i className={`mark tone-${tone} mr-1.5`} aria-label={tone === 'good' ? 'under budget' : 'over budget'} /> : null}
+      {money(diff)}
+    </td>
+  )
 }
 
 // ── Editable campaign row (module scope) ─────────────────────────────────────
 function CampaignRow({ row, index, count, disabled, onChange, onRemove, onMove }) {
   const diff = toNum(row.budget) - toNum(row.estimate)
   return (
-    <tr className="border-t border-rule/50 hover:bg-gold/[0.04]">
-      <td className="px-2 py-1.5">
+    <tr>
+      <td className="py-1">
         <input
           type="text"
           disabled={disabled}
           value={row.label}
           placeholder={disabled ? '' : 'Line item…'}
           onChange={(e) => onChange(row.id, 'label', e.target.value.slice(0, 200))}
-          className="w-full min-w-[160px] rounded-md border border-rule bg-white px-2 py-1 text-[12.5px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-full min-w-[160px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-[12.5px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         <input
           type="number"
           min="0"
           disabled={disabled}
           value={row.budget}
           onChange={(e) => onChange(row.id, 'budget', toMoney(e.target.value))}
-          className="w-[110px] rounded-md border border-rule bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-[110px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         <input
           type="number"
           min="0"
           disabled={disabled}
           value={row.estimate}
           onChange={(e) => onChange(row.id, 'estimate', toMoney(e.target.value))}
-          className="w-[110px] rounded-md border border-rule bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-[110px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className={`px-2 py-1.5 text-right text-[12.5px] tabular-nums ${diffClass(diff)}`}>
-        {money(diff)}
-      </td>
-      <td className="px-2 py-1.5">
+      <DiffCell diff={diff} />
+      <td className="py-1">
         <input
           type="text"
           disabled={disabled}
           value={row.comment}
           placeholder={disabled ? '' : 'Comment…'}
           onChange={(e) => onChange(row.id, 'comment', e.target.value.slice(0, 500))}
-          className="w-full min-w-[140px] rounded-md border border-rule bg-white px-2 py-1 text-[12px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-full min-w-[140px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-[12px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         {!disabled && (
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="dt-actions flex items-center justify-end gap-0.5">
             <button
               type="button"
               onClick={() => onMove(row.id, -1)}
               disabled={index === 0}
               title="Move up"
-              className="rounded p-1 text-muted hover:bg-navy/[0.06] hover:text-navy disabled:opacity-30"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink disabled:opacity-30"
             >
               <ArrowUp size={14} />
             </button>
@@ -162,7 +165,7 @@ function CampaignRow({ row, index, count, disabled, onChange, onRemove, onMove }
               onClick={() => onMove(row.id, 1)}
               disabled={index === count - 1}
               title="Move down"
-              className="rounded p-1 text-muted hover:bg-navy/[0.06] hover:text-navy disabled:opacity-30"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink disabled:opacity-30"
             >
               <ArrowDown size={14} />
             </button>
@@ -170,7 +173,7 @@ function CampaignRow({ row, index, count, disabled, onChange, onRemove, onMove }
               type="button"
               onClick={() => onRemove(row.id)}
               title="Remove line"
-              className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink"
             >
               <Trash2 size={14} />
             </button>
@@ -185,42 +188,19 @@ function CampaignRow({ row, index, count, disabled, onChange, onRemove, onMove }
 function SubtotalRow({ budget, estimate }) {
   const diff = toNum(budget) - toNum(estimate)
   return (
-    <tr className="border-t border-rule bg-cream/60">
-      <td className="px-2 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">
-        Subtotal
-      </td>
-      <td className="px-2 py-2 text-right text-[13px] font-semibold tabular-nums text-navy">
-        {money(budget)}
-      </td>
-      <td className="px-2 py-2 text-right text-[13px] tabular-nums text-muted">{money(estimate)}</td>
-      <td
-        className={`px-2 py-2 text-right text-[13px] font-semibold tabular-nums ${diffClass(
-          diff,
-          'text-navy',
-        )}`}
-      >
-        {money(diff)}
-      </td>
+    <tr className="dt-subtotal">
+      <td className="text-[11px] font-semibold uppercase tracking-[0.06em]">Subtotal</td>
+      <td className="dt-num font-semibold">{money(budget)}</td>
+      <td className="dt-num text-ink2">{money(estimate)}</td>
+      <DiffCell diff={diff} bold />
       <td />
       <td />
     </tr>
   )
 }
 
-// ── Add-row button (module scope) ────────────────────────────────────────────
-function AddRowButton({ onClick, label }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gold/50 bg-gold/[0.04] px-3 py-1.5 text-[12.5px] font-semibold text-gold transition-colors hover:bg-gold/10"
-    >
-      <Plus size={14} /> {label}
-    </button>
-  )
-}
-
 export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit }) {
+  const reduce = useReducedMotion()
   const {
     campaignName: savedName,
     items: savedItems,
@@ -394,8 +374,8 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
 
   if (loading) {
     return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Loading the capital campaign…</p>
+      <div className="b2-note" aria-busy="true">
+        <p>Loading the capital campaign…</p>
       </div>
     )
   }
@@ -408,52 +388,41 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
       subE += toNum(r.estimate)
     }
     return (
-      <div key={group} className="card-soft overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-rule bg-navy-gradient px-4 py-2.5">
-          {canEdit ? (
+      <Section
+        key={group}
+        label={
+          canEdit ? (
             <input
               type="text"
               value={group}
               list={GROUP_DATALIST_ID}
               placeholder="Division name…"
+              aria-label="Division name"
               onChange={(e) => onRenameGroup(group, e.target.value)}
-              className="min-w-[180px] flex-1 rounded-md border border-gold/30 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-gold-light outline-none placeholder:text-gold-light/40 focus:border-gold focus:bg-white/15"
+              className="h-7 min-w-[180px] rounded-[4px] border border-hair/[0.18] bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink outline-none placeholder:text-ink2/60 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25"
             />
           ) : (
-            <h4 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-gold-light">
-              {group || '—'}
-            </h4>
-          )}
-          {canEdit && <AddRowButton onClick={() => onAdd(group)} label="Add line" />}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+            group || '—'
+          )
+        }
+        aside={canEdit ? <AddRowButton onClick={() => onAdd(group)} label="Add line" /> : null}
+      >
+        <div className="dt-wrap">
+          <table className="dt">
             <thead>
-              <tr className="bg-cream">
-                <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Line
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Budget
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Estimate
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Difference to Budget
-                </th>
-                <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
-                  Comment
-                </th>
-                <th className="px-2 py-2" />
+              <tr>
+                <th scope="col">Line</th>
+                <th scope="col" className="dt-num">Budget</th>
+                <th scope="col" className="dt-num">Estimate</th>
+                <th scope="col" className="dt-num">Difference to budget</th>
+                <th scope="col">Comment</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {groupRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-[12.5px] italic text-muted">
-                    No campaign lines yet — add one.
-                  </td>
+                <tr className="dt-empty">
+                  <td colSpan={6}>No campaign lines yet — add one.</td>
                 </tr>
               ) : (
                 groupRows.map((r, i) => (
@@ -473,17 +442,16 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
             </tbody>
           </table>
         </div>
-      </div>
+      </Section>
     )
   }
 
   return (
     <motion.div
       key="campaign"
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-5"
     >
       <datalist id={GROUP_DATALIST_ID}>
         {CAMPAIGN_GROUP_SUGGESTIONS.map((s) => (
@@ -491,35 +459,15 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
         ))}
       </datalist>
 
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <Target size={20} />
-        </span>
-        <div className="flex-1">
-          <h3 className="font-serif text-lg font-semibold text-navy">Capital Campaign</h3>
-          <p className="text-[13px] text-muted">
-            Track campaign line items against budget. These flow into the Capital Campaign section of
-            your board packet — Difference to Budget and totals are computed there.
-          </p>
-        </div>
-        {updatedAt && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[11px] font-medium text-muted">
-            <Clock size={12} /> Saved{' '}
-            {new Date(updatedAt).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-          </span>
-        )}
-      </div>
+      <ScheduleHeading
+        icon={Target}
+        title="Capital Campaign"
+        savedAt={updatedAt}
+        body="Track campaign line items against budget. These flow into the Capital Campaign section of your board packet — Difference to Budget and totals are computed there."
+      />
 
-      <div className="card-soft px-4 py-3.5">
-        <label
-          htmlFor="campaign-name"
-          className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted"
-        >
+      <div className="mt-6 max-w-xl">
+        <label htmlFor="campaign-name" className="b2-label">
           Campaign name
         </label>
         <input
@@ -529,15 +477,15 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
           value={campaignName}
           placeholder="e.g. 2026 Building Our Future Campaign"
           onChange={(e) => onNameChange(e.target.value)}
-          className="w-full max-w-xl rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="b2-input disabled:opacity-50"
         />
       </div>
 
       {rows.length === 0 ? (
-        <div className="card-soft px-6 py-12 text-center">
-          <p className="font-serif text-base italic text-muted">No campaign lines yet</p>
+        <div className="b2-note mt-8">
+          <p className="b2-note-title">No campaign lines yet</p>
           {canEdit && (
-            <div className="mt-4 flex items-center justify-center gap-2.5">
+            <div className="flex items-center justify-center pt-2">
               <AddRowButton onClick={onAddDivision} label="Add division" />
             </div>
           )}
@@ -547,36 +495,22 @@ export default function CampaignScheduleWorkspace({ schoolId, periodId, canEdit 
           {groups.map((g) => renderGroup(g))}
 
           {canEdit && (
-            <div className="flex justify-start">
+            <div className="mt-4 flex justify-start">
               <AddRowButton onClick={onAddDivision} label="Add division" />
             </div>
           )}
 
-          <div className="card-soft flex flex-wrap items-center justify-between gap-3 border-gold/40 bg-gold/[0.06] px-4 py-3">
-            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
-              Campaign Total
-            </span>
-            <div className="flex items-center gap-6 text-[14px] tabular-nums">
-              <span className="text-navy">
-                <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">
-                  Budget
-                </span>
-                <span className="font-semibold">{money(grand.budget)}</span>
-              </span>
-              <span className="text-muted">
-                <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">
-                  Estimate
-                </span>
-                {money(grand.estimate)}
-              </span>
-              <span className={`font-semibold ${diffClass(grand.difference, 'text-navy')}`}>
-                <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">
-                  Difference to Budget
-                </span>
-                {money(grand.difference)}
-              </span>
-            </div>
-          </div>
+          <Section label="Campaign total">
+            <StatStrip cols={3} className="stats-compact">
+              <Stat label="Budget" value={statMoney(grand.budget)} />
+              <Stat label="Estimate" value={statMoney(grand.estimate)} />
+              <Stat
+                label="Difference to budget"
+                value={signedMoney(grand.difference)}
+                status={diffTone(grand.difference) ?? undefined}
+              />
+            </StatStrip>
+          </Section>
         </>
       )}
 

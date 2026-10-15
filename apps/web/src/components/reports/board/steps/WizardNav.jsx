@@ -11,22 +11,22 @@ export default function WizardNav({
   saved = false,
 }) {
   return (
-    <div className="mt-7 flex items-center justify-between gap-3 border-t border-rule/60 pt-5">
+    <div className="mt-7 flex items-center justify-between gap-3 border-t border-hair pt-5">
       <div className="min-w-0">
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-2 text-[13px] font-semibold text-navy transition-colors hover:border-gold/50 hover:text-gold"
+            className="btn btn-quiet"
           >
-            <ArrowLeft size={15} /> {backLabel}
+            <ArrowLeft size={14} aria-hidden="true" /> {backLabel}
           </button>
         ) : (
           <span />
         )}
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
           {saving ? 'Saving…' : saved ? 'Saved' : ''}
         </span>
         {onNext && (
@@ -34,9 +34,9 @@ export default function WizardNav({
             type="button"
             onClick={onNext}
             disabled={nextDisabled}
-            className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary"
           >
-            {nextLabel} <ArrowRight size={15} />
+            {nextLabel} <ArrowRight size={14} aria-hidden="true" />
           </button>
         )}
       </div>

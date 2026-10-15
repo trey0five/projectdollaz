@@ -187,26 +187,26 @@ export default function OrgQuickBooksCard() {
       {!overview ? (
         // While loading show progress; on a load failure the FormError above is
         // the whole story (no perpetual "Checking…" under it).
-        err ? null : <p className="text-[16px] text-muted">Checking connections…</p>
+        err ? null : <p className="text-[16px] text-ink2">Checking connections…</p>
       ) : !overview.configured ? (
-        <p className="rounded-lg border border-border bg-section px-4 py-3 text-[15px] text-muted">
+        <p className="rounded-lg border border-hair/[0.18] bg-ground px-4 py-3 text-[15px] text-ink2">
           The QuickBooks connector isn’t configured on this server yet.
         </p>
       ) : chooserVisible ? (
         // ── Topology chooser (transient UI state — nothing persisted) ──────────
         <>
-          <p className="mb-3 text-[15px] text-navy">How does your organization keep its books?</p>
+          <p className="mb-3 text-[15px] text-ink">How does your organization keep its books?</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setPerSchoolChosen(true)}
-              className="rounded-xl border-2 border-border bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-gold hover:bg-gold/[0.04]"
+              className="rounded-[8px] border border-hair/[0.18] bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-hair/[0.3] hover:bg-ink/[0.02]"
             >
-              <p className="flex items-center gap-2 text-[15.5px] font-semibold text-navy">
-                <Building2 size={16} className="shrink-0 text-gold" />
+              <p className="flex items-center gap-2 text-[15.5px] font-semibold text-ink">
+                <Building2 size={16} className="shrink-0 text-ink2" />
                 Each school has its own QuickBooks
               </p>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink2">
                 Every school keeps a separate QuickBooks company. Connect and sync each one from the
                 list here — no switching schools.
               </p>
@@ -214,19 +214,19 @@ export default function OrgQuickBooksCard() {
             <button
               type="button"
               onClick={() => setShowCompanyPanel(true)}
-              className="rounded-xl border-2 border-border bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-gold hover:bg-gold/[0.04]"
+              className="rounded-[8px] border border-hair/[0.18] bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-hair/[0.3] hover:bg-ink/[0.02]"
             >
-              <p className="flex items-center gap-2 text-[15.5px] font-semibold text-navy">
-                <Landmark size={16} className="shrink-0 text-gold" />
+              <p className="flex items-center gap-2 text-[15.5px] font-semibold text-ink">
+                <Landmark size={16} className="shrink-0 text-ink2" />
                 One QuickBooks for the whole organization
               </p>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink2">
                 A single QuickBooks company split by Location or Class (the diocesan shape). Connect it
                 once, map each location to a school, and import everyone together.
               </p>
             </button>
           </div>
-          <p className="mt-2.5 text-[13px] text-muted">You can switch approaches at any time.</p>
+          <p className="mt-2.5 text-[13px] text-ink2">You can switch approaches at any time.</p>
         </>
       ) : (
         <>
@@ -243,7 +243,7 @@ export default function OrgQuickBooksCard() {
                 onMappingData={setMappingData}
               />
               {!companyConnected && !anyConnected && (
-                <p className="mt-3 text-[13.5px] text-muted">
+                <p className="mt-3 text-[13.5px] text-ink2">
                   Prefer separate QuickBooks companies per school?{' '}
                   <button
                     type="button"
@@ -251,7 +251,7 @@ export default function OrgQuickBooksCard() {
                       setShowCompanyPanel(false)
                       setPerSchoolChosen(true)
                     }}
-                    className="font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    className="font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                   >
                     Set up per-school connections
                   </button>
@@ -263,20 +263,20 @@ export default function OrgQuickBooksCard() {
           {listVisible && (
             <>
               {companyConnected && (
-                <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.14em] text-ink2">
                   Per-school status
                 </p>
               )}
-              <ul className="divide-y divide-border/70 rounded-xl border border-border">
+              <ul className="divide-y divide-border/70 rounded-[8px] border border-hair/[0.18]">
                 {schools.map((s) => {
                   const r = resultFor(s.schoolId)
                   const fedNames = !s.connected ? fedByOrg[s.schoolId] : null
                   return (
                     <li key={s.schoolId} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                      <Building2 size={16} className="shrink-0 text-gold" />
+                      <Building2 size={16} className="shrink-0 text-ink2" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[15.5px] font-semibold text-navy">{s.name}</p>
-                        <p className="truncate text-[13.5px] text-muted">
+                        <p className="truncate text-[15.5px] font-semibold text-ink">{s.name}</p>
+                        <p className="truncate text-[13.5px] text-ink2">
                           {s.connected ? (
                             <>
                               Connected{s.companyName ? ` · ${s.companyName}` : ''}
@@ -289,9 +289,9 @@ export default function OrgQuickBooksCard() {
                           )}
                         </p>
                         {r && (
-                          <p className={`mt-0.5 flex items-start gap-1.5 text-[13.5px] ${r.status === 'failed' ? 'text-danger' : 'text-muted'}`}>
+                          <p className={`mt-0.5 flex items-start gap-1.5 text-[13.5px] ${r.status === 'failed' ? 'tone-risk' : 'text-ink2'}`}>
                             {r.status === 'synced' ? (
-                              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-gold" />
+                              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-ink2" />
                             ) : (
                               <XCircle size={14} className="mt-0.5 shrink-0" />
                             )}
@@ -309,7 +309,7 @@ export default function OrgQuickBooksCard() {
                             type="button"
                             disabled={busy}
                             onClick={() => runSync([s.schoolId])}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-3 py-1.5 text-[14px] font-semibold text-navy transition-all hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-hair/[0.3] bg-ink/[0.04] px-3 py-1.5 text-[14px] font-semibold text-ink transition-all hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {syncingId === s.schoolId ? (
                               <Loader2 size={14} className="animate-spin" />
@@ -323,7 +323,7 @@ export default function OrgQuickBooksCard() {
                             type="button"
                             disabled={busy || connectingId != null}
                             onClick={() => connect(s.schoolId)}
-                            className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-3 py-1.5 text-[14px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+                            className="btn btn-secondary inline-flex items-center gap-1.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {connectingId === s.schoolId ? (
                               <Loader2 size={14} className="animate-spin" />
@@ -344,7 +344,7 @@ export default function OrgQuickBooksCard() {
                   BOTH each row's Sync and Sync all, so say so. */}
               {anyManageable && (
                 <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <span className="text-[13.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <span className="text-[13.5px] font-semibold uppercase tracking-[0.08em] text-ink2">
                     Also import (each Sync):
                   </span>
                   {[
@@ -352,7 +352,7 @@ export default function OrgQuickBooksCard() {
                     ['monthly', 'Monthly'],
                     ['allHistory', 'All prior years'],
                   ].map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2 text-[14.5px] text-navy">
+                    <label key={key} className="flex items-center gap-2 text-[14.5px] text-ink">
                       <input
                         type="checkbox"
                         checked={scope[key]}
@@ -367,7 +367,7 @@ export default function OrgQuickBooksCard() {
                     type="button"
                     disabled={busy || connectedManageable.length === 0}
                     onClick={() => runSync(null)}
-                    className="ml-auto inline-flex items-center gap-2 rounded-lg btn-cta px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ml-auto inline-flex items-center gap-2 rounded-lg btn btn-primary px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {syncingId === 'all' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                     Sync all connected ({connectedManageable.length})
@@ -376,7 +376,7 @@ export default function OrgQuickBooksCard() {
               )}
 
               {result && syncingId == null && (
-                <p className="mt-3 text-[14px] text-muted">
+                <p className="mt-3 text-[14px] text-ink2">
                   {result.synced} synced · {result.failed} failed · {result.skipped} skipped
                 </p>
               )}
@@ -385,12 +385,12 @@ export default function OrgQuickBooksCard() {
                   with zero per-school connections so a fresh org that picked
                   "each school has its own" in the chooser isn't dead-ended. */}
               {!companyConnected && !panelMounted && company && (
-                <p className="mt-4 text-[13.5px] text-muted">
+                <p className="mt-4 text-[13.5px] text-ink2">
                   Using one QuickBooks for the whole organization instead?{' '}
                   <button
                     type="button"
                     onClick={() => setShowCompanyPanel(true)}
-                    className="font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    className="font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                   >
                     Connect it here
                   </button>

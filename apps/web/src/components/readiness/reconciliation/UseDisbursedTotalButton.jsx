@@ -50,20 +50,20 @@ export default function UseDisbursedTotalButton({
         type="button"
         onClick={apply}
         disabled={saving || already}
-        className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[14px] font-semibold transition-colors ${
-          already
-            ? 'cursor-default border-gold/30 bg-gold/5 text-[#7a5e00]'
-            : 'border-gold/40 bg-gold-gradient text-white shadow-glow hover:opacity-90 disabled:opacity-60'
-        }`}
+        className={`btn ${already ? 'btn-quiet !cursor-default !opacity-100' : 'btn-primary'}`}
       >
-        {already || done ? <Check size={15} /> : <Wand2 size={15} />}
+        {already || done ? <Check size={14} aria-hidden="true" /> : <Wand2 size={14} aria-hidden="true" />}
         {already
           ? 'Recorded figure already matches'
           : done
             ? 'Recorded figure updated'
             : `Use disbursed total (${fmtDollar(totalDisbursed)}) as recorded revenue`}
       </button>
-      {err && <p className="text-[13px] text-danger">{err}</p>}
+      {err && (
+        <p className="b2-callout b2-risk" role="alert">
+          {err}
+        </p>
+      )}
     </div>
   )
 }

@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { ROLE_META } from '../lib/roleMeta.js'
+import { Pill } from './ui/surface/index.js'
+import '../styles/pending/b2-finance.css'
 
 const ACCEPT = '.xlsx,.xls,.csv'
 
@@ -63,13 +65,7 @@ export default function EmptySlotCard({
 
   // Border / surface states. Drop highlight uses shadow + bg + the icon
   // tile, not color alone, for a non-color a11y cue.
-  const border = dragOver
-    ? 'border-gold bg-[#fff8e6] shadow-glow'
-    : needsAttention || conflicted
-      ? 'border-gold shadow-glow'
-      : 'border-gold/60'
-
-  const pulse = needsAttention && !conflicted
+  const border = needsAttention || conflicted ? '!border-watch/70' : ''
 
   return (
     <motion.div
@@ -96,46 +92,31 @@ export default function EmptySlotCard({
         depth.current = Math.max(0, depth.current - 1)
         if (depth.current === 0) setDragOver(false)
       }}
-      className={`group relative flex min-h-[196px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed bg-section px-4 py-8 text-center outline-none transition-all hover:border-gold hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow ${border}`}
+      data-active={dragOver ? 'true' : undefined}
+      className={`b2-drop group relative min-h-[196px] w-full gap-3 px-4 py-8 ${border}`}
     >
-      <motion.span
-        className={`flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-glow ${
-          conflicted ? 'bg-gold' : 'bg-gold-gradient'
-        }`}
-        animate={reduce || !pulse ? undefined : { y: [0, -6, 0] }}
-        transition={
-          reduce || !pulse
-            ? undefined
-            : { duration: 4, repeat: Infinity, ease: 'easeInOut' }
-        }
-      >
-        {conflicted ? <AlertTriangle size={22} /> : <Plus size={22} />}
-      </motion.span>
-
-      <p className="font-serif text-base font-semibold text-navy">{meta.plainLabel}</p>
-
-      <span
-        className={`inline-flex items-center rounded-full border-2 px-2.5 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] ${
-          meta.required
-            ? 'border-gold bg-[#fff8e6] text-[#7a5e00]'
-            : 'border-border bg-white text-muted'
-        }`}
-      >
-        {meta.requirementLabel}
+      <span className={conflicted ? 'flex tone-watch' : 'b2-drop-icon'}>
+        {conflicted ? <AlertTriangle size={24} aria-hidden="true" /> : <Plus size={24} aria-hidden="true" />}
       </span>
+
+      <p className="text-[15px] font-semibold text-ink">{meta.plainLabel}</p>
+
+      <Pill variant={meta.required ? 'status' : 'default'} tone="watch">
+        {meta.requirementLabel}
+      </Pill>
 
       {conflicted ? (
         <>
-          <p className="text-[14px] font-medium text-[#7a5e00]">
+          <p className="text-[14px] font-medium text-ink">
             Two files claim this slot
           </p>
-          <p className="text-[13px] text-muted">Resolve below to fill this slot</p>
+          <p className="text-[13px] text-ink2">Resolve below to fill this slot</p>
         </>
       ) : (
         <>
-          <p className="text-[14px] leading-snug text-muted">{meta.blurb}</p>
-          <p className="text-[13px] italic text-muted">{meta.source}</p>
-          <p className="text-[13px] text-muted">Drop a file or click to add</p>
+          <p className="text-[14px] leading-snug text-ink2">{meta.blurb}</p>
+          <p className="text-[13px] italic text-ink2">{meta.source}</p>
+          <p className="text-[13px] text-ink2">Drop a file or click to add</p>
         </>
       )}
 

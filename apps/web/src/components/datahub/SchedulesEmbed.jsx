@@ -35,17 +35,13 @@ export default function SchedulesEmbed({ schoolId, periodId, canEdit }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <p className="mb-4 text-[15px] leading-relaxed text-muted">
+      <p className="mb-4 text-small leading-relaxed text-ink2">
         Capital projects, cash &amp; investment accounts, and campaigns that round out your board
         packet. Fill in the tables for this period — the totals flow into your next board report
         automatically, and everything saves as you type.
       </p>
 
-      <div
-        role="tablist"
-        aria-label="Supporting schedules"
-        className="mb-5 flex flex-wrap gap-2"
-      >
+      <div role="tablist" aria-label="Supporting schedules" className="tabs-ink mb-5 overflow-x-auto">
         {TABS.map((t) => {
           const Icon = t.Icon
           const active = tab === t.id
@@ -56,13 +52,12 @@ export default function SchedulesEmbed({ schoolId, periodId, canEdit }) {
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[15px] font-semibold transition-all ${
-                active
-                  ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
-                  : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
-              }`}
+              className="tab-ink shrink-0"
             >
-              <Icon size={16} /> {t.label}
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Icon size={14} aria-hidden="true" className="text-ink2" /> {t.label}
+              </span>
+              {active && <span className="tab-ink-rule" aria-hidden="true" />}
             </button>
           )
         })}

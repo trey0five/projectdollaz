@@ -10,7 +10,9 @@
 // malformed file shows a friendly inline error instead of crashing the page.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Panel, StatStrip, Stat, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -23,7 +25,14 @@ import {
 import { ingest } from '@finrep/ingestion'
 import { monthlyApi, apiErrorMessage } from '../../lib/api.js'
 import { fyMonthKeys } from '../../lib/monthlyShapes.js'
-import { fmt } from '../../lib/format.js'
+
+// The signed net of the parsed rows as an accounting dollar figure ($0.00 when
+// the rows net to zero — a balanced trial balance), never a bare number.
+function netOfRows(n) {
+  const v = Number(n) || 0
+  const s = `$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return v < 0 ? `(${s})` : s
+}
 
 function readBytes(file) {
   return new Promise((resolve, reject) => {
@@ -45,6 +54,7 @@ export default function MonthlyUploadCard({
   onSaved,
   onCancel,
 }) {
+  const reduce = useReducedMotion()
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState('')
@@ -126,171 +136,131 @@ export default function MonthlyUploadCard({
   const willReplace = monthKey && loadedSet.has(monthKey)
   const canConfirm = !!parsed && !!monthKey && !saving
 
+  // Premium UI P4: the upload is an action, so it is the one Panel here — the
+  // dashed dropzone at 8px inside it, the parsed summary a compact StatStrip,
+  // the month a native select, the actions on the Panel's hairline foot.
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-5 rounded-2xl border border-gold/30 bg-white p-5 shadow-card"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-serif text-lg font-semibold text-navy">Upload a monthly trial balance</h3>
-          <p className="mt-0.5 text-[15px] text-muted">
-            A month-end, cumulative-YTD trial balance (.xlsx) — the standard QuickBooks / Blackbaud
-            export.
-          </p>
-        </div>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Close upload"
-            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-rule/30 hover:text-navy"
-          >
-            <X size={18} />
-          </button>
-        )}
-      </div>
-
-      <label
-        htmlFor="monthly-tb-file"
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragging ? 'border-gold bg-gold/10' : 'border-rule bg-cream/40 hover:border-gold/50'
-        }`}
+    <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <Panel
+        title="Upload a monthly trial balance"
+        actions={
+          onCancel ? (
+            <Button variant="quiet" size="sm" onClick={onCancel} aria-label="Close upload" icon={<X size={16} />} />
+          ) : null
+        }
+        footer={
+          parsed ? (
+            <>
+              {onCancel && (
+                <Button variant="quiet" onClick={onCancel} disabled={saving}>
+                  Cancel
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={onConfirm}
+                disabled={!canConfirm}
+                icon={saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              >
+                {saving ? 'Saving…' : willReplace ? 'Replace month' : 'Save month'}
+              </Button>
+            </>
+          ) : null
+        }
       >
-        <motion.span
-          animate={{ y: dragging ? -4 : 0 }}
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-        >
-          <UploadCloud size={26} />
-        </motion.span>
-        <div>
-          <div className="font-serif text-lg font-semibold text-navy">Drop your monthly trial balance</div>
-          <p className="mt-0.5 text-[15px] text-muted">.xlsx · accounts with month-end balances</p>
-        </div>
-        <span className="btn-ghost mt-1 text-[14px]">Browse files</span>
-        <input
-          ref={inputRef}
-          id="monthly-tb-file"
-          type="file"
-          accept=".xlsx,.xls"
-          className="sr-only"
-          onChange={(e) => handleFile(e.target.files?.[0])}
-        />
-      </label>
+        <div className="space-y-5">
+          <p className="text-small text-ink2">
+            A month-end, cumulative-YTD trial balance (.xlsx) — the standard QuickBooks / Blackbaud export.
+          </p>
 
-      {fileName && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-rule bg-white px-3.5 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <FileSpreadsheet size={18} className="shrink-0 text-gold" />
-            <span className="truncate text-[15px] font-medium text-ink">{fileName}</span>
-          </div>
-          <button
-            type="button"
-            onClick={reset}
-            aria-label="Clear selected file"
-            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-rule/30 hover:text-navy"
+          <label
+            htmlFor="monthly-tb-file"
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            data-active={dragging ? 'true' : undefined}
+            className="b2-drop py-9"
           >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-
-      {parseError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
-          {parseError}
-        </div>
-      )}
-
-      {parsed && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-rule bg-cream/40 px-4 py-3">
-              <div className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-                Accounts parsed
-              </div>
-              <div className="mt-0.5 font-serif text-xl font-semibold text-navy">
-                {summary?.rowCount ?? 0}
-              </div>
+            <span className="b2-drop-icon">
+              <UploadCloud size={28} aria-hidden="true" />
+            </span>
+            <div>
+              <div className="text-heading font-semibold text-ink">Drop your monthly trial balance</div>
+              <p className="mt-0.5 text-small text-ink2">.xlsx · accounts with month-end balances</p>
             </div>
-            <div className="rounded-xl border border-rule bg-cream/40 px-4 py-3">
-              <div className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-                Net of rows
-              </div>
-              <div className="mt-0.5 font-serif text-xl font-semibold text-navy">
-                {fmt(summary?.total ?? 0)}
-              </div>
-            </div>
-          </div>
+            <span className="btn btn-secondary btn-sm mt-1">Browse files</span>
+            <input
+              ref={inputRef}
+              id="monthly-tb-file"
+              type="file"
+              accept=".xlsx,.xls"
+              className="sr-only"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+          </label>
 
-          {/* REQUIRED month picker — the user PICKS the month; we do not auto-trust
-              file metadata. Months already loaded are flagged "will replace". */}
-          <div>
-            <label
-              htmlFor="monthly-tb-month"
-              className="mb-1.5 flex items-center gap-1.5 text-[14px] font-semibold uppercase tracking-[0.08em] text-muted"
-            >
-              <CalendarRange size={14} className="text-gold" /> Which month is this?
-            </label>
-            <select
-              id="monthly-tb-month"
-              value={monthKey}
-              onChange={(e) => setMonthKey(e.target.value)}
-              className="w-full rounded-xl border border-rule bg-white px-3.5 py-2.5 text-[16px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
-            >
-              <option value="">Select a fiscal-year month…</option>
-              {fyMonths.map((m) => (
-                <option key={m.monthKey} value={m.monthKey}>
-                  {m.label}
-                  {loadedSet.has(m.monthKey) ? '  — loaded, will replace' : ''}
-                </option>
-              ))}
-            </select>
-            {willReplace && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[14px] font-medium text-amber-700">
-                <AlertTriangle size={13} /> This month is already loaded — saving will replace it.
-              </p>
-            )}
-          </div>
-
-          {saveError && (
-            <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
-              {saveError}
+          {fileName && (
+            <div className="fig">
+              <span className="fig-label min-w-0">
+                <FileSpreadsheet size={16} aria-hidden="true" className="shrink-0 text-ink2" />
+                <span className="truncate font-medium text-ink">{fileName}</span>
+              </span>
+              <Button variant="quiet" size="sm" onClick={reset} aria-label="Clear selected file" icon={<X size={14} />} />
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {onCancel && (
-              <button type="button" onClick={onCancel} className="btn-ghost" disabled={saving}>
-                Cancel
-              </button>
-            )}
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.97 }}
-              onClick={onConfirm}
-              disabled={!canConfirm}
-              className="btn-primary inline-flex items-center gap-2 disabled:opacity-60"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={15} /> {willReplace ? 'Replace month' : 'Save month'}
-                </>
+          {parseError && (
+            <p className="b2-callout b2-risk" role="alert">
+              {parseError}
+            </p>
+          )}
+
+          {parsed && (
+            <>
+              <StatStrip cols={2} className="stats-compact">
+                <Stat label="Accounts parsed" value={summary?.rowCount ?? 0} />
+                <Stat label="Net of rows" value={netOfRows(summary?.total)} />
+              </StatStrip>
+
+              {/* REQUIRED month picker — the user PICKS the month; we do not auto-trust
+                  file metadata. Months already loaded are flagged "will replace". */}
+              <div>
+                <label htmlFor="monthly-tb-month" className="b2-label flex items-center gap-1.5">
+                  <CalendarRange size={13} aria-hidden="true" /> Which month is this?
+                </label>
+                <select
+                  id="monthly-tb-month"
+                  value={monthKey}
+                  onChange={(e) => setMonthKey(e.target.value)}
+                  className="sel h-9 w-full !max-w-md"
+                >
+                  <option value="">Select a fiscal-year month…</option>
+                  {fyMonths.map((m) => (
+                    <option key={m.monthKey} value={m.monthKey}>
+                      {m.label}
+                      {loadedSet.has(m.monthKey) ? '  — loaded, will replace' : ''}
+                    </option>
+                  ))}
+                </select>
+                {willReplace && (
+                  <p className="b2-callout b2-watch mt-2">
+                    <AlertTriangle size={13} aria-hidden="true" /> This month is already loaded — saving will replace it.
+                  </p>
+                )}
+              </div>
+
+              {saveError && (
+                <p className="b2-callout b2-risk" role="alert">
+                  {saveError}
+                </p>
               )}
-            </motion.button>
-          </div>
-        </>
-      )}
+            </>
+          )}
+        </div>
+      </Panel>
     </motion.div>
   )
 }

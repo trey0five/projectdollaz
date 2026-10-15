@@ -1,31 +1,36 @@
-// Settings shell: the navy app chrome (reusing AppShell chrome) + a responsive sidebar
-// and an animated cream panel that renders the active nested section via Outlet.
-import { motion } from 'framer-motion'
-import { Link, Outlet, useLocation } from 'react-router-dom'
-import { BACK_PILL_DARK, BackPillBody } from '../components/ui/BackLink.jsx'
+// Settings shell: PageHeader + a responsive section nav + the active nested section
+// (rendered via Outlet), on the light ground.
+import { motion, useReducedMotion } from 'framer-motion'
+import { Outlet, useLocation } from 'react-router-dom'
+import BackLink from '../components/ui/BackLink.jsx'
+import { PageHeader } from '../components/ui/surface/index.js'
 import SettingsSidebar from '../components/settings/SettingsSidebar.jsx'
 
+// Premium UI P4: Settings sits on the light ground like every other page (the
+// navy page was a third dark surface — the ledger allows exactly two). BackLink
+// + PageHeader on the hairline, a quiet ruled section nav on the left, each
+// section's forms in Panels (SettingsCard) on the right.
 export default function SettingsPage() {
   const location = useLocation()
+  const reduce = useReducedMotion()
 
   return (
-    <div className="min-h-screen bg-navy-deep bg-navy-radial">
-      <main className="mx-auto w-full max-w-page px-4 py-6 sm:px-8 sm:py-10">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="font-serif text-[24px] font-semibold text-gold-light sm:text-[28px]">
-            Settings
-          </h1>
-          <Link to="/app" className={BACK_PILL_DARK}>
-            <BackPillBody label="Back to dashboard" tone="dark" />
-          </Link>
-        </div>
+    <div className="min-h-screen">
+      <main className="mx-auto w-full max-w-page px-4 py-6 sm:px-10">
+        <BackLink className="mb-2" />
+        <PageHeader
+          eyebrow="Account · Settings"
+          title="Settings"
+          meta="Your account, your school and organization, members, integrations, billing and your data."
+          hue="16 28 61"
+        />
 
-        <div className="sm:flex sm:gap-8">
+        <div className="mt-6 sm:flex sm:gap-10">
           <SettingsSidebar />
           <div className="min-w-0 flex-1">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
+              initial={reduce ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
             >

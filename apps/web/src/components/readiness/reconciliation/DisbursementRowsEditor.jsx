@@ -53,36 +53,36 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-gold/30 bg-white p-5">
-      <p className="font-serif text-base font-semibold text-navy">Edit disbursements</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[14px]">
+    <div className="panel space-y-3 p-5">
+      <p className="text-heading font-semibold text-ink">Edit disbursements</p>
+      <div className="dt-wrap">
+        <table className="dt">
           <thead>
-            <tr className="border-b border-rule text-left text-[12px] uppercase tracking-[0.08em] text-muted">
-              <th className="px-2 py-1.5 font-semibold">Student</th>
-              <th className="px-2 py-1.5 font-semibold">Program</th>
-              <th className="px-2 py-1.5 font-semibold">Pay date</th>
-              <th className="px-2 py-1.5 font-semibold">Amount</th>
-              <th className="px-2 py-1.5 font-semibold">Term</th>
-              <th className="px-2 py-1.5 font-semibold">Batch</th>
-              <th className="px-2 py-1.5" />
+            <tr>
+              <th scope="col">Student</th>
+              <th scope="col">Program</th>
+              <th scope="col">Pay date</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Term</th>
+              <th scope="col">Batch</th>
+              <th scope="col"><span className="sr-only">Remove</span></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-b border-rule/40">
-                <td className="px-1 py-1">
+              <tr key={i}>
+                <td className="py-1">
                   <input
                     value={r.studentRef}
                     onChange={(e) => update(i, 'studentRef', e.target.value)}
-                    className="w-24 rounded border border-border px-1.5 py-1 text-[14px]"
+                    className="w-24 h-7 rounded-[4px] border border-hair/[0.18] bg-white px-1.5 text-[13px] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25"
                   />
                 </td>
-                <td className="px-1 py-1">
+                <td className="py-1">
                   <select
                     value={r.program}
                     onChange={(e) => update(i, 'program', e.target.value)}
-                    className="rounded border border-border px-1 py-1 text-[14px]"
+                    className="h-7 rounded-[4px] border border-hair/[0.18] bg-white px-1 text-[13px] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25"
                   >
                     <option value="">—</option>
                     {PROGRAM_OPTIONS.map((p) => (
@@ -92,40 +92,40 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
                     ))}
                   </select>
                 </td>
-                <td className="px-1 py-1">
+                <td className="py-1">
                   <DatePicker
                     value={r.payDate}
                     onChange={(v) => update(i, 'payDate', v)}
-                    className="rounded border border-border px-1.5 py-1 text-[14px]"
+                    className="h-7 rounded-[4px] border border-hair/[0.18] bg-white px-1.5 text-[13px] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25"
                   />
                 </td>
-                <td className="px-1 py-1">
+                <td className="py-1">
                   <input
                     inputMode="decimal"
                     value={r.amount}
                     onChange={(e) => update(i, 'amount', sanitizeDecimal(e.target.value))}
-                    className="w-24 rounded border border-border px-1.5 py-1 text-right text-[14px] tabular-nums"
+                    className="w-24 rounded border border-hair/[0.18] px-1.5 py-1 text-right text-[14px] tabular-nums"
                   />
                 </td>
-                <td className="px-1 py-1">
+                <td className="py-1">
                   <input
                     value={r.term}
                     onChange={(e) => update(i, 'term', e.target.value)}
-                    className="w-20 rounded border border-border px-1.5 py-1 text-[14px]"
+                    className="w-20 h-7 rounded-[4px] border border-hair/[0.18] bg-white px-1.5 text-[13px] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25"
                   />
                 </td>
-                <td className="px-1 py-1">
+                <td className="py-1">
                   <input
                     value={r.batchRef}
                     onChange={(e) => update(i, 'batchRef', e.target.value)}
-                    className="w-20 rounded border border-border px-1.5 py-1 text-[14px]"
+                    className="w-20 h-7 rounded-[4px] border border-hair/[0.18] bg-white px-1.5 text-[13px] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/25"
                   />
                 </td>
-                <td className="px-1 py-1 text-right">
+                <td className="py-1 text-right">
                   <button
                     type="button"
                     onClick={() => remove(i)}
-                    className="text-muted hover:text-danger"
+                    className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink"
                     aria-label="Remove row"
                   >
                     <Trash2 size={15} />
@@ -137,13 +137,13 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
         </table>
       </div>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={add} className="btn-ghost">
+        <button type="button" onClick={add} className="btn btn-secondary">
           <Plus size={15} /> Add row
         </button>
-        <button type="button" onClick={save} className="btn-primary disabled:opacity-50" disabled={saving}>
+        <button type="button" onClick={save} className="btn btn-primary" disabled={saving}>
           <Save size={15} /> {saving ? 'Saving…' : 'Save set'}
         </button>
-        <button type="button" onClick={onCancel} className="btn-ghost" disabled={saving}>
+        <button type="button" onClick={onCancel} className="btn btn-secondary" disabled={saving}>
           Cancel
         </button>
       </div>

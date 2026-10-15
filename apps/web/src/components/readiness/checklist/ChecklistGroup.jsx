@@ -14,7 +14,7 @@ export default function ChecklistGroup({ group, drafts, onChange, canEdit }) {
       title={checklistGroupTitle(group.section, group.title)}
       subtitle={`${count} ${count === 1 ? 'item' : 'items'}`}
     >
-      <div className="space-y-3">
+      <div className="border-t border-hair">
         {group.items.map((item, i) => (
           <ChecklistItemRow
             key={item.id}

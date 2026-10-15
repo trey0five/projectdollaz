@@ -1,6 +1,7 @@
 // Phase 3 — scheduled board-report delivery config. Owner/accountant set a cadence
 // + recipients and enable recurring emails of the board financial summary; a
 // "Send test now" button triggers an immediate send. Read-only for viewers.
+import '../../styles/pending/b2-finance.css'
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Send } from 'lucide-react'
@@ -9,9 +10,9 @@ import { reportScheduleApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
 
-const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
+const labelCls = 'b2-label'
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 export default function ReportScheduleSection() {
   const { activeId, activeSchool } = useSchools()
@@ -83,7 +84,7 @@ export default function ReportScheduleSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="Board Reports">
-        <p className="text-[16px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-ink2">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -105,7 +106,7 @@ export default function ReportScheduleSection() {
           onChange={(e) => setEnabled(e.target.checked)}
           className="h-4 w-4 accent-gold"
         />
-        <span className="text-[16px] font-semibold text-navy">Send recurring board summaries</span>
+        <span className="text-[16px] font-semibold text-ink">Send recurring board summaries</span>
       </label>
 
       <div className="mb-5">
@@ -130,14 +131,14 @@ export default function ReportScheduleSection() {
           onChange={(e) => setRecipients(e.target.value)}
           placeholder="board@school.org, treasurer@school.org"
         />
-        <p className="mt-1.5 text-[14px] text-muted">
+        <p className="mt-1.5 text-[14px] text-ink2">
           Comma or newline separated. Each email gets the period’s summary plus a link to the full
           board packet.
         </p>
       </div>
 
       {lastSentAt && (
-        <p className="mb-3 text-[14px] text-muted">
+        <p className="mb-3 text-[14px] text-ink2">
           Last sent {new Date(lastSentAt).toLocaleString()}.
         </p>
       )}
@@ -151,14 +152,14 @@ export default function ReportScheduleSection() {
             whileTap={{ scale: 0.98 }}
             onClick={save}
             disabled={busy}
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
+            className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
           >
             {busy ? 'Saving…' : 'Save schedule'}
           </motion.button>
           <button
             onClick={sendTest}
             disabled={sending}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-all hover:border-hair hover:text-ink2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send size={15} /> {sending ? 'Sending…' : 'Send test now'}
           </button>

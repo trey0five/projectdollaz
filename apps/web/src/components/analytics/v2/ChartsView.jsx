@@ -11,7 +11,8 @@
 // Each scope is its own component so hooks stay unconditional across scope switches.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
-import { formatMetricValue, metricLabel } from '../../../lib/metricMeta.js'
+import { METRIC_META } from '@finrep/analytics'
+import { formatMetricValue, metricFormat, metricLabel } from '../../../lib/metricMeta.js'
 import { schoolColor, CHROME } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import TrendSpark from './TrendSpark.jsx'
@@ -59,10 +60,23 @@ function BarsFromMix(metric) {
 }
 
 
-// TrendCard now lives in v2/TrendSpark.jsx (shared with /hr) — render-identical.
-const TrendCard = (trend, color, formatter) => (
-  <TrendSpark trend={trend} color={color} formatter={formatter} />
-)
+// TrendCard now lives in v2/TrendSpark.jsx (shared with /hr). The formatter is
+// the METRIC'S OWN unit formatter (@finrep/analytics formatMetricValue via the
+// canonical metricFormat): the same function formats the tooltip value AND the
+// y-axis ticks, so a percent metric's axis reads "5.0% 10.0% 15.0%" in the unit
+// its values are printed in. The unit comes off the live metric, falling back to
+// the registry catalog (METRIC_META) when the metric itself is absent.
+const unitOf = (key, metric) => metric?.unit ?? METRIC_META.find((d) => d.key === key)?.unit ?? 'ratio'
+// A missing period is a GAP, never a zero: TrendSpark maps a null value to 0,
+// which drew NMB's operating margin "falling to 0.0%" at an unreported FY. Only
+// real, finite points go in — so a series left with < 2 still shows the
+// "Not enough history yet." empty state.
+const realPoints = (trend) =>
+  trend && { ...trend, points: (trend.points ?? []).filter((p) => p.value != null && Number.isFinite(p.value)) }
+const TrendCard = (trend, color, key, metric) => {
+  const unit = metricFormat(key, unitOf(key, metric))
+  return <TrendSpark trend={realPoints(trend)} color={color} formatter={(v) => formatMetricValue(v, unit)} />
+}
 
 // One same-scale small-multiple cell. Hand-rolled (LineChart autoscales per cell;
 // the card promises ONE shared scale, so yMin/yMax are passed in explicitly).
@@ -208,17 +222,17 @@ function SchoolCharts({ school, onCrossToTable }) {
             {BarsFromMix(m.expense_mix)}
           </ChartCard>
           <ChartCard id="chart-margin" metricKey="operating_margin" title="Operating margin" sub="Across your saved periods" asOf={asOf} onViewAsTable={onCrossToTable}>
-            {TrendCard(t.operating_margin, schoolColor(0), (v) => `${(v * 100).toFixed(1)}%`)}
+            {TrendCard(t.operating_margin, schoolColor(0), 'operating_margin', m.operating_margin)}
           </ChartCard>
           <ChartCard id="chart-cash" metricKey="days_cash_on_hand" title="Days cash on hand" sub="Liquidity trend" asOf={asOf} onViewAsTable={onCrossToTable}>
-            {TrendCard(t.days_cash_on_hand, schoolColor(4), (v) => Math.round(v).toLocaleString())}
+            {TrendCard(t.days_cash_on_hand, schoolColor(4), 'days_cash_on_hand', m.days_cash_on_hand)}
           </ChartCard>
         </div>
       </QuestionGroup>
       <QuestionGroup title="How's enrollment?">
         <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
           <ChartCard id="chart-enrollment" metricKey="enrollment_change_yoy" title="Enrollment change" sub="Year over year" asOf={asOf} onViewAsTable={onCrossToTable}>
-            {TrendCard(t.enrollment_change_yoy, schoolColor(2), (v) => `${(v * 100).toFixed(1)}%`)}
+            {TrendCard(t.enrollment_change_yoy, schoolColor(2), 'enrollment_change_yoy', m.enrollment_change_yoy)}
           </ChartCard>
           <ChartCard id="chart-aidrate" metricKey="pct_students_on_aid" title="Students on aid" sub="Share of enrollment receiving aid" asOf={asOf} onViewAsTable={onCrossToTable}>
             {aid?.value != null ? (

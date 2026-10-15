@@ -5,6 +5,7 @@ import { useReducedMotion } from './useReducedMotion.js'
 import { useMeasuredWidth } from './useMeasuredWidth.js'
 import { useTooltip } from './Tooltip.jsx'
 import { stripFiller } from './labelText.js'
+import '../../../styles/pending/b2-finance.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ColumnChart — the ONE vertical bar (column) primitive for every analytics
@@ -239,6 +240,7 @@ export default function ColumnChart({
   const [ref, measured] = useMeasuredWidth(560)
   const [hot, setHot] = useState(null)
   const [focused, setFocused] = useState(null)
+  const [atEnd, setAtEnd] = useState(false)
 
   const navy = surface === 'navy'
   const T = navy
@@ -504,7 +506,18 @@ export default function ColumnChart({
         </div>
       ) : null}
 
-      <div ref={ref} className="fr-col-scroll">
+      {/* A chart wider than its card (rotate mode, many schools) scrolls INSIDE
+          this wrapper — never the page — and says so with the same right-edge
+          fade a DataTable uses; the fade lifts once the reader reaches the end. */}
+      <div className="b2-hscroll-fade" data-overflow={!navy && W > hostW + 1 ? 'x' : undefined} data-at-end={String(atEnd || W <= hostW + 1)}>
+      <div
+        ref={ref}
+        className="fr-col-scroll"
+        onScroll={(e) => {
+          const el = e.currentTarget
+          setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 1)
+        }}
+      >
         <svg
           width={W}
           height={H}
@@ -767,6 +780,7 @@ export default function ColumnChart({
             )
           })}
         </svg>
+      </div>
       </div>
 
       {unit ? (

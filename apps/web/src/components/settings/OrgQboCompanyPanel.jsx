@@ -28,7 +28,7 @@ const IGNORE = '__ignore__'
 const NOT_SPECIFIED = '__unspecified__'
 
 const selectCls =
-  'rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'rounded-lg border border-hair/[0.18] bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none transition-colors focus:border-[#2563EB] disabled:cursor-not-allowed disabled:bg-ink/[0.04] disabled:text-ink2'
 
 // "location(s)" / "class(es)" — QuickBooks' UI word for the Department entity is
 // Location, so the copy says Location everywhere.
@@ -284,12 +284,12 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
   // ── Not connected: the connect state ───────────────────────────────────────
   if (!connected) {
     return (
-      <div className="rounded-xl border-2 border-gold/40 bg-gold/[0.05] px-4 py-4 sm:px-5">
-        <p className="flex items-center gap-2 text-[15.5px] font-semibold text-navy">
-          <Plug size={16} className="shrink-0 text-gold" />
+      <div className="rounded-[8px] border border-hair bg-ground px-4 py-4 sm:px-5">
+        <p className="flex items-center gap-2 text-[15.5px] font-semibold text-ink">
+          <Plug size={16} className="shrink-0 text-ink2" />
           One QuickBooks for the whole organization
         </p>
-        <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-muted">
+        <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-ink2">
           Connect the organization&apos;s single QuickBooks company once. Its Locations (or Classes)
           then get mapped to schools, and one import pulls every school&apos;s trial balance from the
           same books.
@@ -301,7 +301,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
             type="button"
             onClick={connect}
             disabled={busy}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg btn btn-primary px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
           >
             {connecting ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
             {connecting ? 'Redirecting…' : "Connect the organization's QuickBooks"}
@@ -320,16 +320,16 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
   const anyIgnored = values.some((v) => (sel?.[dim]?.[v.qboId] ?? '') === IGNORE) || nsSel === IGNORE
 
   return (
-    <div className="rounded-xl border border-gold/40 bg-gold/[0.04] px-4 py-4 sm:px-5">
+    <div className="rounded-[8px] border border-hair bg-ink/[0.02] px-4 py-4 sm:px-5">
       {/* Status header */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-navy">
-        <Plug size={15} className="shrink-0 text-gold" />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-ink">
+        <Plug size={15} className="shrink-0 text-ink2" />
         <span className="font-semibold">Organization QuickBooks connected</span>
-        {company.environment && <span className="text-muted">({company.environment})</span>}
+        {company.environment && <span className="text-ink2">({company.environment})</span>}
         {company.companyName ? (
           <>
             · <span className="font-semibold">{company.companyName}</span>
-            {company.realmId && <span className="font-mono text-[13px] text-muted">#{company.realmId}</span>}
+            {company.realmId && <span className="font-mono text-[13px] text-ink2">#{company.realmId}</span>}
           </>
         ) : (
           company.realmId && (
@@ -339,21 +339,21 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
           )
         )}
       </div>
-      <p className="mt-1 text-[13.5px] text-muted">
-        Split by <span className="font-semibold text-navy">{activeDim === 'class' ? 'Classes' : 'Locations'}</span>
+      <p className="mt-1 text-[13.5px] text-ink2">
+        Split by <span className="font-semibold text-ink">{activeDim === 'class' ? 'Classes' : 'Locations'}</span>
         {company.connectedAt && <> · connected {formatRelative(company.connectedAt)}</>}
         {company.lastImportedAt ? <> · last imported {formatRelative(company.lastImportedAt)}</> : ' · never imported'}
       </p>
 
       {/* Mapping summary — amber when anything still needs a decision. */}
       {mapStats ? (
-        <p className={`mt-1 text-[13.5px] ${mapStats.unmapped > 0 ? 'font-semibold text-amber-600' : 'text-muted'}`}>
+        <p className={`mt-1 text-[13.5px] ${mapStats.unmapped > 0 ? 'font-semibold text-ink2' : 'text-ink2'}`}>
           {mapStats.mapped} mapped · {mapStats.ignored} ignored
           {mapStats.unmapped > 0 && <> · {mapStats.unmapped} unmapped</>}
         </p>
       ) : (
         company.mapping && (
-          <p className="mt-1 text-[13.5px] text-muted">
+          <p className="mt-1 text-[13.5px] text-ink2">
             {company.mapping.mappedCount} mapped · {company.mapping.ignoredCount} ignored
           </p>
         )
@@ -369,7 +369,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
           type="button"
           onClick={() => setShowMapping((v) => !v)}
           disabled={disconnecting}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-3 py-1.5 text-[14px] font-semibold text-navy transition-all hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-hair/[0.3] bg-ink/[0.04] px-3 py-1.5 text-[14px] font-semibold text-ink transition-all hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ListChecks size={14} />
           {showMapping ? 'Hide mapping' : 'Review mapping'}
@@ -379,7 +379,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
             type="button"
             onClick={() => setPendingDisconnect(true)}
             disabled={busy || pendingDisconnect}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-[14px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-hair/[0.18] bg-white px-3 py-1.5 text-[14px] font-semibold text-ink transition-all hover:border-hair/[0.3] hover:text-[rgb(var(--c-risk))] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Unplug size={14} /> Disconnect
           </button>
@@ -388,13 +388,13 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
 
       {/* Disconnect confirm — keep-data is the SAFE PRIMARY default. */}
       {pendingDisconnect && (
-        <div className="mt-4 rounded-lg border-2 border-gold/40 bg-white px-4 py-3.5">
-          <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
-            <Unplug size={16} className="mt-0.5 shrink-0 text-gold" />
+        <div className="mt-4 rounded-lg border border-hair bg-white px-4 py-3.5">
+          <p className="flex items-start gap-2 text-[15px] font-semibold text-ink">
+            <Unplug size={16} className="mt-0.5 shrink-0 text-ink2" />
             Disconnect the organization&apos;s QuickBooks?
           </p>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-            By default we <span className="font-medium text-navy">keep everything already imported</span>{' '}
+          <p className="mt-1.5 text-[14px] leading-relaxed text-ink2">
+            By default we <span className="font-medium text-ink">keep everything already imported</span>{' '}
             for every mapped school — statements and dashboards stay exactly as they are; you just stop
             importing. You can also permanently delete the QuickBooks-imported data across those
             schools, which rebuilds their statements from any uploaded files.
@@ -404,7 +404,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
               type="button"
               onClick={() => doDisconnect(false)}
               disabled={disconnecting || importing || saving}
-              className="inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg btn btn-primary px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
             >
               {disconnecting ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
               Disconnect (keep data)
@@ -413,7 +413,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
               type="button"
               onClick={() => setPendingDisconnect(false)}
               disabled={disconnecting}
-              className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-colors hover:border-hair/[0.3] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -421,7 +421,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
               type="button"
               onClick={() => doDisconnect(true)}
               disabled={disconnecting || importing || saving}
-              className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-danger/80 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-50"
+              className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[rgb(var(--c-risk)/0.8)] underline-offset-2 transition-colors hover:text-[rgb(var(--c-risk))] hover:underline disabled:opacity-50"
             >
               <AlertTriangle size={14} /> Disconnect &amp; delete QuickBooks data
             </button>
@@ -431,20 +431,20 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
 
       {/* ── Inline mapping editor ─────────────────────────────────────────────── */}
       {showMapping && (
-        <div className="mt-4 rounded-lg border border-border bg-white px-4 py-4">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+        <div className="mt-4 rounded-lg border border-hair/[0.18] bg-white px-4 py-4">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink2">
             Map QuickBooks {dimNoun(dim, true)} to schools
           </p>
 
           {mappingLoading && !mapping ? (
-            <p className="mt-3 text-[15px] text-muted">Loading the QuickBooks mapping…</p>
+            <p className="mt-3 text-[15px] text-ink2">Loading the QuickBooks mapping…</p>
           ) : mappingErr && !mapping ? (
             <div className="mt-3">
               <FormError>{mappingErr}</FormError>
               <button
                 type="button"
                 onClick={loadMapping}
-                className="mt-2 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                className="mt-2 text-[14px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
               >
                 Try again
               </button>
@@ -464,50 +464,50 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
                       type="button"
                       onClick={() => setDim(key)}
                       disabled={saving}
-                      className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         dim === key
-                          ? 'border-gold bg-gold/15 text-navy'
-                          : 'border-border bg-white text-muted hover:border-gold/60 hover:text-navy'
+                          ? 'border-[#2563EB]/60 bg-[#2563EB]/[0.06] text-ink'
+                          : 'border-hair/[0.18] bg-white text-ink2 hover:border-hair/[0.3] hover:text-ink'
                       }`}
                     >
-                      <PillIcon size={14} className={dim === key ? 'text-gold' : ''} />
+                      <PillIcon size={14} className={dim === key ? 'text-ink2' : ''} />
                       {label} ({count})
                     </button>
                   )
                 })}
               </div>
               {dim !== activeDim && (
-                <p className="mt-2 text-[13.5px] font-medium text-amber-600">
+                <p className="mt-2 text-[13.5px] font-medium text-ink2">
                   Saving switches the split to {dim === 'class' ? 'Classes' : 'Locations'} — imports
                   will use this mapping instead of the {activeDim === 'class' ? 'Classes' : 'Locations'} one.
                 </p>
               )}
 
               {values.length === 0 ? (
-                <p className="mt-4 rounded-lg border border-border bg-section px-4 py-3 text-[15px] text-muted">
+                <p className="mt-4 rounded-lg border border-hair/[0.18] bg-ground px-4 py-3 text-[15px] text-ink2">
                   {dim === 'class'
                     ? 'No classes found in this QuickBooks company — add Classes in QuickBooks first.'
                     : 'No locations found in this QuickBooks company — add Locations in QuickBooks first.'}
                 </p>
               ) : (
                 <>
-                  <ul className="mt-4 divide-y divide-border/70 rounded-xl border border-border">
+                  <ul className="mt-4 divide-y divide-border/70 rounded-[8px] border border-hair/[0.18]">
                     {values.map((v) => (
                       <li
                         key={v.qboId}
                         className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pr-4 ${v.parentId ? 'pl-9' : 'pl-4'}`}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-navy">
+                          <p className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-ink">
                             <span className="truncate">{v.name}</span>
                             {!v.active && (
-                              <span className="rounded-full bg-navy/[0.06] px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-navy/60">
+                              <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink2">
                                 Inactive
                               </span>
                             )}
                           </p>
                           {v.activityCY != null && (
-                            <p className="text-[13px] text-muted">
+                            <p className="text-[13px] text-ink2">
                               {v.activityCY === 0
                                 ? 'No activity this year'
                                 : `${fmtActivity(v.activityCY)} activity this year`}
@@ -541,10 +541,10 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
                       </li>
                     ))}
                     {/* Not Specified pseudo-row — always pinned last, Ignored by default. */}
-                    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-section/50 px-4 py-2.5">
+                    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-ground px-4 py-2.5">
                       <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-medium italic text-navy">Not Specified</p>
-                        <p className="text-[13px] text-muted">
+                        <p className="text-[15px] font-medium italic text-ink">Not Specified</p>
+                        <p className="text-[13px] text-ink2">
                           Amounts with no {dimNoun(dim)} tag in QuickBooks. Ignored by default — map it
                           to a school only if untagged activity belongs there.
                         </p>
@@ -573,8 +573,8 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
 
                   {/* Honesty line — nothing silently vanishes. */}
                   {(anyUndecided || anyIgnored) && (
-                    <p className="mt-2.5 flex items-start gap-1.5 text-[13.5px] text-muted">
-                      <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+                    <p className="mt-2.5 flex items-start gap-1.5 text-[13.5px] text-ink2">
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0 text-ink2" />
                       Unmapped and ignored {dimNoun(dim, true)} aren&apos;t imported — their activity
                       stays out of every school&apos;s statements.
                     </p>
@@ -587,7 +587,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
                       type="button"
                       onClick={saveMapping}
                       disabled={busy}
-                      className="mt-3 inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg btn btn-primary px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                       {saving ? 'Saving…' : 'Save mapping'}
@@ -610,14 +610,14 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
       {/* ── Import all mapped schools ─────────────────────────────────────────── */}
       {canManage && (
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <span className="text-[13.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-[13.5px] font-semibold uppercase tracking-[0.08em] text-ink2">
             Also import (each run):
           </span>
           {[
             ['priorYear', 'Prior year'],
             ['monthly', 'Monthly'],
           ].map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-[14.5px] text-navy">
+            <label key={key} className="flex items-center gap-2 text-[14.5px] text-ink">
               <input
                 type="checkbox"
                 checked={importScope[key]}
@@ -633,7 +633,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
             disabled={busy || pendingDisconnect || importCount === 0}
             onClick={runImport}
             title={importCount === 0 ? 'Map at least one location to a school first' : undefined}
-            className="ml-auto inline-flex items-center gap-2 rounded-lg btn-cta px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-2 rounded-lg btn btn-primary px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
           >
             {importing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             Import all mapped schools ({importCount})
@@ -643,32 +643,32 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
 
       {/* Import outcome — one row per school + honest totals. */}
       {importResult && !importing && (
-        <div className="mt-3 rounded-lg border border-gold/40 bg-white px-4 py-3">
-          <p className="text-[14px] font-semibold text-navy">
+        <div className="mt-3 rounded-lg border border-hair bg-white px-4 py-3">
+          <p className="text-[14px] font-semibold text-ink">
             {importResult.synced} synced · {importResult.failed} failed · {importResult.skipped} skipped
           </p>
           <ul className="mt-2 space-y-1.5">
             {(importResult.results ?? []).map((r) => (
               <li
                 key={r.schoolId}
-                className={`flex items-start gap-2 text-[14px] ${r.status === 'failed' ? 'text-danger' : 'text-muted'}`}
+                className={`flex items-start gap-2 text-[14px] ${r.status === 'failed' ? 'tone-risk' : 'text-ink2'}`}
               >
                 {r.status === 'synced' ? (
-                  <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-gold" />
+                  <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-ink2" />
                 ) : (
                   <XCircle size={15} className="mt-0.5 shrink-0" />
                 )}
                 <span>
-                  <span className="font-medium text-navy">{r.name}</span>
+                  <span className="font-medium text-ink">{r.name}</span>
                   {r.dimensionNames?.length > 0 && (
-                    <span className="text-muted"> ({r.dimensionNames.join(', ')})</span>
+                    <span className="text-ink2"> ({r.dimensionNames.join(', ')})</span>
                   )}
                   {' · '}
                   {r.status === 'synced'
                     ? `Imported${r.periodLabel ? ` into ${r.periodLabel}` : ''} — ${scopeSummary(r.scope) || 'done'}`
                     : r.reason}
                   {r.balancePlug != null && r.balancePlug !== 0 && (
-                    <span className="text-muted">
+                    <span className="text-ink2">
                       {' '}
                       · includes an interlocation balance plug of {fmtWhole(r.balancePlug)}
                     </span>
@@ -679,8 +679,8 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
           </ul>
           {(importResult.notSpecified?.revenue !== 0 || importResult.notSpecified?.expense !== 0) &&
             importResult.notSpecified && (
-              <p className="mt-2.5 flex items-start gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-[13.5px] text-amber-800">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+              <p className="mt-2.5 flex items-start gap-1.5 rounded-md bg-white px-3 py-2 text-[13.5px] text-ink">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-ink2" />
                 <span>
                   QuickBooks has unallocated &quot;Not Specified&quot; amounts this year — revenue{' '}
                   {fmtWhole(importResult.notSpecified.revenue)} · expense{' '}

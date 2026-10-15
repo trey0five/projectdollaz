@@ -14,7 +14,7 @@
 // nested component definitions; no setState-in-render/effect — this view is pure
 // read.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { TrendingUp, Clock } from 'lucide-react'
 import {
@@ -25,6 +25,8 @@ import {
 } from '@finrep/analytics'
 import { useForecast } from '../../hooks/useAnalytics.js'
 import { useBilling } from '../../context/BillingContext.jsx'
+import { PageHeader, StatStrip, Stat, Section, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 
 // ── Where "enter the forecast" actually goes ─────────────────────────────────
 // GATE THE DESTINATION ON ENTITLEMENT, DON'T ASSUME IT. /planning is client-side
@@ -78,44 +80,41 @@ function sumKeys(map, keys) {
   return t
 }
 
+// Variance tone → a 2px mark beside the (ink) figure; never coloured text.
+function varianceTone(kind, variance, vp, budget) {
+  if (budget == null) return null
+  if (isFavorable(kind, variance)) return 'good'
+  return Math.abs(vp ?? 0) > 10 ? 'risk' : 'watch'
+}
+function VarianceCell({ tone, children, bold }) {
+  return (
+    <td className={`dt-num whitespace-nowrap ${bold ? 'font-semibold' : ''}`}>
+      {tone ? <i className={`mark tone-${tone} mr-1.5`} aria-label={tone === 'good' ? 'favorable' : 'unfavorable'} /> : null}
+      {children}
+    </td>
+  )
+}
+
 // ── Read-only Forecast-vs-Budget row (module scope) — variance is STORED. ──────
 function ForecastRow({ kind, label, forecast, budget, variance, explanation }) {
   const vp = budget == null ? null : variancePct(variance ?? 0, budget)
-  const fav = isFavorable(kind, variance ?? 0)
-  const varTone =
-    budget == null
-      ? 'text-ink'
-      : fav
-        ? 'text-emerald-600'
-        : Math.abs(vp ?? 0) > 10
-          ? 'text-rose-600'
-          : 'text-amber-700'
+  const tone = varianceTone(kind, variance ?? 0, vp, budget)
   return (
-    <tr className="border-t border-rule/50 hover:bg-gold/[0.04]">
-      <td className="px-3 py-1.5 text-[13px] text-ink">{label}</td>
-      <td className="px-3 py-1.5 text-right text-[13px] font-semibold tabular-nums text-navy">
-        {money(forecast)}
-      </td>
-      <td className="px-3 py-1.5 text-right text-[13px] tabular-nums text-muted">
-        {budget == null ? '—' : money(budget)}
-      </td>
-      <td className={`px-3 py-1.5 text-right text-[13px] tabular-nums ${varTone}`}>
-        {budget == null ? '—' : signed(variance)}
-      </td>
-      <td className={`px-3 py-1.5 text-right text-[12px] tabular-nums ${varTone}`}>
-        {budget == null ? '—' : pctText(vp)}
-      </td>
-      <td className="px-2 py-1.5 text-[12.5px] text-muted">
-        {explanation ? explanation : ''}
-      </td>
+    <tr>
+      <td>{label}</td>
+      <td className="dt-num font-semibold">{money(forecast)}</td>
+      <td className="dt-num text-ink2">{budget == null ? '—' : money(budget)}</td>
+      <VarianceCell tone={tone}>{budget == null ? '—' : signed(variance)}</VarianceCell>
+      <td className="dt-num text-[12px] text-ink2">{budget == null ? '—' : pctText(vp)}</td>
+      <td className="text-[12.5px] text-ink2">{explanation ? explanation : ''}</td>
     </tr>
   )
 }
 
 function GroupHeader({ title }) {
   return (
-    <tr className="bg-navy-gradient">
-      <td colSpan={6} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold-light">
+    <tr className="dt-section">
+      <td colSpan={6} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
         {title}
       </td>
     </tr>
@@ -125,66 +124,55 @@ function GroupHeader({ title }) {
 function TotalRow({ kind, label, forecast, budget, variance, net }) {
   const vp = budget == null ? null : variancePct(variance ?? 0, budget)
   const fav = net ? (variance ?? 0) >= 0 : isFavorable(kind, variance ?? 0)
-  const tone =
-    budget == null ? 'text-navy' : fav ? 'text-emerald-600' : 'text-rose-600'
+  const tone = budget == null ? null : fav ? 'good' : 'risk'
   return (
-    <tr className={net ? 'border-t-2 border-gold/60 bg-gold/10' : 'border-t border-rule bg-cream/60'}>
-      <td className="px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">{label}</td>
-      <td className="px-3 py-2 text-right text-[14px] font-semibold tabular-nums text-navy">{money(forecast)}</td>
-      <td className="px-3 py-2 text-right text-[13px] tabular-nums text-muted">
-        {budget == null ? '—' : money(budget)}
-      </td>
-      <td className={`px-3 py-2 text-right text-[13px] font-semibold tabular-nums ${tone}`}>
-        {budget == null ? '—' : signed(variance)}
-      </td>
-      <td className={`px-3 py-2 text-right text-[12px] tabular-nums ${tone}`}>
-        {budget == null ? '—' : pctText(vp)}
-      </td>
+    <tr className={net ? 'dt-section-total' : 'dt-subtotal'}>
+      <td className="text-[11px] font-semibold uppercase tracking-[0.06em]">{label}</td>
+      <td className="dt-num font-semibold">{money(forecast)}</td>
+      <td className="dt-num text-ink2">{budget == null ? '—' : money(budget)}</td>
+      <VarianceCell tone={tone} bold>{budget == null ? '—' : signed(variance)}</VarianceCell>
+      <td className="dt-num text-[12px] text-ink2">{budget == null ? '—' : pctText(vp)}</td>
       <td />
     </tr>
   )
 }
 
 export default function ForecastView({ schoolId, periodId }) {
+  const reduce = useReducedMotion()
   const { forecast, hasBudget, loading } = useForecast(schoolId, periodId)
   const { hasModule } = useBilling()
   const entry = forecastEntry(hasModule('planning'))
 
-  // (a) Loading skeleton (mirrors ForecastWorkspace).
+  // (a) Loading note (mirrors ForecastWorkspace).
   if (loading) {
     return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Loading the forecast…</p>
+      <div className="b2-note" aria-busy="true">
+        <p>Loading the forecast…</p>
       </div>
     )
   }
 
-  // (b) Empty state — no forecast saved yet. Point to Planning & Forecasting
-  // (the input surface) via a gold CTA pill styled like the BudgetPage CTA.
+  // (b) Empty state — no forecast saved yet. A ruled note on the ground with the
+  // entitlement-aware destination as the one primary action.
   if (!forecast) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="card-soft border-dashed px-6 py-14 text-center"
-      >
-        <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <TrendingUp size={22} />
-        </span>
-        <p className="font-serif text-lg italic text-muted">No forecast saved yet for this period.</p>
-        <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
+      <div>
+      <PageHeader eyebrow="Reports · FYE forecast" title="Fiscal-year-end forecast" hue="37 99 235" />
+      <div className="b2-note mt-8">
+        <TrendingUp size={22} aria-hidden="true" className="mx-auto text-ink2" />
+        <p className="b2-note-title">No forecast saved yet for this period.</p>
+        <p className="mx-auto max-w-md">
           {hasModule('planning')
             ? 'Project where the year lands — revise your driver assumptions and add anticipated feeder enrollment in Planning & Forecasting. The saved forecast appears here and flows into your board packet.'
             : 'Projecting where the year lands — driver assumptions and anticipated feeder enrollment — is part of the Planning & Forecasting add-on. Once it is on your plan, the saved forecast appears here and flows into your board packet.'}
         </p>
-        <Link
-          to={entry.to}
-          className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
-        >
-          {entry.label}
-        </Link>
-      </motion.div>
+        <div className="pt-2">
+          <Button variant="primary" to={entry.to}>
+            {entry.label}
+          </Button>
+        </div>
+      </div>
+      </div>
     )
   }
 
@@ -214,91 +202,68 @@ export default function ForecastView({ schoolId, periodId }) {
   const revVarTotal = sumKeys(varRevenue, REVENUE_LINE_KEYS)
   const expVarTotal = sumKeys(varExpense, EXPENSE_LINE_KEYS)
 
-  const kpiCards = [
-    {
-      label: 'Projected students',
-      value: (kpis.enrollmentTotal ?? 0).toLocaleString('en-US'),
-      hint: isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder',
-    },
-    { label: 'Forecast revenue', value: money(kpis.totalRevenue), hint: 'Total projected revenue' },
-    { label: 'Forecast expense', value: money(kpis.totalExpense), hint: 'Total projected expense' },
-    {
-      label: 'Net surplus / (deficit)',
-      value: signed(kpis.netIncome),
-      tone: (kpis.netIncome ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600',
-      hint: 'Forecast revenue − expense',
-    },
-  ]
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-5"
     >
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <TrendingUp size={20} />
-        </span>
-        <div className="flex-1">
-          <h3 className="font-serif text-lg font-semibold text-navy">Fiscal-year-end forecast</h3>
-          <p className="text-[13px] text-muted">
-            {isRollforward
-              ? 'This year’s roster rolled forward a grade with retention plus new entrants — where the year lands compared to the budget you set.'
-              : 'Revised assumptions and anticipated feeder enrollment — where the year lands compared to the budget you set.'}
-          </p>
-        </div>
-        {savedAt && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[11px] font-medium text-muted">
-            <Clock size={12} /> Saved{' '}
-            {new Date(savedAt).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-          </span>
-        )}
-      </div>
+      <PageHeader
+        eyebrow="Reports · FYE forecast"
+        title="Fiscal-year-end forecast"
+        meta={
+          isRollforward
+            ? 'This year’s roster rolled forward a grade with retention plus new entrants — where the year lands compared to the budget you set.'
+            : 'Revised assumptions and anticipated feeder enrollment — where the year lands compared to the budget you set.'
+        }
+        hue="37 99 235"
+        actions={
+          savedAt ? (
+            <Pill>
+              <Clock size={11} aria-hidden="true" /> Saved{' '}
+              {new Date(savedAt).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </Pill>
+          ) : null
+        }
+      />
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {kpiCards.map((c) => (
-          <div key={c.label} className="card-soft p-3.5" title={c.hint}>
-            <div className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-              {c.label}
-            </div>
-            <div className={`font-serif text-lg font-semibold tabular-nums ${c.tone ?? 'text-navy'}`}>
-              {c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* The headline figures */}
+      <StatStrip cols={4}>
+        <Stat
+          label="Projected students"
+          value={kpis.enrollmentTotal ?? 0}
+          title={isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder'}
+        />
+        <Stat label="Forecast revenue" value={kpis.totalRevenue ?? null} format="currency" title="Total projected revenue" />
+        <Stat label="Forecast expense" value={kpis.totalExpense ?? null} format="currency" title="Total projected expense" />
+        <Stat
+          label="Net surplus / (deficit)"
+          value={signed(kpis.netIncome)}
+          status={(kpis.netIncome ?? 0) >= 0 ? 'good' : 'risk'}
+          title="Forecast revenue − expense"
+        />
+      </StatStrip>
 
       {/* Variance table (read-only) */}
-      <div className="card-soft overflow-hidden p-0">
-        <div className="flex flex-wrap items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
-            <TrendingUp size={16} />
-          </span>
-          <div className="flex-1">
-            <h4 className="font-serif text-[15px] font-semibold text-navy">Forecast vs. Budget</h4>
-            <p className="text-[12px] text-muted">
-              Where the year lands under the saved assumptions, compared to the active budget.
-            </p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+      <Section label="Forecast vs. budget">
+        <p className="mb-3 text-small text-ink2">
+          Where the year lands under the saved assumptions, compared to the active budget.
+        </p>
+        <div className="dt-wrap">
+          <table className="dt">
             <thead>
-              <tr className="bg-cream">
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Line</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">Forecast</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Budget</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Variance</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">%</th>
-                <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">Comment</th>
+              <tr>
+                <th scope="col">Line</th>
+                <th scope="col" className="dt-num">Forecast</th>
+                <th scope="col" className="dt-num">Budget</th>
+                <th scope="col" className="dt-num">Variance</th>
+                <th scope="col" className="dt-num">%</th>
+                <th scope="col">Comment</th>
               </tr>
             </thead>
             <tbody>
@@ -352,11 +317,11 @@ export default function ForecastView({ schoolId, periodId }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </Section>
 
-      <p className="text-[12px] text-muted">
+      <p className="sec-note">
         To revise the forecast,{' '}
-        <Link to={entry.to} className="font-semibold text-gold underline-offset-2 hover:underline">
+        <Link to={entry.to} className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
           {hasModule('planning')
             ? 'open Planning & Forecasting →'
             : 'add Planning & Forecasting to your plan →'}

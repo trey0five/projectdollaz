@@ -63,10 +63,10 @@ export default function ExportMenu({ onCancel = null }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="btn-ghost min-h-[44px] w-full shrink-0 justify-center sm:h-[52px] sm:w-[120px]"
+        className="btn btn-secondary w-full shrink-0 sm:w-auto"
         disabled={!reports}
       >
-        Export <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        Export <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
         {open && (
@@ -75,15 +75,15 @@ export default function ExportMenu({ onCancel = null }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[260px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border-2 border-border bg-white shadow-lift"
+            className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[260px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[8px] border border-hair/[0.18] bg-white shadow-float"
           >
             {OPTIONS.map((opt) => (
               <button
                 key={opt.key}
                 onClick={() => handle(opt.key)}
-                className="flex w-full items-center gap-3 border-b border-rule px-5 py-3 text-left text-sm text-ink transition-colors last:border-b-0 hover:bg-section hover:text-navy"
+                className="flex w-full items-center gap-3 border-b border-hair px-5 py-3 text-left text-sm text-ink transition-colors last:border-b-0 hover:bg-ground hover:text-ink"
               >
-                <opt.icon size={17} className="shrink-0 text-gold" />
+                <opt.icon size={17} className="shrink-0 text-ink2" />
                 {opt.label}
               </button>
             ))}
@@ -93,7 +93,7 @@ export default function ExportMenu({ onCancel = null }) {
                   setOpen(false)
                   onCancel()
                 }}
-                className="flex w-full items-center gap-3 border-t-2 border-rule px-5 py-3 text-left text-sm text-muted transition-colors hover:bg-section hover:text-danger"
+                className="flex w-full items-center gap-3 border-t-2 border-hair px-5 py-3 text-left text-sm text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
               >
                 <X size={17} className="shrink-0" />
                 Discard these files

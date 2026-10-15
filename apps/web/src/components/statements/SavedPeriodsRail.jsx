@@ -2,9 +2,16 @@
 // saved periods (newest-first). The NEWEST/active period is the live editable
 // workspace; selecting any OTHER saved period opens its stored snapshot read-only.
 // Mirrors the prior HistoryPanel selection model exactly — no new hydration path.
-import { motion } from 'framer-motion'
-import { FileCheck2, FileX2, ChevronRight, Loader2, Sparkles } from 'lucide-react'
+//
+// Premium UI P4: a RULED LIST on the ground (no card per period) — each row is a
+// button with the period label, its end date and import roles; the selected row
+// carries a 2px primary rule on the left and the ink weight; state is a status
+// Pill (Live / Saved / No snapshot). Hover = a quiet wash.
+import { ChevronRight, Loader2 } from 'lucide-react'
 import { formatShortDate } from '../../lib/format.js'
+import { Pill } from '../ui/surface/index.js'
+
+const ROLE_LABEL = { cy: 'CY', py: 'PY', audit: 'Audit' }
 
 export default function SavedPeriodsRail({
   periods,
@@ -16,85 +23,54 @@ export default function SavedPeriodsRail({
   if (!periods || periods.length === 0) return null
 
   return (
-    <div className="space-y-2 sm:space-y-2.5">
-      {periods.map((p, i) => {
+    <ul className="border-t border-hair">
+      {periods.map((p) => {
         const isLive = p.id === activePeriodId
         const isSelected = p.id === selectedId
+        const enabled = isLive || p.hasSnapshot
+        const roles = ['cy', 'py', 'audit'].filter((r) => p.roles?.[r])
         return (
-          <motion.button
-            key={p.id}
-            type="button"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i * 0.04, 0.3) }}
-            onClick={() => onSelect(p)}
-            disabled={!isLive && !p.hasSnapshot}
-            className={`flex w-full items-center justify-between gap-3 rounded-xl border bg-white px-3.5 py-2.5 text-left shadow-card transition-all sm:border-2 sm:px-4 sm:py-3 ${
-              isSelected
-                ? 'border-gold shadow-glow'
-                : isLive || p.hasSnapshot
-                  ? 'cursor-pointer border-border hover:border-gold hover:shadow-glow'
-                  : 'cursor-not-allowed border-border opacity-70'
-            }`}
-            aria-current={isSelected ? 'true' : undefined}
-          >
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-serif text-[16px] font-semibold text-navy sm:text-[16px]">{p.label}</span>
-                {isLive ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#7a5e00]">
-                    <Sparkles size={11} /> Live
+          <li key={p.id} className="border-b border-hair">
+            <button
+              type="button"
+              onClick={() => onSelect(p)}
+              disabled={!enabled}
+              aria-current={isSelected ? 'true' : undefined}
+              className={`relative flex w-full items-center justify-between gap-3 py-2.5 pl-3 pr-1 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#2563EB]/50 ${
+                enabled ? 'cursor-pointer hover:bg-ink/[0.03]' : 'cursor-not-allowed opacity-60'
+              }`}
+            >
+              {isSelected && <span className="absolute inset-y-1 left-0 w-0.5 bg-[#2563EB]" aria-hidden="true" />}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`text-[14px] ${isSelected ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
+                    {p.label}
                   </span>
-                ) : p.hasSnapshot ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700">
-                    <FileCheck2 size={11} /> Saved
-                  </span>
+                  {isLive ? (
+                    <Pill variant="status" tone="good">Live</Pill>
+                  ) : p.hasSnapshot ? (
+                    <Pill variant="status" tone="neutral">Saved</Pill>
+                  ) : (
+                    <Pill>No snapshot</Pill>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[12px] text-ink2">
+                  Ends {formatShortDate(p.periodEndDate)}
+                  {' · '}
+                  {roles.length === 0 ? <span className="italic">no imports</span> : roles.map((r) => ROLE_LABEL[r]).join(' · ')}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center">
+                {loadingId === p.id ? (
+                  <Loader2 size={15} aria-hidden="true" className="animate-spin text-ink2" />
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
-                    <FileX2 size={11} /> No snapshot
-                  </span>
+                  enabled && <ChevronRight size={15} aria-hidden="true" className={isSelected ? 'text-ink' : 'text-ink2'} />
                 )}
               </div>
-              <p className="mt-0.5 text-[14px] text-muted">Ends {formatShortDate(p.periodEndDate)}</p>
-              {/* Import-role chips — colored so a card's data coverage reads at a glance. */}
-              <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                {['cy', 'py', 'audit'].filter((r) => p.roles?.[r]).length === 0 ? (
-                  <span className="text-[12px] italic text-muted/70">no imports</span>
-                ) : (
-                  ['cy', 'py', 'audit']
-                    .filter((r) => p.roles?.[r])
-                    .map((r) => (
-                      <span
-                        key={r}
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${
-                          r === 'cy'
-                            ? 'bg-gold/15 text-gold'
-                            : r === 'py'
-                              ? 'bg-navy-soft/15 text-navy-soft'
-                              : 'bg-emerald-100 text-emerald-700'
-                        }`}
-                      >
-                        {r === 'audit' ? 'Audit' : r.toUpperCase()}
-                      </span>
-                    ))
-                )}
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center">
-              {loadingId === p.id ? (
-                <Loader2 size={17} className="animate-spin text-gold" />
-              ) : (
-                (isLive || p.hasSnapshot) && (
-                  <ChevronRight
-                    size={17}
-                    className={isSelected ? 'text-gold' : 'text-muted'}
-                  />
-                )
-              )}
-            </div>
-          </motion.button>
+            </button>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

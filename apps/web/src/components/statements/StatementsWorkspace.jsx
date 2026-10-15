@@ -10,9 +10,8 @@
 // saved period on mount.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, FileStack, Database, CloudUpload } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, Database, CloudUpload, Loader2 } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useUiV2 } from '../../context/UiFlagContext.jsx'
@@ -22,26 +21,25 @@ import CreateSchoolForm from '../CreateSchoolForm.jsx'
 import ReportTabs from '../reports/ReportTabs.jsx'
 import SavedPeriodsRail from './SavedPeriodsRail.jsx'
 import BackLink from '../ui/BackLink.jsx'
+import { PageHeader, Section, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 
 // Read-only statements view for one period (module scope — not an in-render def).
+// Premium UI P4: a Section on the ground — the period label + date as the
+// label row, "Back to current" as its aside; the statements below on ink tabs.
 function StatementsView({ bundle, label, periodId, periodEndDate, periodType, school, onBack }) {
   return (
-    <div className="card-soft overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
-        <div className="min-w-0">
-          <h2 className="truncate font-serif text-lg font-semibold text-navy">
-            {label || 'Statements'}
-          </h2>
-          <p className="text-[14px] text-muted">
-            {formatShortDate(periodEndDate)} · generated statements (read-only)
-          </p>
-        </div>
-        {onBack && (
-          <button type="button" onClick={onBack} className="btn-ghost shrink-0">
+    <Section
+      label={`${label || 'Statements'} · ${formatShortDate(periodEndDate)} · read-only`}
+      aside={
+        onBack ? (
+          <Button variant="quiet" size="sm" onClick={onBack} icon={<ArrowLeft size={13} />}>
             Back to current
-          </button>
-        )}
-      </div>
+          </Button>
+        ) : null
+      }
+      className="!mt-0"
+    >
       <ReportTabs
         bundle={bundle}
         school={school}
@@ -49,7 +47,7 @@ function StatementsView({ bundle, label, periodId, periodEndDate, periodType, sc
         dateLabel={formatShortDate(periodEndDate)}
         periodLabel={PERIOD_LABELS[periodType] || ''}
       />
-    </div>
+    </Section>
   )
 }
 
@@ -57,32 +55,27 @@ function StatementsView({ bundle, label, periodId, periodEndDate, periodType, sc
 // directly (flag-aware — never through the /data redirect, which strips params).
 function NoStatementsCard({ addHref }) {
   return (
-    <div className="card-soft flex flex-col items-center gap-4 px-6 py-14 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-        <Database size={28} />
-      </span>
-      <div>
-        <h2 className="font-serif text-xl font-semibold text-navy">No statements yet</h2>
-        <p className="mx-auto mt-1.5 max-w-sm text-[15px] leading-relaxed text-muted">
-          Add your trial balance and we&rsquo;ll generate your four financial statements right
-          here.
-        </p>
+    <div className="b2-note">
+      <Database size={22} aria-hidden="true" className="mx-auto text-ink2" />
+      <p className="b2-note-title">No statements yet</p>
+      <p className="mx-auto max-w-sm">
+        Add your trial balance and we&rsquo;ll generate your four financial statements right here.
+      </p>
+      <div className="pt-2">
+        <Button variant="primary" to={addHref}>
+          Add trial balance <ArrowRight size={14} aria-hidden="true" />
+        </Button>
       </div>
-      <Link to={addHref} className="btn-primary inline-flex items-center gap-2">
-        Add trial balance <ArrowRight size={16} />
-      </Link>
     </div>
   )
 }
 
+// A static splash while the schools/periods hydrate (no infinite spinner loop in
+// app chrome beyond the one-shot fade; the standard spinner stays).
 function Splash() {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <motion.div
-        className="h-10 w-10 rounded-full border-4 border-gold/30 border-t-gold"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-      />
+    <div className="flex min-h-[60vh] items-center justify-center" aria-busy="true">
+      <Loader2 size={28} aria-label="Loading" className="animate-spin text-ink2" />
     </div>
   )
 }
@@ -164,46 +157,31 @@ export default function StatementsWorkspace() {
   if (hydrating) return <Splash />
 
   return (
-    <div className="mx-auto max-w-page bg-page-glow bg-no-repeat px-4 py-6 sm:px-10">
-      <BackLink className="mb-4" />
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-            <FileStack size={22} />
-          </span>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">
-              Finance · Workspaces
-            </p>
-            <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-              Statements &amp; Periods
-            </h1>
-            <p className="text-[15px] text-muted">
-              Your generated financial statements — view any period here. Add or update numbers
-              from Add data.
-            </p>
-          </div>
-        </div>
-        <Link
-          to={addHref}
-          className="btn-primary inline-flex shrink-0 items-center gap-1.5 self-start sm:self-auto"
-        >
-          <CloudUpload size={15} /> Add data
-        </Link>
-      </div>
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
+      <BackLink className="mb-2" />
+      <PageHeader
+        eyebrow={['Finance', activeSchool?.name, 'Workspaces'].filter(Boolean).join(' · ')}
+        title="Statements & periods"
+        meta="Your generated financial statements — view any period here. Add or update numbers from Add data."
+        hue="37 99 235"
+        actions={
+          <Button variant="primary" to={addHref} icon={<CloudUpload size={14} />}>
+            Add data
+          </Button>
+        }
+      />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+      <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
         {/* Saved-periods rail */}
-        <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[224px]">
-          <h2 className="mb-2.5 px-1 font-sans text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
-            Saved periods
-          </h2>
+        <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[240px]">
+          <div className="sec-head">
+            <h2 className="sec-label">Saved periods</h2>
+            <span className="sec-rule" aria-hidden="true" />
+          </div>
           {periods.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-border bg-section px-4 py-8 text-center">
-              <p className="font-serif text-[16px] italic text-muted">No saved periods yet.</p>
-              <p className="mt-1 text-[14px] text-muted">
-                Upload a trial balance and save to build your history.
-              </p>
+            <div className="b2-note">
+              <p>No saved periods yet.</p>
+              <p>Upload a trial balance and save to build your history.</p>
             </div>
           ) : (
             <SavedPeriodsRail

@@ -8,9 +8,8 @@
 //
 // Pure presentation over the `rollup` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
-import { motion } from 'framer-motion'
-import { Building2, CheckCircle2, MinusCircle, Landmark, FileBarChart, Waves, Scale } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
+import { Section, StatStrip, Stat, DataTable } from '../ui/surface/index.js'
 
 // Friendly labels for the engine's flat SOA/SFP field abbreviations. Anything not
 // listed falls back to a titleized key, so a new engine field still renders sanely.
@@ -130,18 +129,46 @@ const SCF_CASH = ['cashBegin', 'cashEnd', 'cashUnrestricted', 'cashRestricted']
 const NA_ROLL = ['begin', 'change', 'end']
 const NA_SPLIT = ['withoutDonor', 'withDonor']
 
+// Per-school summary columns (DataTable) — money right-aligned & tabular; the
+// reported state is the 2px status mark + an ink word, not a coloured icon.
+const money = (block, key) => (r) => (r[block] ? fmt(r[block][key]) : '—')
+const SCHOOL_COLUMNS = [
+  // The reported state is the row's 2px mark; an unreported school also says so
+  // in ink-2 under its name (no separate "Status" column — it pushed the table
+  // to 10 columns and wrapped every name). Names hold one line; numbers scroll.
+  {
+    key: 'name',
+    header: 'School',
+    className: 'whitespace-nowrap',
+    render: (r) => (
+      <span className="block">
+        <span className="font-medium">{r.name}</span>
+        {!r.reported && <span className="block text-[12px] leading-4 text-ink2">Not yet reported</span>}
+      </span>
+    ),
+  },
+  { key: 'rev', header: 'Revenue', num: true, render: money('soa', 'totalRev') },
+  { key: 'exp', header: 'Expense', num: true, render: money('soa', 'totalExp') },
+  { key: 'net', header: 'Net change', num: true, render: money('soa', 'netChange') },
+  { key: 'assets', header: 'Total assets', num: true, render: money('sfp', 'totalAssets') },
+  { key: 'liab', header: 'Total liabilities', num: true, render: money('sfp', 'totalLiab') },
+  { key: 'na', header: 'Net assets', num: true, render: money('sfp', 'totalNA') },
+  { key: 'opcash', header: 'Operating cash', num: true, render: money('scf', 'operatingCash') },
+  { key: 'cashEnd', header: 'Cash, end', num: true, render: money('scf', 'cashEnd') },
+]
+
 export default function OrgStatements({ rollup, loading, error }) {
   if (loading) {
     return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Consolidating your organization’s statements…</p>
+      <div className="b2-note mt-8" aria-busy="true">
+        <p>Consolidating your organization’s statements…</p>
       </div>
     )
   }
   if (error) {
     return (
-      <div className="card-soft border-dashed px-6 py-12 text-center">
-        <p className="font-serif text-base italic text-muted">{error}</p>
+      <div className="b2-note mt-8">
+        <p>{error}</p>
       </div>
     )
   }
@@ -173,15 +200,6 @@ export default function OrgStatements({ rollup, loading, error }) {
 
   const noneReported = reportedCount === 0
 
-  const summaryCard = (label, value, accent) => (
-    <div key={label} className="card-vital p-4 text-center">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</div>
-      <div className={`mt-1 font-serif text-xl font-semibold ${accent || 'text-navy'}`}>
-        {value == null ? '—' : fmt(value)}
-      </div>
-    </div>
-  )
-
   const soaRows = [...lineRows(soa, SOA_REVENUE), ...lineRows(soa, SOA_EXPENSE), ...lineRows(soa, ['netChange'])]
   const sfpRows = [...lineRows(sfp, SFP_ASSETS), ...lineRows(sfp, SFP_LIAB), ...lineRows(sfp, SFP_NA)]
   const scfRows = [
@@ -196,139 +214,78 @@ export default function OrgStatements({ rollup, loading, error }) {
   const naEmpty = naReportedCount === 0
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-5"
-    >
-      {/* Coverage banner — never let the totals look complete while a school is missing
-          a statement. Four independent denominators, so partial SFP/SCF/NA coverage is
-          surfaced distinctly and a partial consolidation never reads as complete. */}
-      <div className="rounded-2xl border border-gold/30 bg-gold/5 px-5 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[13px] font-semibold text-navy">
-            {reportedCount} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
-          </p>
-          <p className="text-[11px] italic text-muted">Advisory consolidation — straight sum, pre-elimination.</p>
-        </div>
+    <div>
+      {/* Coverage + the consolidated headline — never let the totals look complete
+          while a school is missing a statement. Four independent denominators, so
+          partial SFP/SCF/NA coverage is surfaced distinctly. */}
+      <Section
+        label="Consolidated"
+        aside={<span className="italic">Advisory consolidation — straight sum, pre-elimination.</span>}
+      >
+        <p className="text-small font-semibold text-ink">
+          {reportedCount} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
+        </p>
         {(noSfp > 0 || noScf > 0 || noNa > 0) && (
-          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink2">
             {noSfp > 0 && (
               <span>
-                <span className="font-semibold text-navy">{noSfp}</span> {noSfp === 1 ? 'has' : 'have'} no balance sheet (SFP)
+                <span className="font-semibold text-ink">{noSfp}</span> {noSfp === 1 ? 'has' : 'have'} no balance sheet (SFP)
               </span>
             )}
             {noScf > 0 && (
               <span>
-                <span className="font-semibold text-navy">{noScf}</span> {noScf === 1 ? 'has' : 'have'} no cash-flow statement
+                <span className="font-semibold text-ink">{noScf}</span> {noScf === 1 ? 'has' : 'have'} no cash-flow statement
               </span>
             )}
             {noNa > 0 && (
               <span>
-                <span className="font-semibold text-navy">{noNa}</span> {noNa === 1 ? 'has' : 'have'} no net-assets statement
+                <span className="font-semibold text-ink">{noNa}</span> {noNa === 1 ? 'has' : 'have'} no net-assets statement
               </span>
             )}
           </div>
         )}
-      </div>
-
-      {/* Consolidated summary cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {summaryCard('Consolidated revenue', totalRev, 'text-emerald-700')}
-        {summaryCard('Consolidated expense', totalExp, 'text-navy')}
-        {summaryCard(
-          'Change in net assets',
-          netChange,
-          netChange != null && netChange < 0 ? 'text-rose-600' : 'text-gold',
-        )}
-      </div>
+        <StatStrip cols={3} className="mt-2">
+          <Stat label="Consolidated revenue" value={totalRev == null ? null : fmt(totalRev)} />
+          <Stat label="Consolidated expense" value={totalExp == null ? null : fmt(totalExp)} />
+          <Stat
+            label="Change in net assets"
+            value={netChange == null ? null : fmt(netChange)}
+            status={netChange == null ? undefined : !netChange ? 'neutral' : netChange > 0 ? 'good' : 'risk'}
+          />
+        </StatStrip>
+      </Section>
 
       {/* Per-school summary */}
-      <div className="card-soft overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-            <Building2 size={17} />
-          </span>
-          <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">
-            Schools in your organization
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-cream">
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">School</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Revenue</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Expense</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Net change</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Total assets</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Total liabilities</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Net assets</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Operating cash</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Cash, end</th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schools.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center font-serif italic text-muted">
-                    No schools found for your organization.
-                  </td>
-                </tr>
-              )}
-              {schools.map((s) => (
-                <tr key={s.schoolId} className="border-t border-rule/50">
-                  <td className="px-3 py-2 font-medium text-ink">{s.name}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.soa ? fmt(s.soa.totalRev) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.soa ? fmt(s.soa.totalExp) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.soa ? fmt(s.soa.netChange) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalAssets) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalLiab) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalNA) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.scf ? fmt(s.scf.operatingCash) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.scf ? fmt(s.scf.cashEnd) : '—'}</td>
-                  <td className="px-3 py-2 text-center">
-                    {s.reported ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
-                        <CheckCircle2 size={14} /> Reported
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
-                        <MinusCircle size={14} /> Not yet reported
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Not-reported callout — totals are never silently understated. */}
-      {notReported.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-rule bg-cream/40 px-5 py-3">
-          <p className="text-[12px] text-muted">
-            <span className="font-semibold text-navy">Not yet reported:</span>{' '}
-            {notReported.map((n) => n.name).join(', ')}. These schools are excluded from the consolidated totals above.
+      <Section label="Schools in your organization">
+        <DataTable
+          columns={SCHOOL_COLUMNS}
+          rows={schools}
+          rowKey="schoolId"
+          markOf={(r) => (r.reported ? 'good' : 'neutral')}
+          empty="No schools found for your organization."
+          caption="Schools in your organization"
+        />
+        {/* Not-reported note — totals are never silently understated. */}
+        {notReported.length > 0 && (
+          <p className="sec-note">
+            <span className="font-semibold text-ink">Not yet reported:</span>{' '}
+            {notReported.map((n) => n.name).join(', ')}. These schools are excluded from the consolidated
+            totals above.
           </p>
-        </div>
-      )}
+        )}
+      </Section>
 
       {/* Consolidated statements */}
       {noneReported ? (
-        <div className="card-soft border-dashed px-6 py-12 text-center">
-          <p className="font-serif text-base italic text-muted">No statements reported for this fiscal year yet.</p>
+        <div className="b2-note mt-8">
+          <p>No statements reported for this fiscal year yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <StatementTable title="Consolidated Statement of Activities" icon={FileBarChart} rows={soaRows} />
-          <StatementTable title="Consolidated Statement of Financial Position" icon={Landmark} rows={sfpRows} />
+        <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
+          <StatementTable title="Consolidated Statement of Activities" rows={soaRows} />
+          <StatementTable title="Consolidated Statement of Financial Position" rows={sfpRows} />
           <StatementTable
             title="Consolidated Statement of Cash Flows"
-            icon={Waves}
             rows={scfRows}
             emptyText={
               scfEmpty
@@ -338,51 +295,52 @@ export default function OrgStatements({ rollup, loading, error }) {
           />
           <StatementTable
             title="Consolidated Statement of Changes in Net Assets"
-            icon={Scale}
             rows={naRows}
             emptyText={naEmpty ? 'No changes-in-net-assets statements reported for this fiscal year yet.' : undefined}
           />
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }
 
 // Module-scope helper component (NOT defined inside render — React-Compiler safe).
-function StatementTable({ title, icon, rows, emptyText }) {
-  const Icon = icon
+// A statement on the ground: a Section rule, then a `.dt` sheet — plain lines,
+// subtotal/total lines on the 2px rule in ink weight, money right-aligned.
+function StatementTable({ title, rows, emptyText }) {
   return (
-    <div className="card-soft overflow-hidden p-0">
-      <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          {Icon && <Icon size={16} />}
-        </span>
-        <h3 className="font-serif text-base font-semibold text-navy">{title}</h3>
-      </div>
-      <table className="w-full border-collapse text-[13px]">
-        <tbody>
-          {rows.length === 0 && (
+    <Section label={title} className="!mt-0 min-w-0">
+      <div className="dt-wrap">
+        <table className="dt">
+          <caption className="sr-only">{title}</caption>
+          <thead>
             <tr>
-              <td colSpan={2} className="px-4 py-6 text-center font-serif italic text-muted">
-                {emptyText || 'No data yet.'}
-              </td>
+              <th scope="col">Line</th>
+              <th scope="col" className="dt-num">Amount</th>
             </tr>
-          )}
-          {rows.map((r) =>
-            r.emphasis ? (
-              <tr key={r.key} className="border-t border-gold/50 bg-gold/5">
-                <td className="px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-navy">{labelFor(r.key)}</td>
-                <td className="px-4 py-2 text-right font-semibold tabular-nums text-navy">{fmt(r.value)}</td>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr className="dt-empty">
+                <td colSpan={2}>{emptyText || 'No data yet.'}</td>
               </tr>
-            ) : (
-              <tr key={r.key} className="border-t border-rule/50">
-                <td className="px-4 py-2 text-ink">{labelFor(r.key)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-ink">{fmt(r.value)}</td>
-              </tr>
-            ),
-          )}
-        </tbody>
-      </table>
-    </div>
+            )}
+            {rows.map((r) =>
+              r.emphasis ? (
+                <tr key={r.key} className="dt-section-total">
+                  <td className="text-[11px] uppercase tracking-[0.06em]">{labelFor(r.key)}</td>
+                  <td className="dt-num">{fmt(r.value)}</td>
+                </tr>
+              ) : (
+                <tr key={r.key}>
+                  <td>{labelFor(r.key)}</td>
+                  <td className="dt-num">{fmt(r.value)}</td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Section>
   )
 }

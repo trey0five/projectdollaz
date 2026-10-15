@@ -19,10 +19,12 @@
 // (selected period) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Wallet, Scale, Building2, Landmark } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
+import { PageHeader } from '../components/ui/surface/index.js'
+import '../styles/pending/b2-finance.css'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import OrgRollup from '../components/budget/OrgRollup.jsx'
@@ -60,6 +62,7 @@ function deriveFiscalYearStart(periodEndDate) {
 }
 
 export default function BudgetPage() {
+  const reduce = useReducedMotion()
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -179,11 +182,11 @@ export default function BudgetPage() {
   const renderBudget = () => {
     if (!selectedPeriodId) {
       return (
-        <div key="budget" className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">Select a period to view its budget.</p>
-          <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
+        <div key="budget" className="b2-note">
+          <p className="b2-note-title">Select a period to view its budget.</p>
+          <p className="mx-auto max-w-md">
             No periods yet? Add your first trial balance from the{' '}
-            <Link to="/finance" className="font-semibold text-navy underline decoration-gold/60 underline-offset-2 hover:decoration-gold">
+            <Link to="/finance" className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
               Finance page
             </Link>
             . A budget attaches to a period.
@@ -193,8 +196,8 @@ export default function BudgetPage() {
     }
     if (budgetLoading) {
       return (
-        <div key="budget" className="card-soft animate-pulse px-6 py-14 text-center">
-          <p className="font-serif text-base italic text-muted">Loading your budget…</p>
+        <div key="budget" className="b2-note" aria-busy="true">
+          <p>Loading your budget…</p>
         </div>
       )
     }
@@ -216,8 +219,8 @@ export default function BudgetPage() {
   const renderBva = () => {
     if (!selectedPeriodId) {
       return (
-        <div key="bva" className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">Select a period to compare budget vs. actual.</p>
+        <div key="bva" className="b2-note">
+          <p className="b2-note-title">Select a period to compare budget vs. actual.</p>
         </div>
       )
     }
@@ -261,56 +264,37 @@ export default function BudgetPage() {
     }
   }
 
+  const eyebrow = ['Finance', activeSchool?.name, 'Budget'].filter(Boolean).join(' · ')
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-        <BackLink className="mb-4" />
-        {/* Page header: title + pinned school switcher & period selector. */}
-        <div className="mb-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-                <Wallet size={22} />
-              </span>
-              <div>
-                <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-                  Budget Workspace
-                </h1>
-                <p className="text-[13px] text-muted">
-                  Set up a budget the guided way or the advanced way, compare it to actuals, and consolidate across your organization.
-                </p>
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10">
+        <BackLink className="mb-2" />
+        {/* Page header (Premium UI P4): eyebrow FINANCE · SCHOOL · BUDGET, the
+            Garamond title, the period selector on the hairline. The school is
+            read-only here — switch it in the sidebar (one switcher, one value). */}
+        <PageHeader
+          eyebrow={eyebrow}
+          title="Budget workspace"
+          meta="Set up a budget the guided way or the advanced way, compare it to actuals, and consolidate across your organization."
+          hue="37 99 235"
+          actions={
+            periods && periods.length > 0 ? (
+              <div className="flex min-w-0 max-w-full flex-col gap-1">
+                <span className="toolbar-label">Period</span>
+                <PeriodSelector
+                  periods={periods}
+                  activeId={selectedPeriodId}
+                  onSelect={setSelectedPeriodId}
+                  light
+                />
               </div>
-            </div>
-            {/* School context — read-only here; switch via the masthead switcher
-                (avoids a confusing second switcher controlling the same value). */}
-            {activeSchool?.name && (
-              <div className="hidden text-right sm:block">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                  School
-                </div>
-                <div className="text-[14px] font-semibold text-navy">{activeSchool.name}</div>
-              </div>
-            )}
-          </div>
-
-          {periods && periods.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                Period
-              </div>
-              <PeriodSelector
-                periods={periods}
-                activeId={selectedPeriodId}
-                onSelect={setSelectedPeriodId}
-                light
-              />
-            </div>
-          )}
-        </div>
+            ) : null
+          }
+        />
 
         {/* Tab bar (id anchors Penny's budget-workspace glide). */}
-        <div id="budgetpage-driver-tab" className="mb-6">
+        <div id="budgetpage-driver-tab" className="mb-6 mt-4">
           <BudgetTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
         </div>
 
@@ -320,19 +304,19 @@ export default function BudgetPage() {
           role="tabpanel"
           aria-labelledby={`budget-tab-${activeTab}`}
           tabIndex={0}
-          className="outline-none"
+          className="rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
         >
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
             {hydrating &&
             activeTab !== 'rollup' &&
             activeTab !== 'orgStatements' ? (
-              <div className="card-soft animate-pulse px-6 py-14 text-center">
-                <p className="font-serif text-base italic text-muted">Loading your periods…</p>
+              <div className="b2-note" aria-busy="true">
+                <p>Loading your periods…</p>
               </div>
             ) : (
               renderActivePanel()

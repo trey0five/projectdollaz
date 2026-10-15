@@ -193,7 +193,7 @@ function ZoomButton({ label, onClick, children }) {
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/25 bg-navy/85 text-white shadow-lift backdrop-blur transition hover:bg-navy"
+      className="flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/25 bg-[#0A1628]/90 text-white transition hover:bg-[#0A1628]"
     >
       {children}
     </button>

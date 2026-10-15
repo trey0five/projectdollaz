@@ -66,7 +66,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
     URL.revokeObjectURL(url)
   }
 
-  const sub = v2 ? 'text-muted' : 'text-white/60'
+  const sub = v2 ? 'text-ink2' : 'text-white/60'
   return (
     <div className="sm:col-span-2">
       {celebrate && (
@@ -84,7 +84,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
             <ShieldCheck size={22} />
           </span>
           <div>
-            <p className={`text-[15px] font-semibold ${v2 ? 'text-navy' : 'text-white'}`}>
+            <p className={`text-[15px] font-semibold ${v2 ? 'text-ink' : 'text-white'}`}>
               Two-factor is on.
             </p>
             <p className={`text-[13px] ${sub}`}>One last thing — save your recovery codes.</p>
@@ -97,7 +97,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
       </p>
       <div
         className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border p-4 font-mono text-[14px] tracking-[0.08em] ${
-          v2 ? 'border-rule bg-section text-navy' : 'border-white/15 bg-navy-deep/50 text-gold-light'
+          v2 ? 'border-hair bg-ground text-ink' : 'border-white/15 bg-navy-deep/50 text-gold-light'
         }`}
       >
         {codes.map((c) => (
@@ -110,7 +110,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
           onClick={copyAll}
           className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
             v2
-              ? 'border-rule text-navy hover:border-gold'
+              ? 'border-hair text-ink hover:border-hair/[0.3]'
               : 'border-white/20 text-white/85 hover:border-gold/60'
           }`}
         >
@@ -122,7 +122,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
           onClick={download}
           className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
             v2
-              ? 'border-rule text-navy hover:border-gold'
+              ? 'border-hair text-ink hover:border-hair/[0.3]'
               : 'border-white/20 text-white/85 hover:border-gold/60'
           }`}
         >
@@ -137,7 +137,7 @@ function BackupCodesPanel({ codes, v2, onAllSaved, allSaved, celebrate }) {
           onChange={(e) => onAllSaved(e.target.checked)}
           className="mt-0.5 h-4 w-4 accent-[#C9A227]"
         />
-        <span className={`text-[13.5px] leading-snug ${v2 ? 'text-navy' : 'text-white/85'}`}>
+        <span className={`text-[13.5px] leading-snug ${v2 ? 'text-ink' : 'text-white/85'}`}>
           I&rsquo;ve saved these codes somewhere safe.
         </span>
       </label>
@@ -296,7 +296,7 @@ export default function MfaWizard({ open, mode = 'enable', onClose, onChanged })
               ? 'Generate new codes'
               : 'Continue'
 
-  const sub = v2 ? 'text-muted' : 'text-white/60'
+  const sub = v2 ? 'text-ink2' : 'text-white/60'
 
   return (
     <EntityFormModal
@@ -341,7 +341,7 @@ export default function MfaWizard({ open, mode = 'enable', onClose, onChanged })
             <code
               className={`min-w-0 flex-1 break-all rounded-lg border px-3 py-2 font-mono text-[13px] tracking-[0.06em] ${
                 v2
-                  ? 'border-rule bg-section text-navy'
+                  ? 'border-hair bg-ground text-ink'
                   : 'border-white/15 bg-navy-deep/50 text-gold-light'
               }`}
             >
@@ -353,7 +353,7 @@ export default function MfaWizard({ open, mode = 'enable', onClose, onChanged })
               aria-label="Copy secret key"
               className={`shrink-0 rounded-lg border p-2 transition-colors ${
                 v2
-                  ? 'border-rule text-navy hover:border-gold'
+                  ? 'border-hair text-ink hover:border-hair/[0.3]'
                   : 'border-white/20 text-white/85 hover:border-gold/60'
               }`}
             >
@@ -386,7 +386,7 @@ export default function MfaWizard({ open, mode = 'enable', onClose, onChanged })
       {step === 'confirm' && (
         <>
           {mode === 'disable' && (
-            <p className={`sm:col-span-2 text-[13.5px] leading-snug ${v2 ? 'text-danger' : 'text-red-300'}`}>
+            <p className={`sm:col-span-2 text-[13.5px] leading-snug ${v2 ? 'tone-risk' : 'text-red-300'}`}>
               This removes the extra sign-in step and deletes your recovery codes.
             </p>
           )}

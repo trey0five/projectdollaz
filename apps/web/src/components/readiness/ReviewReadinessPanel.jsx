@@ -41,6 +41,8 @@ import CorrectiveActionPlanSection from './cap/CorrectiveActionPlanSection.jsx'
 import YearEndChecklistSection from './checklist/YearEndChecklistSection.jsx'
 import RuleRow from './RuleRow.jsx'
 import BackLink from '../ui/BackLink.jsx'
+import { PageHeader, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 import ReadinessWizardHero from './wizard/ReadinessWizardHero.jsx'
 import ReadinessStepper from './wizard/ReadinessStepper.jsx'
 
@@ -110,21 +112,17 @@ function intakeComplete(inputs) {
   return true
 }
 
-function PageHeader() {
+// The page header (Premium UI P4): BackLink + PageHeader on the hairline.
+function ReadinessHeader({ schoolName }) {
   return (
-    <div className="mb-5">
-      <BackLink className="mb-4" />
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-          <ShieldCheck size={22} />
-        </span>
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">Review Readiness</h1>
-          <p className="text-[15px] text-muted">
-            A guided self-check against the Florida scholarship AUP — before your CPA engagement.
-          </p>
-        </div>
-      </div>
+    <div className="mb-2">
+      <BackLink className="mb-2" />
+      <PageHeader
+        eyebrow={['Finance', schoolName, 'Review readiness'].filter(Boolean).join(' · ')}
+        title="Review readiness"
+        meta="A guided self-check against the Florida scholarship AUP — before your CPA engagement."
+        hue="37 99 235"
+      />
     </div>
   )
 }
@@ -192,7 +190,7 @@ export default function ReviewReadinessPanel() {
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
       <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-        <PageHeader />
+        <ReadinessHeader schoolName={activeSchool?.name} />
         <EntitlementPausedPanel />
       </div>
     )
@@ -204,15 +202,15 @@ export default function ReviewReadinessPanel() {
   if (!initialLoading && savedPeriods.length === 0) {
     return (
       <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-        <PageHeader />
-        <div className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
-          <p className="mt-1 text-[15px] text-muted">
-            Generate and save a period on the dashboard to begin your readiness check.
-          </p>
-          <Link to="/app" className="btn-primary mt-6">
-            Go to dashboard
-          </Link>
+        <ReadinessHeader schoolName={activeSchool?.name} />
+        <div className="b2-note mt-8">
+          <p className="b2-note-title">No saved statements yet.</p>
+          <p>Generate and save a period on the dashboard to begin your readiness check.</p>
+          <div className="pt-2">
+            <Link to="/app" className="btn btn-primary">
+              Go to dashboard
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -265,7 +263,7 @@ export default function ReviewReadinessPanel() {
 
   return (
     <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-      <PageHeader />
+      <ReadinessHeader schoolName={activeSchool?.name} />
 
       {!showSkeleton && savedPeriods.length > 0 && (
         <div className="mb-4">
@@ -287,7 +285,7 @@ export default function ReviewReadinessPanel() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="mt-6 space-y-6">
           {/* ── HERO: verdict + progress + next action ── */}
           <ReadinessWizardHero
             hasFigure={hasFigure}
@@ -305,7 +303,7 @@ export default function ReviewReadinessPanel() {
           <DisclaimerBanner />
 
           {/* ── STEPPER ── */}
-          <div className="sticky top-2 z-10">
+          <div className="sticky top-14 z-10 lg:top-0">
             <ReadinessStepper
               steps={stepMeta}
               current={step}
@@ -318,14 +316,14 @@ export default function ReviewReadinessPanel() {
           <div id="readiness-wizard-panel" role="tabpanel" aria-labelledby={`readiness-tab-${step}`}>
             {/* Step intro */}
             <div className="mb-4">
-              <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#2563eb]">
+              <p className="pg-eyebrow tabular-nums">
                 Step {activeIdx + 1} of {STEP_ORDER.length}
                 {doneMap[step] ? ' · Complete' : ''}
               </p>
-              <h2 className="mt-1 font-serif text-[24px] font-semibold text-navy sm:text-[28px]">
+              <h2 className="font-serif text-title font-medium text-ink sm:text-[26px] sm:leading-[32px]">
                 {activeStep.title}
               </h2>
-              <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-muted">{activeStep.why}</p>
+              <p className="mt-1 max-w-2xl text-small leading-relaxed text-ink2">{activeStep.why}</p>
             </div>
 
             <AnimatePresence mode="wait">
@@ -370,7 +368,7 @@ export default function ReviewReadinessPanel() {
                         title={`${group.section} · ${sectionTitle(group.section)}`}
                         subtitle={`${group.findings.length} ${group.findings.length === 1 ? 'check' : 'checks'}`}
                       >
-                        <div className="space-y-3">
+                        <div className="border-t border-hair">
                           {group.findings.map((f, i) => (
                             <RuleRow key={f.id} finding={f} index={i} />
                           ))}
@@ -383,9 +381,9 @@ export default function ReviewReadinessPanel() {
                 {step === 'cap' && selectedPeriodId && (
                   <div className="space-y-4">
                     {capNoExceptions && (
-                      <div className="flex items-start gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3">
-                        <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
-                        <p className="text-[15px] text-emerald-800">
+                      <div className="b2-callout b2-good">
+                        <CheckCircle2 size={14} aria-hidden="true" />
+                        <p>
                           <span className="font-semibold">No exceptions to correct.</span> Nothing
                           you entered is reportable or material — there's no corrective action plan
                           required for this engagement.
@@ -410,15 +408,15 @@ export default function ReviewReadinessPanel() {
                     {/* Finish line: the workpapers export, spotlighted once everything
                         is complete. */}
                     <div
-                      className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 sm:flex-row sm:items-center sm:justify-between ${
-                        allDone ? 'border-emerald-200 bg-emerald-50' : 'border-rule bg-white'
+                      className={`panel flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:justify-between ${
+                        allDone ? 'panel-attention !border-l-good' : ''
                       }`}
                     >
                       <div>
-                        <p className="font-serif text-lg font-semibold text-navy">
+                        <p className="text-heading font-semibold text-ink">
                           {allDone ? 'You’re ready for your CPA.' : 'Export the workpapers packet'}
                         </p>
-                        <p className="mt-0.5 text-[14px] text-muted">
+                        <p className="mt-0.5 text-small text-ink2">
                           A single print/PDF bundle of your inputs, findings, reconciliation, CAP,
                           and checklist — hand it to your engaged CPA.
                         </p>
@@ -426,9 +424,9 @@ export default function ReviewReadinessPanel() {
                       <button
                         type="button"
                         onClick={openExport}
-                        className="btn-primary inline-flex shrink-0 items-center gap-2"
+                        className="btn btn-primary shrink-0"
                       >
-                        <FileDown size={16} /> Export workpapers
+                        <FileDown size={14} aria-hidden="true" /> Export workpapers
                       </button>
                     </div>
                   </div>
@@ -437,33 +435,23 @@ export default function ReviewReadinessPanel() {
             </AnimatePresence>
 
             {/* ── Back / Next nav ── */}
-            <div className="mt-6 flex items-center justify-between gap-3">
-              <button
-                type="button"
+            <div className="b2-actions mt-8">
+              <Button
+                variant="quiet"
                 onClick={() => activeIdx > 0 && setStep(STEP_ORDER[activeIdx - 1])}
                 disabled={activeIdx === 0}
-                className="btn-ghost inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+                icon={<ArrowLeft size={14} />}
               >
-                <ArrowLeft size={15} /> Back
-              </button>
+                Back
+              </Button>
               {activeIdx < STEP_ORDER.length - 1 ? (
-                <motion.button
-                  type="button"
-                  whileTap={reduce ? undefined : { scale: 0.97 }}
-                  onClick={() => setStep(STEP_ORDER[activeIdx + 1])}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  Next — {STEPS[activeIdx + 1].label} <ArrowRight size={15} />
-                </motion.button>
+                <Button variant="primary" onClick={() => setStep(STEP_ORDER[activeIdx + 1])}>
+                  Next — {STEPS[activeIdx + 1].label} <ArrowRight size={14} aria-hidden="true" />
+                </Button>
               ) : (
-                <motion.button
-                  type="button"
-                  whileTap={reduce ? undefined : { scale: 0.97 }}
-                  onClick={openExport}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  <FileDown size={15} /> Export workpapers
-                </motion.button>
+                <Button variant="primary" onClick={openExport} icon={<FileDown size={14} />}>
+                  Export workpapers
+                </Button>
               )}
             </div>
           </div>

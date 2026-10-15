@@ -13,6 +13,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Section } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 import { AlertTriangle, CheckCircle2, Download, Loader2, Package, ShieldCheck } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
@@ -118,9 +120,9 @@ export default function DataExportSection() {
 
   if (!isOwner) {
     return (
-      <div className="rounded-2xl border border-navy/10 bg-white p-6">
-        <h2 className="font-serif text-[22px] font-semibold text-navy">Export your data</h2>
-        <p className="mt-2 max-w-prose text-[13.5px] text-muted">
+      <div className="panel p-6">
+        <h2 className="text-heading font-semibold text-ink">Export your data</h2>
+        <p className="mt-2 max-w-prose text-[13.5px] text-ink2">
           A full export contains every student, gift, figure and audit entry your school holds here, so it is
           restricted to owners. Ask an owner at your school to run one — or export a single area from the page that
           owns it.
@@ -130,18 +132,20 @@ export default function DataExportSection() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-navy/10 bg-white p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-serif text-[22px] font-semibold text-navy">Export your data</h2>
-            <p className="mt-1.5 max-w-prose text-[13.5px] text-muted">
+    <div className="space-y-6">
+      {/* The export is an action → the one Panel; the record below is a ruled
+          list on the ground (no card per archive). */}
+      <div className="panel p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-heading font-semibold text-ink">Export your data</h2>
+            <p className="mt-1.5 max-w-prose text-[13.5px] text-ink2">
               {scope === 'network'
                 ? `Every school in ${orgName ?? 'your network'} that you own, in one archive with a folder per school — every module, as spreadsheets you can open in Excel.`
                 : 'Your school owns everything it puts into KYRO. This builds a complete copy — every module, as spreadsheets you can open in Excel — with no involvement from us and nothing to ask for.'}
             </p>
             {networkAvailable ? (
-              <div className="mt-3 inline-flex rounded-lg border border-navy/15 p-0.5" role="group" aria-label="Export scope">
+              <div className="seg mt-3" role="group" aria-label="Export scope">
                 {[
                   ['school', activeSchool?.name ?? 'This school'],
                   ['network', 'Whole network'],
@@ -156,9 +160,7 @@ export default function DataExportSection() {
                       setLoading(true)
                       setScope(key)
                     }}
-                    className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                      scope === key ? 'bg-navy text-white' : 'text-muted hover:text-navy'
-                    }`}
+                    className="seg-btn"
                   >
                     {label}
                   </button>
@@ -170,13 +172,13 @@ export default function DataExportSection() {
             type="button"
             onClick={request}
             disabled={busy}
-            className="shrink-0 rounded-xl bg-navy px-4 py-2.5 text-[13px] font-bold uppercase tracking-[0.1em] text-white transition-opacity disabled:opacity-50"
+            className="btn btn-primary shrink-0"
           >
             {busy ? 'Starting…' : 'Export everything'}
           </button>
         </div>
 
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
+        <div className="mt-5 grid gap-x-8 gap-y-3 border-t border-hair pt-4 sm:grid-cols-3">
           {[
             {
               Icon: Package,
@@ -189,21 +191,24 @@ export default function DataExportSection() {
             { Icon: ShieldCheck, t: 'No credentials', d: 'Connection tokens for QuickBooks and your SIS are stripped — they are keys to other systems, not your data.' },
             { Icon: Download, t: 'Yours to keep', d: 'Plain CSV. Nothing in the archive needs KYRO to read it, now or later.' },
           ].map(({ Icon, t, d }) => (
-            <div key={t} className="rounded-xl border border-navy/10 px-3.5 py-3">
-              <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-navy">
-                <Icon size={14} className="text-navy/60" /> {t}
+            <div key={t} className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+                <Icon size={14} className="text-ink2" /> {t}
               </p>
-              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">{d}</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-ink2">{d}</p>
             </div>
           ))}
         </div>
 
-        {error ? <p className="mt-3 text-[12.5px] text-danger">{error}</p> : null}
+        {error ? (
+          <p className="b2-callout b2-risk mt-3" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
 
-      <div className="rounded-2xl border border-navy/10 bg-white p-6">
-        <h3 className="font-serif text-[18px] font-semibold text-navy">Your exports</h3>
-        <p className="mt-1 text-[12.5px] text-muted">
+      <Section label="Your exports" className="!mt-0">
+        <p className="text-[12.5px] text-ink2">
           A finished archive stays available for seven days, then the file is removed. The record of it stays here.
           Run a new one whenever you like.
           {scope === 'network'
@@ -212,11 +217,11 @@ export default function DataExportSection() {
         </p>
 
         {loading ? (
-          <p className="mt-4 text-[13px] text-muted">Loading…</p>
+          <p className="mt-4 text-[13px] text-ink2">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="mt-4 text-[13px] text-muted">You have not exported anything yet.</p>
+          <p className="mt-4 text-[13px] text-ink2">You have not exported anything yet.</p>
         ) : (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 border-t border-hair">
             {rows.map((r, i) => {
               const expired = r.expiresAt && new Date(r.expiresAt).getTime() < Date.now()
               const files = Object.keys(r.rowCounts ?? {}).length
@@ -227,27 +232,27 @@ export default function DataExportSection() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, ease: EASE, delay: i * 0.04 }}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-navy/10 px-4 py-3"
+                  className="flex flex-wrap items-center gap-3 border-b border-hair py-2.5"
                 >
                   <span className="shrink-0">
                     {r.status === 'running' ? (
-                      <Loader2 size={16} className="animate-spin text-navy/50" />
+                      <Loader2 size={16} className="animate-spin text-ink/50" />
                     ) : r.status === 'failed' ? (
-                      <AlertTriangle size={16} className="text-danger" />
+                      <AlertTriangle size={16} className="tone-risk" />
                     ) : (
-                      <CheckCircle2 size={16} className="text-emerald-600" />
+                      <CheckCircle2 size={16} className="tone-good" />
                     )}
                   </span>
 
                   <div className="min-w-[12rem] flex-1">
-                    <p className="text-[13px] font-semibold text-navy">
+                    <p className="text-[13px] font-semibold text-ink">
                       {r.status === 'running'
                         ? 'Preparing your archive…'
                         : r.status === 'failed'
                           ? 'This export did not finish'
                           : `${files} files · ${totalRows.toLocaleString()} rows · ${fmtBytes(r.byteSize)}`}
                     </p>
-                    <p className="text-[11.5px] text-muted">
+                    <p className="text-[11.5px] text-ink2">
                       {fmtWhen(r.createdAt)}
                       {r.status === 'ready' && !expired ? ' · available for 7 days' : ''}
                       {expired ? ' · expired' : ''}
@@ -259,7 +264,7 @@ export default function DataExportSection() {
                     <button
                       type="button"
                       onClick={() => download(r.id)}
-                      className="shrink-0 rounded-lg border border-navy/20 px-3.5 py-1.5 text-[12px] font-semibold text-navy hover:bg-navy/[0.04]"
+                      className="btn btn-secondary btn-sm shrink-0"
                     >
                       Download
                     </button>
@@ -269,7 +274,7 @@ export default function DataExportSection() {
             })}
           </div>
         )}
-      </div>
+      </Section>
     </div>
   )
 }

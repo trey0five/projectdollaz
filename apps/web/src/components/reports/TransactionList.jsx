@@ -45,7 +45,7 @@ function RunningTotal({ value }) {
   }, [value, animate])
 
   return (
-    <span className="gold-text font-serif text-[26px] font-semibold leading-none tabular-nums">
+    <span className="font-serif text-[26px] font-medium leading-none tabular-nums text-ink">
       {fmtDollar(animate ? display : value)}
     </span>
   )
@@ -57,27 +57,27 @@ function TxnRow({ txn }) {
   const linkable = !!txn.deepLink
   const body = (
     <>
-      <span className="whitespace-nowrap tabular-nums text-muted">{formatShortDate(txn.date)}</span>
+      <span className="whitespace-nowrap tabular-nums text-ink2">{formatShortDate(txn.date)}</span>
       <span className="truncate text-ink" title={txn.type}>
         {txn.type || '—'}
       </span>
-      <span className="truncate text-navy" title={txn.payee || ''}>
+      <span className="truncate text-ink" title={txn.payee || ''}>
         {txn.payee || '—'}
       </span>
-      <span className="truncate text-muted" title={txn.memo || ''}>
+      <span className="truncate text-ink2" title={txn.memo || ''}>
         {txn.memo || '—'}
       </span>
       <span className="flex items-center justify-end gap-1">
-        <span className={`tabular-nums ${txn.amount < 0 ? 'amt-neg' : 'text-navy'}`}>
+        <span className={`tabular-nums ${txn.amount < 0 ? 'amt-neg' : 'text-ink'}`}>
           {fmt(txn.amount)}
         </span>
         {linkable && (
-          <ExternalLink size={12} className="shrink-0 text-gold opacity-70 group-hover:opacity-100" />
+          <ExternalLink size={12} aria-hidden="true" className="shrink-0 text-ink2 opacity-60 group-hover:opacity-100" />
         )}
       </span>
     </>
   )
-  const cls = `${GRID} items-center px-3 py-2 text-[13.5px]`
+  const cls = `${GRID} min-h-[36px] items-center border-b border-hair px-1 py-1.5 text-[13px]`
   if (!linkable) {
     return (
       <div className={cls} title="No linkable QuickBooks transaction for this row">
@@ -90,7 +90,7 @@ function TxnRow({ txn }) {
       href={txn.deepLink}
       target="_blank"
       rel="noopener noreferrer"
-      className={`group ${cls} outline-none transition-colors hover:bg-gold/10 focus-visible:bg-gold/10 focus-visible:ring-2 focus-visible:ring-gold/50`}
+      className={`group ${cls} outline-none transition-colors hover:bg-ink/[0.03] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2563EB]/50`}
       title="Open this transaction in QuickBooks"
     >
       {body}
@@ -144,17 +144,11 @@ export default function TransactionList({ result }) {
       {/* running total + reconcile badge */}
       <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-            Running total
-          </p>
+          <p className="stat-label">Running total</p>
           <RunningTotal value={runningTotal} />
         </div>
-        <div
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold ${
-            ties ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-          }`}
-        >
-          {ties ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+        <div className={`b2-callout py-1 font-semibold ${ties ? 'b2-good' : 'b2-watch'}`}>
+          {ties ? <CheckCircle2 size={14} aria-hidden="true" /> : <AlertTriangle size={14} aria-hidden="true" />}
           {ties
             ? 'Ties to the penny'
             : `Differs by ${fmt(Math.abs(reconcile.diff ?? 0))}${reconcile.note ? ` — ${reconcile.note}` : ''}`}
@@ -164,16 +158,16 @@ export default function TransactionList({ result }) {
       {/* Empty: the line drilled but QuickBooks returned no transactions for the
           window (honest — the reconcile badge above still shows any line/txn gap). */}
       {txns.length === 0 && !hasOpening ? (
-        <div className="rounded-lg border border-dashed border-rule/60 bg-white px-3 py-5 text-center text-[13px] italic text-muted">
+        <div className="b2-note">
           No QuickBooks transactions found for this line in the period.
         </div>
       ) : (
         <>
       {/* transaction table (horizontal scroll on mobile; body never overflows) */}
-      <div className="overflow-x-auto rounded-lg border border-rule/50 bg-white">
+      <div className="overflow-x-auto">
         <div className="min-w-[380px]">
           <div
-            className={`${GRID} border-b border-rule/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted`}
+            className={`${GRID} border-b border-hair bg-ground px-1 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2`}
           >
             <span>Date</span>
             <span>Type</span>
@@ -184,18 +178,18 @@ export default function TransactionList({ result }) {
 
           {/* SFP opening-balance pseudo-row (prior-year balance rolled forward) */}
           {hasOpening && (
-            <div className={`${GRID} items-center border-b border-rule/30 bg-section/60 px-3 py-2 text-[13.5px]`}>
-              <span className="text-muted">—</span>
-              <span className="col-span-2 truncate italic text-muted">Opening balance (prior years)</span>
-              <span className="text-muted">—</span>
-              <span className="text-right tabular-nums text-navy">{fmt(reconcile.opening)}</span>
+            <div className={`${GRID} min-h-[36px] items-center border-b border-hair bg-ground px-1 py-1.5 text-[13px]`}>
+              <span className="text-ink2">—</span>
+              <span className="col-span-2 truncate italic text-ink2">Opening balance (prior years)</span>
+              <span className="text-ink2">—</span>
+              <span className="text-right tabular-nums text-ink">{fmt(reconcile.opening)}</span>
             </div>
           )}
 
           {groups.map((g) => (
-            <div key={g.name ?? '_'} className="divide-y divide-rule/30">
+            <div key={g.name ?? '_'}>
               {g.name && (
-                <p className="bg-section/50 px-3 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-wide text-navy/70">
+                <p className="border-b border-hair px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
                   {g.name}
                 </p>
               )}
@@ -209,7 +203,7 @@ export default function TransactionList({ result }) {
 
       {/* cap note — honest "showing top N of M" when the account is large */}
       {reconcile.capped && (
-        <p className="mt-2 text-[12.5px] italic text-muted">
+        <p className="mt-2 text-[12px] italic text-ink2">
           Showing the {reconcile.shown} largest of {reconcile.total} transactions (total still reconciled).
         </p>
       )}

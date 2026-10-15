@@ -15,13 +15,22 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { CalendarClock, Plus, Loader2, Info } from 'lucide-react'
+import { Section, Pill, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 import { monthlyApi, apiErrorMessage } from '../../lib/api.js'
 import { useMonthlySnapshots } from '../../hooks/useMonthlySnapshots.js'
 import { monthKeyLabel } from '../../lib/monthlyShapes.js'
 import MonthlyUploadCard from './MonthlyUploadCard.jsx'
 import LoadedMonthsList from './LoadedMonthsList.jsx'
 
-export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = false }) {
+// What monthly actuals are, in the user's terms (shared with the hub header).
+export const MONTHLY_BLURB =
+  'Add each month-end trial balance (year-to-date figures) as the year goes on, so you can see where the year stands month by month — not just at year-end.'
+
+// `hosted` — the caller (the Reports hub's MonthlyActualsSection) already shows
+// a PageHeader titled "Monthly actuals", so the panel drops its own heading and
+// keeps only the upload action.
+export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = false, hosted = false }) {
   const { fiscalYearStart, months, loading, error, notEntitled, reload } = useMonthlySnapshots(
     schoolId,
     periodId,
@@ -68,10 +77,8 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
 
   if (!periodId) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-rule bg-section/50 px-6 py-12 text-center">
-        <p className="font-serif text-lg italic text-muted">
-          Select a period to manage its monthly actuals.
-        </p>
+      <div className="b2-note">
+        <p>Select a period to manage its monthly actuals.</p>
       </div>
     )
   }
@@ -79,66 +86,57 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
   if (loading) {
     return (
       <div className="flex min-h-[180px] items-center justify-center">
-        <Loader2 size={26} className="animate-spin text-gold" />
+        <Loader2 size={24} aria-label="Loading" className="animate-spin text-ink2" />
       </div>
     )
   }
 
   if (notEntitled) {
     return (
-      <div className="rounded-2xl border border-rule bg-white px-6 py-12 text-center shadow-card">
-        <p className="font-serif text-lg italic text-muted">
-          Monthly actuals are part of your subscription — reactivate to upload monthly trial balances.
-        </p>
+      <div className="b2-note">
+        <p>Monthly actuals are part of your subscription — reactivate to upload monthly trial balances.</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-            <CalendarClock size={22} />
-          </span>
-          <div>
-            <h2 className="font-serif text-xl font-semibold text-navy">Monthly actuals</h2>
-            <p className="mt-0.5 max-w-xl text-[15px] text-muted">
-              Upload a month-end (cumulative-YTD) trial balance for each month of the fiscal year.
-              These feed year-to-date and month-to-date actuals for an upcoming board-report view.
-            </p>
+      <div className={`flex flex-wrap items-start gap-3 ${hosted ? 'justify-end' : 'justify-between'}`}>
+        {!hosted && (
+          <div className="flex items-start gap-2.5">
+            <CalendarClock size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" />
+            <div>
+              <h2 className="font-serif text-title font-medium text-ink">Monthly actuals</h2>
+              <p className="mt-0.5 max-w-xl text-small text-ink2">{MONTHLY_BLURB}</p>
+            </div>
           </div>
-        </div>
+        )}
         {canEdit && mode === 'idle' && (
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.97 }}
-            onClick={() => openUpload('')}
-            className="btn-primary inline-flex items-center gap-2"
-          >
-            <Plus size={15} /> Upload a month
-          </motion.button>
+          <Button variant="primary" onClick={() => openUpload('')} icon={<Plus size={14} />}>
+            Upload a month
+          </Button>
         )}
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
+        <p className="b2-callout b2-risk" role="alert">
           {error}
-        </div>
+        </p>
       )}
       {deleteError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
+        <p className="b2-callout b2-risk" role="alert">
           {deleteError}
-        </div>
+        </p>
       )}
       {toast && (
-        <motion.div
+        <motion.p
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-[15px] font-medium text-emerald-800"
+          className="b2-callout b2-good font-medium"
+          role="status"
         >
           {toast}
-        </motion.div>
+        </motion.p>
       )}
 
       {mode === 'upload' && canEdit && (
@@ -154,32 +152,26 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
       )}
 
       {months.length === 0 && mode === 'idle' ? (
-        <div className="rounded-2xl border-2 border-dashed border-rule bg-section/40 px-6 py-12 text-center">
-          <p className="font-serif text-lg italic text-muted">No monthly trial balances loaded yet.</p>
-          <p className="mx-auto mt-1.5 flex max-w-md items-center justify-center gap-1.5 text-[14px] text-muted">
-            <Info size={13} className="shrink-0 text-gold" />
+        <div className="b2-note">
+          <p className="b2-note-title">No monthly trial balances loaded yet.</p>
+          <p className="mx-auto flex max-w-md items-center justify-center gap-1.5">
+            <Info size={13} aria-hidden="true" className="shrink-0" />
             Each month should be a cumulative year-to-date trial balance as of that month-end.
           </p>
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => openUpload('')}
-              className="btn-ghost mt-4 inline-flex items-center gap-1.5"
-            >
-              <Plus size={14} /> Upload your first month
-            </button>
+            <div className="pt-2">
+              <Button variant="secondary" onClick={() => openUpload('')} icon={<Plus size={14} />}>
+                Upload your first month
+              </Button>
+            </div>
           )}
         </div>
       ) : (
-        <div>
-          <div className="mb-2.5 flex items-center justify-between">
-            <h3 className="font-sans text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
-              Fiscal year {fiscalYearStart ? `(${fiscalYearStart.slice(0, 4)}–${Number(fiscalYearStart.slice(0, 4)) + 1})` : ''}
-            </h3>
-            <span className="text-[14px] text-muted">
-              {months.length} of 12 months loaded
-            </span>
-          </div>
+        <Section
+          label={`Fiscal year ${fiscalYearStart ? `(${fiscalYearStart.slice(0, 4)}–${Number(fiscalYearStart.slice(0, 4)) + 1})` : ''}`}
+          aside={<Pill variant="count">{months.length} of 12 months loaded</Pill>}
+          className="!mt-2"
+        >
           <LoadedMonthsList
             fiscalYearStart={fiscalYearStart}
             months={months}
@@ -187,7 +179,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
             onReplace={openUpload}
             onDelete={onDelete}
           />
-        </div>
+        </Section>
       )}
     </div>
   )

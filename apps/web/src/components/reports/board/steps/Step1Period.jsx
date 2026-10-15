@@ -187,14 +187,14 @@ export default function Step1Period({ ctx }) {
   return (
     <div>
       <header className="mb-5">
-        <h2 className="font-serif text-2xl font-semibold text-navy">Choose a reporting period</h2>
-        <p className="mt-1 text-[13.5px] text-muted">
+        <h2 className="font-serif text-title font-medium text-ink">Choose a reporting period</h2>
+        <p className="mt-1 text-[13.5px] text-ink2">
           The board report assembles from this period&apos;s saved statements and budget.
         </p>
       </header>
 
       {list.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border bg-section px-4 py-8 text-center text-[13.5px] italic text-muted">
+        <p className="b2-note text-[13.5px] italic text-ink2">
           No periods yet. Generate statements for a period first, then come back to build the report.
         </p>
       ) : (
@@ -206,17 +206,18 @@ export default function Step1Period({ ctx }) {
                 key={p.id}
                 type="button"
                 onClick={() => dispatch({ type: 'setPeriod', periodId: p.id })}
-                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition-all ${
+                aria-pressed={active}
+                className={`b2-chip ${
                   active
-                    ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
-                    : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
+                    ? 'is-active'
+                    : ''
                 }`}
                 title={`Period end ${formatShortDate(p.periodEndDate)}`}
               >
-                <CalendarRange size={15} className={active ? 'text-gold' : 'text-muted'} />
+                <CalendarRange size={15} aria-hidden="true" className={active ? 'text-[#2563EB]' : 'text-ink2'} />
                 {p.label}
                 {!p.hasSnapshot && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-ink2">
                     no statements
                   </span>
                 )}
@@ -227,7 +228,7 @@ export default function Step1Period({ ctx }) {
       )}
 
       <div className="mb-2">
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-gold">Granularity</p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">Granularity</p>
         <div className="flex flex-wrap gap-2">
           {GRANULARITIES.map((g) => {
             const active = g.id === draft.granularity && g.enabled
@@ -237,12 +238,11 @@ export default function Step1Period({ ctx }) {
                 type="button"
                 disabled={!g.enabled}
                 onClick={() => g.enabled && dispatch({ type: 'setField', field: 'granularity', value: g.id })}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition-all ${
+                aria-pressed={active}
+                className={`b2-chip ${
                   active
-                    ? 'border-gold/60 bg-gold/10 text-navy'
-                    : g.enabled
-                      ? 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
-                      : 'cursor-not-allowed border-rule/50 text-muted/60'
+                    ? 'is-active'
+                    : ''
                 }`}
               >
                 {g.label}
@@ -250,33 +250,33 @@ export default function Step1Period({ ctx }) {
             )
           })}
         </div>
-        <p className="mt-2 text-[12px] italic text-muted">
+        <p className="mt-2 text-[12px] italic text-ink2">
           Annual, quarterly (NBOA QTD &amp; YTD), and monthly (NBOA MTD &amp; YTD) are all available.
         </p>
       </div>
 
       {isMonthly && (
-        <div className="mt-5 rounded-xl border border-rule/60 bg-section/60 px-4 py-4">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-gold">
-            <CalendarDays size={13} className="text-gold" />
+        <div className="mt-5 border-t border-hair pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+            <CalendarDays size={13} aria-hidden="true" />
             Reporting month
           </p>
 
           {!draft.periodId ? (
-            <p className="text-[12.5px] italic text-muted">Select a period to choose a month.</p>
+            <p className="text-[12.5px] italic text-ink2">Select a period to choose a month.</p>
           ) : monthsLoading ? (
-            <p className="text-[12.5px] italic text-muted">Loading loaded months…</p>
+            <p className="text-[12.5px] italic text-ink2">Loading loaded months…</p>
           ) : months.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-white/60 px-4 py-5 text-center">
-              <p className="text-[13px] font-semibold text-navy">No monthly actuals loaded yet</p>
-              <p className="mt-1 text-[12.5px] text-muted">
+            <div className="b2-note">
+              <p className="b2-note-title !text-[17px]">No monthly actuals loaded yet</p>
+              <p className="mt-1 text-[12.5px] text-ink2">
                 Monthly MTD/YTD reporting needs at least one month of trial-balance actuals.
               </p>
               <a
                 href="/reports"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-3.5 py-2 text-[12.5px] font-semibold text-navy transition-all hover:bg-gold/20"
+                className="mt-3 inline-flex items-center gap-1.5 btn btn-secondary btn-sm"
               >
-                <Upload size={13} className="text-gold" />
+                <Upload size={13} aria-hidden="true" />
                 Upload Monthly Actuals
               </a>
             </div>
@@ -289,15 +289,16 @@ export default function Step1Period({ ctx }) {
                     key={mk}
                     type="button"
                     onClick={() => dispatch({ type: 'setField', field: 'monthKey', value: mk })}
-                    className={`flex flex-col items-start gap-0.5 rounded-lg border px-3.5 py-2 text-left transition-all ${
+                    aria-pressed={active}
+                    className={`b2-chip flex-col !items-start !gap-0.5 ${
                       active
-                        ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
-                        : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
+                        ? 'is-active'
+                        : ''
                     }`}
                     title={monthEndLabel(mk)}
                   >
                     <span className="text-[13px] font-semibold">{monthChipLabel(mk)}</span>
-                    <span className={`text-[10.5px] ${active ? 'text-navy/70' : 'text-muted/80'}`}>
+                    <span className={`text-[10.5px] ${active ? 'text-ink2' : 'text-ink2'}`}>
                       {monthEndLabel(mk)}
                     </span>
                   </button>
@@ -307,7 +308,7 @@ export default function Step1Period({ ctx }) {
           )}
 
           {monthError && (
-            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-800">
+            <p className="mt-3 b2-callout b2-watch">
               {monthError}
             </p>
           )}
@@ -315,27 +316,27 @@ export default function Step1Period({ ctx }) {
       )}
 
       {isQuarterly && (
-        <div className="mt-5 rounded-xl border border-rule/60 bg-section/60 px-4 py-4">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-gold">
-            <CalendarDays size={13} className="text-gold" />
+        <div className="mt-5 border-t border-hair pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+            <CalendarDays size={13} aria-hidden="true" />
             Reporting quarter
           </p>
 
           {!draft.periodId ? (
-            <p className="text-[12.5px] italic text-muted">Select a period to choose a quarter.</p>
+            <p className="text-[12.5px] italic text-ink2">Select a period to choose a quarter.</p>
           ) : monthsLoading ? (
-            <p className="text-[12.5px] italic text-muted">Loading loaded quarters…</p>
+            <p className="text-[12.5px] italic text-ink2">Loading loaded quarters…</p>
           ) : quarters.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-white/60 px-4 py-5 text-center">
-              <p className="text-[13px] font-semibold text-navy">No quarter-end actuals loaded yet</p>
-              <p className="mt-1 text-[12.5px] text-muted">
+            <div className="b2-note">
+              <p className="b2-note-title !text-[17px]">No quarter-end actuals loaded yet</p>
+              <p className="mt-1 text-[12.5px] text-ink2">
                 Quarterly QTD/YTD reporting needs the trial-balance actuals for a quarter end (Sep, Dec, Mar, or Jun).
               </p>
               <a
                 href="/reports"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-3.5 py-2 text-[12.5px] font-semibold text-navy transition-all hover:bg-gold/20"
+                className="mt-3 inline-flex items-center gap-1.5 btn btn-secondary btn-sm"
               >
-                <Upload size={13} className="text-gold" />
+                <Upload size={13} aria-hidden="true" />
                 Upload Monthly Actuals
               </a>
             </div>
@@ -348,15 +349,16 @@ export default function Step1Period({ ctx }) {
                     key={qk}
                     type="button"
                     onClick={() => dispatch({ type: 'setField', field: 'quarter', value: qk })}
-                    className={`flex flex-col items-start gap-0.5 rounded-lg border px-3.5 py-2 text-left transition-all ${
+                    aria-pressed={active}
+                    className={`b2-chip flex-col !items-start !gap-0.5 ${
                       active
-                        ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
-                        : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'
+                        ? 'is-active'
+                        : ''
                     }`}
                     title={quarterEndLabel(qk)}
                   >
                     <span className="text-[13px] font-semibold">{quarterChipLabel(qk)}</span>
-                    <span className={`text-[10.5px] ${active ? 'text-navy/70' : 'text-muted/80'}`}>
+                    <span className={`text-[10.5px] ${active ? 'text-ink2' : 'text-ink2'}`}>
                       {quarterEndLabel(qk)}
                     </span>
                   </button>
@@ -366,7 +368,7 @@ export default function Step1Period({ ctx }) {
           )}
 
           {quarterError && (
-            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] font-medium text-amber-800">
+            <p className="mt-3 b2-callout b2-watch">
               {quarterError}
             </p>
           )}

@@ -25,6 +25,8 @@ import { fmt, formatDate } from '../../lib/format.js'
 import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
 import TransactionList from './TransactionList.jsx'
 import ValueHistory from './ValueHistory.jsx'
+import { Section, Button } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 
 // Map a statement id to the import role whose active version fed the column.
 const ROLE_BY_VARIANT = { cy: 'cy', py: 'py', audit: 'audit' }
@@ -56,13 +58,11 @@ function SourceBadge({ imp }) {
   const isQbo = imp.sourceType === 'quickbooks'
   const Icon = isQbo ? RefreshCw : FileText
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-rule/50 bg-white px-3 py-2.5">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold">
-        <Icon size={16} />
-      </span>
+    <div className="fig !items-start !justify-start !gap-2.5">
+      <Icon size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-ink2" />
       <div className="min-w-0">
-        <p className="truncate font-semibold text-navy">{imp.sourceName}</p>
-        <p className="mt-0.5 text-[13px] text-muted">
+        <p className="truncate font-semibold text-ink">{imp.sourceName}</p>
+        <p className="mt-0.5 text-[12px] text-ink2">
           {isQbo ? 'Synced from QuickBooks Online' : 'Uploaded trial balance'}
           {' · '}
           {formatDate((imp.createdAt || '').slice(0, 10))}
@@ -149,9 +149,11 @@ export default function LineageDrawer({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="absolute inset-0 bg-navy-deep/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#0A1628]/30"
             aria-hidden
           />
+          {/* The drawer is a Panel (the one raised surface: hairline + the float
+              shadow), white, sliding in once from the right. */}
           <motion.div
             ref={panelRef}
             tabIndex={-1}
@@ -162,130 +164,99 @@ export default function LineageDrawer({
             animate={reduce ? { opacity: 1 } : { x: 0 }}
             exit={reduce ? { opacity: 0 } : { x: '100%' }}
             transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-            className="relative flex h-full w-full max-w-[440px] flex-col overflow-y-auto bg-cream shadow-lift outline-none"
+            className="relative flex h-full w-full max-w-[440px] flex-col overflow-y-auto border-l border-hair bg-white shadow-float outline-none"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-rule/50 bg-white px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold">
-                  <Link2 size={19} />
-                </span>
-                <div>
-                  <h2 className="font-serif text-lg font-semibold text-navy">{selection.label}</h2>
-                  <p className="mt-0.5 text-[13px] italic text-muted">Audit trail — figure to source</p>
-                </div>
+            <div className="flex items-start justify-between gap-3 border-b border-hair px-5 py-4">
+              <div className="min-w-0">
+                <p className="pg-eyebrow flex items-center gap-1.5">
+                  <Link2 size={12} aria-hidden="true" /> Audit trail — figure to source
+                </p>
+                <h2 className="font-serif text-title font-medium text-ink">{selection.label}</h2>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg border border-rule/60 p-1.5 text-muted transition-colors hover:border-gold hover:text-navy"
-                aria-label="Close trace"
-              >
-                <X size={16} />
+              <button type="button" onClick={onClose} className="btn btn-quiet btn-sm" aria-label="Close trace">
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
-            <div className="flex flex-col gap-5 px-5 py-5">
+            <div className="flex flex-col px-5 pb-6">
               {/* line value */}
-              <div>
-                <p className="font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                  Line total
-                </p>
-                <span className="gold-text font-serif text-[40px] font-semibold leading-none">
-                  {fmt(lineValue)}
-                </span>
+              <div className="pt-5">
+                <p className="stat-label">Line total</p>
+                <span className="stat-value num !text-[40px] !leading-[44px]">{fmt(lineValue)}</span>
               </div>
 
               {/* contributing accounts */}
-              <div>
-                <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                  Contributing accounts
-                </p>
+              <Section label="Contributing accounts" className="!mt-6">
                 {hasAccounts ? (
                   <>
-                    <div className="overflow-hidden rounded-lg border border-rule/50 bg-white">
-                      <div className="grid grid-cols-[64px_minmax(0,1fr)_92px] gap-2 border-b border-rule/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                        <span>Acct</span>
-                        <span>Description</span>
-                        <span className="text-right">Amount</span>
-                      </div>
-                      <ul className="divide-y divide-rule/30">
-                        {sources.map((s, i) => (
-                          <li
-                            key={`${s.acct}-${i}`}
-                            className="grid grid-cols-[64px_minmax(0,1fr)_92px] gap-2 px-3 py-2 text-[14px]"
-                          >
-                            <span className="font-mono text-navy">{s.acct}</span>
-                            <span className="truncate text-ink" title={s.desc}>
-                              {s.desc || '—'}
-                            </span>
-                            <span className={`text-right tabular-nums ${s.total < 0 ? 'amt-neg' : 'text-navy'}`}>
-                              {fmt(s.total)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="dt-wrap">
+                      <table className="dt">
+                        <thead>
+                          <tr>
+                            <th scope="col">Acct</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" className="dt-num">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sources.map((s, i) => (
+                            <tr key={`${s.acct}-${i}`}>
+                              <td className="whitespace-nowrap font-mono text-[12px] text-ink2">{s.acct}</td>
+                              <td className="max-w-[180px] truncate" title={s.desc}>
+                                {s.desc || '—'}
+                              </td>
+                              <td className={`dt-num ${s.total < 0 ? 'amt-neg' : ''}`}>{fmt(s.total)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                     {/* tie-out */}
-                    <div
-                      className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] font-semibold ${
-                        ties
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-amber-50 text-amber-700'
-                      }`}
-                    >
-                      {ties ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                    <p className={`b2-callout mt-3 font-semibold ${ties ? 'b2-good' : 'b2-watch'}`}>
+                      {ties ? <CheckCircle2 size={14} aria-hidden="true" /> : <AlertTriangle size={14} aria-hidden="true" />}
                       {ties
                         ? 'Accounts tie out to the line total.'
                         : `Accounts differ from the line by ${fmt(Math.abs(diff))} (reclassed/adjusted).`}
-                    </div>
+                    </p>
                   </>
                 ) : (
-                  <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                  <p className="text-small italic text-ink2">
                     {line
                       ? 'No account-level detail — this is a calculated subtotal or derived figure.'
                       : 'No line-level detail available for this figure.'}
                   </p>
                 )}
-              </div>
+              </Section>
 
               {/* QuickBooks transaction drill — the fourth unfurl: from
                   "these accounts" to the actual QuickBooks transactions inside
-                  them. Lazy: nothing fetches until the gold button is clicked. */}
+                  them. Lazy: nothing fetches until the button is clicked. */}
               {canDrill && (
-                <div className="no-print">
+                <div className="no-print mt-6">
                   {drill.status === 'idle' && (
-                    <button
-                      type="button"
-                      onClick={runDrill}
-                      className="btn-gold w-full"
-                    >
-                      <Receipt size={15} />
+                    <Button variant="primary" onClick={runDrill} icon={<Receipt size={14} />} className="w-full">
                       View the transactions
-                    </button>
+                    </Button>
                   )}
 
                   {drill.status === 'loading' && (
-                    <div className="rounded-lg border border-rule/50 bg-white p-3">
-                      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-navy">
-                        <Loader2 size={15} className="animate-spin text-gold" />
+                    <div aria-busy="true">
+                      <p className="mb-3 flex items-center gap-2 text-small font-semibold text-ink">
+                        <Loader2 size={14} aria-hidden="true" className="animate-spin text-ink2" />
                         Pulling the transactions behind this number…
-                      </div>
+                      </p>
                       <div className="space-y-2">
                         {[0, 1, 2, 3].map((i) => (
-                          <div key={i} className="h-6 animate-pulse rounded bg-section" />
+                          <div key={i} className="h-6 animate-pulse rounded-[4px] bg-ground" />
                         ))}
                       </div>
                     </div>
                   )}
 
                   {drill.status === 'error' && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[14px] text-amber-700">
+                    <div className="b2-callout b2-watch flex-col !gap-1" role="alert">
                       <p className="font-semibold">Couldn&apos;t load transactions.</p>
-                      <button
-                        type="button"
-                        onClick={runDrill}
-                        className="mt-1.5 text-[13px] font-semibold text-navy underline decoration-gold underline-offset-2 hover:text-gold"
-                      >
+                      <button type="button" onClick={runDrill} className="dt-link">
                         Try again
                       </button>
                     </div>
@@ -296,8 +267,8 @@ export default function LineageDrawer({
                       {/* Diocesan (Topology B) drill: the rows come from the shared
                           org-wide QuickBooks company, filtered to this school. */}
                       {drillResult.source?.topology === 'org' && (
-                        <p className="mb-2 flex items-center gap-1.5 text-[12.5px] italic text-muted">
-                          <Building2 size={13} className="shrink-0 text-gold/80" />
+                        <p className="mb-2 flex items-center gap-1.5 text-[12.5px] italic text-ink2">
+                          <Building2 size={13} aria-hidden="true" className="shrink-0" />
                           From your organization&apos;s QuickBooks company.
                         </p>
                       )}
@@ -306,7 +277,7 @@ export default function LineageDrawer({
                   )}
 
                   {drill.status === 'done' && drillReason && (
-                    <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                    <p className="text-small italic text-ink2">
                       {DRILL_STATE_COPY[drillReason] ?? 'Transaction detail is unavailable for this line.'}
                     </p>
                   )}
@@ -317,35 +288,34 @@ export default function LineageDrawer({
                   snapshot chain. NOT QBO-gated (upload history matters too):
                   enabled whenever we can reach the API for this line. */}
               {!!schoolId && !!periodId && !!selection?.lineKey && (
-                <ValueHistory
-                  schoolId={schoolId}
-                  periodId={periodId}
-                  enabled
-                  noun="line"
-                  swapKey={selKey}
-                  selection={{
-                    statement: selection.statement,
-                    variant: selection.variant,
-                    lineKey: selection.lineKey,
-                  }}
-                />
+                <div className="mt-6">
+                  <ValueHistory
+                    schoolId={schoolId}
+                    periodId={periodId}
+                    enabled
+                    noun="line"
+                    swapKey={selKey}
+                    selection={{
+                      statement: selection.statement,
+                      variant: selection.variant,
+                      lineKey: selection.lineKey,
+                    }}
+                  />
+                </div>
               )}
 
               {/* source provenance */}
-              <div>
-                <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                  Source
-                </p>
+              <Section label="Source" className="!mt-6">
                 {source ? (
                   <SourceBadge imp={source} />
                 ) : (
-                  <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                  <p className="text-small italic text-ink2">
                     {Array.isArray(imports)
                       ? 'No import on record for this column.'
                       : 'Source appears once this period is saved.'}
                   </p>
                 )}
-              </div>
+              </Section>
             </div>
           </motion.div>
         </div>

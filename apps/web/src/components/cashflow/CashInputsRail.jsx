@@ -21,6 +21,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Section, Pill } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -66,13 +68,13 @@ function IncludeSwitch({ checked, onToggle, disabled, label }) {
       aria-label={label}
       disabled={disabled}
       onClick={onToggle}
-      className={`relative h-[22px] w-[40px] shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:opacity-40 ${
-        checked ? 'bg-gold' : 'bg-slate-300'
+      className={`relative h-[20px] w-[36px] shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 focus-visible:ring-offset-1 disabled:opacity-40 ${
+        checked ? 'bg-[#2563EB]' : 'bg-ink/20'
       }`}
     >
       <span
-        className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
-          checked ? 'left-[20px]' : 'left-[3px]'
+        className={`absolute top-[2px] h-4 w-4 rounded-full bg-white transition-all duration-200 ${
+          checked ? 'left-[18px]' : 'left-[2px]'
         }`}
       />
     </button>
@@ -81,9 +83,9 @@ function IncludeSwitch({ checked, onToggle, disabled, label }) {
 
 function TeachingCard({ icon: Icon, children }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-dashed border-rule/70 bg-cream/40 p-4">
-      {Icon ? <Icon size={16} className="mt-0.5 shrink-0 text-gold" /> : null}
-      <div className="min-w-0 text-[13.5px] leading-relaxed text-muted">{children}</div>
+    <div className="flex items-start gap-3 border-y border-hair py-4">
+      {Icon ? <Icon size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-ink2" /> : null}
+      <div className="min-w-0 text-small leading-relaxed text-ink2">{children}</div>
     </div>
   )
 }
@@ -171,22 +173,27 @@ export default function CashInputsRail({
   }
 
   return (
-    <div className="space-y-5">
+    <div>
       {/* ── GROUP A · From QuickBooks ─────────────────────────────────────── */}
       {/* id: Penny walkthrough anchor 'cashFlow.linesTable' — the derived lines
           she can propose excluding or re-totalling. */}
-      <section id="cf-lines" className="rounded-2xl border border-rule/60 bg-white p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-            <Zap size={14} className="text-gold" /> From QuickBooks
-          </h2>
-          {adjustable.length > 0 ? (
-            <span className="text-[12px] text-muted">
+      <Section
+        id="cf-lines"
+        label={
+          <span className="inline-flex items-center gap-1.5">
+            <Zap size={12} aria-hidden="true" /> From QuickBooks
+          </span>
+        }
+        aside={
+          adjustable.length > 0 ? (
+            <span>
               {adjustable.length} line{adjustable.length === 1 ? '' : 's'} · switch off anything
               that shouldn&apos;t count
             </span>
-          ) : null}
-        </div>
+          ) : null
+        }
+        className="!mt-0"
+      >
 
         {!hasProjection ? (
           <TeachingCard icon={Zap}>
@@ -206,51 +213,41 @@ export default function CashInputsRail({
               Connect QuickBooks and your open invoices and bills type themselves into this
               forecast — no keying.
             </p>
-            <Link
-              to="/finance?tab=add&add=tb"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg btn-cta px-3.5 py-1.5 text-[12.5px] font-semibold"
-            >
-              <Zap size={12} /> Connect QuickBooks
+            <Link to="/finance?tab=add&add=tb" className="btn btn-primary btn-sm mt-2">
+              <Zap size={12} aria-hidden="true" /> Connect QuickBooks
             </Link>
           </TeachingCard>
         ) : (
           <div className="space-y-4">
             {groups.map(({ origin, rows }) => (
               <div key={origin}>
-                <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted/80">
+                <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                   {sourceLabels[origin] ?? origin}
                 </h3>
-                <div className="space-y-1.5">
+                <div className="border-t border-hair">
                   {rows.map((f) => {
                     const included = isIncluded(f)
                     return (
                       <div
                         key={f.sourceRef}
-                        className={`flex items-center gap-3 rounded-xl border border-rule/60 px-3.5 py-2.5 transition-opacity ${
-                          included ? 'bg-white' : 'bg-section/60 opacity-70'
+                        className={`flex min-h-[44px] items-center gap-3 border-b border-hair py-2 transition-opacity hover:bg-ink/[0.03] ${
+                          included ? '' : 'opacity-60'
                         }`}
                       >
-                        <Zap size={14} className="shrink-0 text-gold/80" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13.5px] font-semibold text-navy">
+                          <p className="truncate text-[13px] font-semibold text-ink">
                             {f.label}
                           </p>
-                          <p className="text-[11.5px] text-muted">
+                          <p className="text-[11.5px] text-ink2">
                             {f.eventCount > 1
                               ? `${f.eventCount} events · ${shortDate(f.firstDate)} – ${shortDate(f.lastDate)}`
                               : shortDate(f.firstDate)}
                           </p>
                         </div>
-                        <span className="hidden rounded-full border border-rule/70 bg-section px-2 py-0.5 text-[11px] font-semibold capitalize text-muted sm:inline-block">
-                          {prettyCategory(f.category)}
-                        </span>
+                        <Pill className="hidden capitalize sm:inline-flex">{prettyCategory(f.category)}</Pill>
                         <span
-                          className={`w-28 shrink-0 text-right font-mono text-[13px] font-semibold tabular-nums ${
-                            included
-                              ? f.direction === 'in'
-                                ? 'text-emerald-700'
-                                : 'text-navy'
-                              : 'text-muted line-through'
+                          className={`w-28 shrink-0 text-right text-[13px] font-semibold tabular-nums ${
+                            included ? 'text-ink' : 'text-ink2 line-through'
                           }`}
                         >
                           {f.direction === 'in' ? '+' : '−'}
@@ -273,7 +270,8 @@ export default function CashInputsRail({
               <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-3 py-1.5 text-[12.5px] font-semibold text-muted transition hover:border-gold/60 hover:text-navy"
+                className="dt-link"
+                aria-expanded={expanded}
               >
                 <ChevronDown
                   size={14}
@@ -284,14 +282,12 @@ export default function CashInputsRail({
             ) : null}
           </div>
         )}
-      </section>
+      </Section>
 
       {/* ── GROUP B · Your expected items ─────────────────────────────────── */}
-      <section className="rounded-2xl border border-rule/60 bg-white p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Your expected items
-          </h2>
+      <Section
+        label="Your expected items"
+        aside={
           <button
             // Penny walkthrough anchor 'cashFlow.addCommitment'. THE CANONICAL
             // one of the three "Add expected item" buttons — the other two (the
@@ -301,13 +297,17 @@ export default function CashInputsRail({
             id="cf-add-item"
             type="button"
             onClick={() => onAddItem()}
-            className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-3.5 py-1.5 text-[12.5px] font-semibold"
+            className="btn btn-secondary btn-sm"
           >
-            <Plus size={13} /> Add expected item
+            <Plus size={13} aria-hidden="true" /> Add expected item
           </button>
-        </div>
-
-        {removeError ? <p className="mb-2 text-[12.5px] text-danger">{removeError}</p> : null}
+        }
+      >
+        {removeError ? (
+          <p className="b2-callout b2-risk mb-2" role="alert">
+            {removeError}
+          </p>
+        ) : null}
 
         {commitments.length === 0 ? (
           <TeachingCard>
@@ -321,7 +321,7 @@ export default function CashInputsRail({
                   key={ex.chip}
                   type="button"
                   onClick={() => onAddItem(ex.seed)}
-                  className="rounded-full border border-gold/40 bg-gold-pale/50 px-3 py-1 text-[12.5px] font-semibold text-navy transition hover:border-gold hover:bg-gold-pale"
+                  className="b2-chip !min-h-[28px] !py-1 !text-[12.5px]"
                 >
                   {ex.chip}
                 </button>
@@ -329,7 +329,7 @@ export default function CashInputsRail({
             </div>
           </TeachingCard>
         ) : (
-          <div className="space-y-1.5">
+          <div className="border-t border-hair">
             <AnimatePresence initial={false}>
               {commitments.map((c) => (
                 <motion.div
@@ -343,32 +343,24 @@ export default function CashInputsRail({
                       : { opacity: 0, height: 0, marginTop: 0, overflow: 'hidden' }
                   }
                   transition={{ duration: 0.28, ease: [0.22, 0.8, 0.2, 1] }}
-                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-rule/60 bg-white px-3.5 py-2.5 transition-colors hover:border-gold/50"
+                  className="flex min-h-[44px] cursor-pointer items-center gap-3 border-b border-hair py-2 transition-colors hover:bg-ink/[0.03]"
                   onClick={() => onEditItem(c)}
                 >
                   {c.direction === 'in' ? (
-                    <ArrowUpRight size={15} className="shrink-0 text-emerald-600" />
+                    <ArrowUpRight size={15} aria-label="cash in" className="shrink-0 text-ink2" />
                   ) : (
-                    <ArrowDownRight size={15} className="shrink-0 text-rose-600" />
+                    <ArrowDownRight size={15} aria-label="cash out" className="shrink-0 text-ink2" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-semibold text-navy">{c.label}</p>
-                    <p className="text-[11.5px] text-muted">
+                    <p className="truncate text-[13px] font-semibold text-ink">{c.label}</p>
+                    <p className="text-[11.5px] text-ink2">
                       {shortDate(c.startDate)}
                       {c.recurrence !== 'once' && c.endDate ? ` – ${shortDate(c.endDate)}` : ''}
                     </p>
                   </div>
-                  <span className="hidden rounded-full border border-rule/70 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted sm:inline-block">
-                    {RECURRENCE_LABELS[c.recurrence] ?? c.recurrence}
-                  </span>
-                  <span className="hidden rounded-full border border-rule/70 bg-section px-2 py-0.5 text-[11px] font-semibold capitalize text-muted md:inline-block">
-                    {c.confidence}
-                  </span>
-                  <span
-                    className={`w-24 shrink-0 text-right font-mono text-[13px] font-semibold tabular-nums ${
-                      c.direction === 'in' ? 'text-emerald-700' : 'text-navy'
-                    }`}
-                  >
+                  <Pill className="hidden sm:inline-flex">{RECURRENCE_LABELS[c.recurrence] ?? c.recurrence}</Pill>
+                  <Pill className="hidden capitalize md:inline-flex">{c.confidence}</Pill>
+                  <span className="w-24 shrink-0 text-right text-[13px] font-semibold tabular-nums text-ink">
                     {c.direction === 'in' ? '+' : '−'}
                     {fmt(Math.abs(c.amount))}
                   </span>
@@ -379,7 +371,7 @@ export default function CashInputsRail({
                       e.stopPropagation()
                       onEditItem(c)
                     }}
-                    className="rounded-md p-1.5 text-muted transition hover:bg-section hover:text-navy"
+                    className="rounded-[4px] p-1.5 text-ink2 transition hover:bg-ink/[0.05] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]/50"
                   >
                     <Pencil size={14} />
                   </button>
@@ -391,7 +383,7 @@ export default function CashInputsRail({
                       e.stopPropagation()
                       remove(c.id)
                     }}
-                    className="rounded-md p-1.5 text-muted transition hover:bg-red-50 hover:text-danger disabled:opacity-50"
+                    className="rounded-[4px] p-1.5 text-ink2 transition hover:bg-ink/[0.05] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]/50 disabled:opacity-50"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -400,7 +392,7 @@ export default function CashInputsRail({
             </AnimatePresence>
           </div>
         )}
-      </section>
+      </Section>
     </div>
   )
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
 import IntakeBar from '../IntakeBar.jsx'
@@ -72,8 +71,8 @@ export default function TrialBalanceModalBody({
   return (
     <div>
       {canEdit && (
-        <div className="border-b border-rule/60 bg-white px-5 pt-3.5">
-          <div className="inline-flex items-center gap-1 rounded-xl border border-gold/30 bg-section p-1">
+        <div className="border-b border-hair bg-white px-5 pt-3.5">
+          <div className="seg" role="tablist" aria-label="How to add">
             {TABS.map((t) => {
               const on = active === t.key
               return (
@@ -81,25 +80,16 @@ export default function TrialBalanceModalBody({
                   key={t.key}
                   type="button"
                   onClick={() => setMode(t.key)}
-                  className={`relative inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[14px] font-semibold transition-colors ${
-                    on ? 'text-navy' : 'text-muted hover:text-navy'
-                  }`}
+                  role="tab"
+                  aria-selected={on}
+                  className="seg-btn"
                 >
-                  {on && (
-                    <motion.span
-                      layoutId="tb-mode-pill"
-                      className="absolute inset-0 rounded-lg bg-gold-gradient shadow-glow"
-                      transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-                    />
-                  )}
-                  <span className="relative flex items-center gap-1.5">
-                    <t.Icon size={14} /> {t.label}
-                  </span>
+                  <t.Icon size={13} aria-hidden="true" /> {t.label}
                 </button>
               )
             })}
           </div>
-          <p className="mt-2 pb-3 text-[13.5px] text-muted">
+          <p className="mt-2 pb-3 text-[13.5px] text-ink2">
             {active === 'bulk'
               ? 'Bring in several past years at once to build your year-over-year trend.'
               : active === 'qbo'

@@ -10,14 +10,14 @@
 //   onResolved() — parent bumps the assess key to force a re-assessment.
 //
 // ADVISORY ONLY — never gates Confirm. A save failure only sets local error.
-// Navy/gold, framer-motion entrance, consistent with SufficiencyPanel.
+// A Section on the ground (ruled rows, native selects), consistent with SufficiencyPanel.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { Wand2, Loader2, CheckCircle2 } from 'lucide-react'
 import { mappingApi, apiErrorMessage } from '../../lib/api.js'
 import { fmtDollar } from '../../lib/format.js'
 import { SCOA_REVENUE_OPTIONS, SCOA_EXPENSE_OPTIONS } from '../../lib/scoaCategories.js'
+import { Section, Pill, Button } from '../ui/surface/index.js'
 
 export default function ResolveUnmatched({ schoolId, unmatched, onResolved }) {
   const [choices, setChoices] = useState({})
@@ -51,45 +51,31 @@ export default function ResolveUnmatched({ schoolId, unmatched, onResolved }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="card-soft space-y-3 border-amber-300/60 p-4"
+    <Section
+      label="Resolve unmatched lines"
+      aside={<Pill variant="status" tone="watch">{rows.length} to resolve</Pill>}
+     
     >
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-          <Wand2 size={15} />
-        </span>
-        <div>
-          <div className="font-serif text-[15px] font-semibold text-navy">Resolve unmatched lines</div>
-          <p className="text-[12px] text-muted">
-            Pick a category so these lines roll into the totals — your choices are saved for next time.
-          </p>
-        </div>
-      </div>
+      <p className="mb-2 flex items-start gap-2 text-small text-ink2">
+        <Wand2 size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
+        Pick a category so these lines roll into the totals — your choices are saved for next time.
+      </p>
 
-      <ul className="space-y-2">
+      <ul>
         {rows.map((r) => (
-          <li
-            key={r.key}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rule bg-white px-3.5 py-2.5"
-          >
+          <li key={r.key} className="fig flex-wrap !items-center">
             <div className="min-w-0">
               <div className="truncate text-[13px] font-medium text-ink">
                 {r.label || '(no label)'}
-                {r.acct > 0 && (
-                  <span className="ml-2 text-[11px] font-normal text-muted">#{r.acct}</span>
-                )}
+                {r.acct > 0 && <span className="ml-2 text-[11px] font-normal text-ink2">#{r.acct}</span>}
               </div>
-              <div className="text-[12px] text-muted">{fmtDollar(r.annual)}</div>
+              <div className="text-[12px] tabular-nums text-ink2">{fmtDollar(r.annual)}</div>
             </div>
             <select
               value={choices[r.key] ?? ''}
-              onChange={(e) =>
-                setChoices((prev) => ({ ...prev, [r.key]: e.target.value }))
-              }
-              className="rounded-lg border border-rule bg-cream/40 px-2.5 py-1.5 text-[13px] text-ink focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+              aria-label={`Category for ${r.label || 'this line'}`}
+              onChange={(e) => setChoices((prev) => ({ ...prev, [r.key]: e.target.value }))}
+              className="sel max-w-full"
             >
               <option value="">Choose a category…</option>
               <optgroup label="Revenue">
@@ -112,30 +98,21 @@ export default function ResolveUnmatched({ schoolId, unmatched, onResolved }) {
       </ul>
 
       {saveError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-2.5 text-[13px] font-medium text-rose-700">
+        <p className="b2-callout mt-3" data-tone="risk" role="alert">
           {saveError}
-        </div>
+        </p>
       )}
 
-      <div className="flex items-center justify-end">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
+      <div className="mt-3 flex items-center justify-end">
+        <Button
+          variant="primary"
           onClick={onSave}
           disabled={saving || chosenCount === 0}
-          className="btn-primary inline-flex items-center gap-2 disabled:opacity-60"
+          icon={saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
         >
-          {saving ? (
-            <>
-              <Loader2 size={15} className="animate-spin" /> Saving…
-            </>
-          ) : (
-            <>
-              <CheckCircle2 size={15} /> Save categories
-            </>
-          )}
-        </motion.button>
+          {saving ? 'Saving…' : 'Save categories'}
+        </Button>
       </div>
-    </motion.div>
+    </Section>
   )
 }

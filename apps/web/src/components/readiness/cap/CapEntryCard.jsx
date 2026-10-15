@@ -8,16 +8,13 @@ import {
   Archive,
   ArchiveRestore,
 } from 'lucide-react'
-import StatusDot from '../../analytics/StatusDot.jsx'
 import { complianceStatusMeta } from '../../../lib/complianceMeta.js'
 import { CAP_STATUS_OPTIONS, capStatusMeta } from '../../../lib/capMeta.js'
-import { activePillCls } from '../../../lib/activePill.js'
+import { Pill } from '../../ui/surface/index.js'
 import DatePicker from '../../ui/DatePicker.jsx'
 
-const labelCls =
-  'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
-const inputCls =
-  'w-full rounded-lg border border-border bg-white px-4 py-3 text-[16px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+const labelCls = 'b2-label'
+const inputCls = 'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 /**
  * One CAP card. Read-only finding context (severity badge, observation, citation)
@@ -49,39 +46,34 @@ export default function CapEntryCard({
       transition={
         reduce ? undefined : { type: 'spring', stiffness: 260, damping: 22, delay: index * 0.04 }
       }
-      className={`card-soft relative overflow-hidden p-5 pl-6 ${
-        entry.isResolved ? 'opacity-70' : ''
-      }`}
+      className={`panel relative overflow-hidden p-5 pl-6 ${entry.isResolved ? 'opacity-70' : ''}`}
     >
-      <span className={`absolute inset-y-0 left-0 w-1 ${sevMeta.meta.rail}`} aria-hidden />
+      {/* The one actionable entry card: a Panel with a 2px severity mark. */}
+      <span className={`tone-${sevMeta.palette} absolute inset-y-0 left-0 w-0.5 bg-current`} aria-hidden />
 
       {/* Header: severity + title + citation, resolved badge */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${sevMeta.meta.chip}`}
-        >
-          <SevIcon size={11} />
+        <Pill variant="status" tone={sevMeta.palette} className="capitalize">
+          <SevIcon size={11} aria-hidden="true" />
           {entry.severity}
-        </span>
+        </Pill>
         {entry.isResolved && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
-            <CheckCircle2 size={11} /> Resolved
-          </span>
+          <Pill variant="status" tone="good">
+            <CheckCircle2 size={11} aria-hidden="true" /> Resolved
+          </Pill>
         )}
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted/80">
-          <BookOpen size={12} className="text-gold" />
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink2">
+          <BookOpen size={12} aria-hidden="true" />
           <span className="font-mono">{entry.citation}</span>
         </span>
       </div>
 
-      <h4 className="font-serif text-[16px] font-semibold text-navy">{entry.title}</h4>
+      <h4 className="text-heading font-semibold text-ink">{entry.title}</h4>
 
-      {/* Read-only observation */}
-      <div className="mt-2 rounded-lg border border-border bg-section px-4 py-3">
-        <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
-          Observation
-        </p>
-        <p className="mt-1 text-[15px] leading-relaxed text-ink">{entry.observation}</p>
+      {/* Read-only observation — a quoted block on the ground (ink left rule). */}
+      <div className="mt-2 border-l-2 border-hair/[0.3] pl-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">Observation</p>
+        <p className="mt-0.5 text-small leading-relaxed text-ink">{entry.observation}</p>
       </div>
 
       {/* Editable grid */}
@@ -89,7 +81,7 @@ export default function CapEntryCard({
         <div className="sm:col-span-2">
           <label className={labelCls}>Root cause</label>
           <textarea
-            className={`${inputCls} min-h-[72px] resize-y`}
+            className={`${inputCls} !h-auto min-h-[72px] resize-y py-2`}
             value={draft.rootCause}
             disabled={disabled}
             onChange={set('rootCause')}
@@ -99,7 +91,7 @@ export default function CapEntryCard({
         <div className="sm:col-span-2">
           <label className={labelCls}>Corrective action</label>
           <textarea
-            className={`${inputCls} min-h-[88px] resize-y`}
+            className={`${inputCls} !h-auto min-h-[88px] resize-y py-2`}
             value={draft.correctiveAction}
             disabled={disabled}
             onChange={set('correctiveAction')}
@@ -125,7 +117,7 @@ export default function CapEntryCard({
             onChange={(v) => set('targetDate')({ target: { value: v } })}
           />
           {entry.suggestedTimeframe && !draft.targetDate && (
-            <p className="mt-1.5 text-[13px] italic text-muted">
+            <p className="mt-1.5 text-[12px] italic text-ink2">
               Suggested: {entry.suggestedTimeframe}
             </p>
           )}
@@ -136,33 +128,22 @@ export default function CapEntryCard({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className={labelCls}>Status</span>
-          <div className="flex gap-2">
+          <div className="seg" role="group" aria-label="Status">
             {CAP_STATUS_OPTIONS.map((opt) => {
               const active = draft.status === opt.value
               const m = capStatusMeta(opt.value)
               return (
-                <motion.button
+                <button
                   key={opt.value}
                   type="button"
                   aria-pressed={active}
-                  whileTap={reduce || disabled ? undefined : { scale: 0.96 }}
                   disabled={disabled}
                   onClick={() => onChange(entry.ruleId, 'status', opt.value)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-2 text-[14px] font-semibold uppercase tracking-[0.06em] transition-all ${
-                    active ? activePillCls(m.palette) : 'border-border bg-section text-muted'
-                  } ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-gold/40'}`}
+                  className="seg-btn disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {active ? (
-                    <span
-                      aria-hidden
-                      className="inline-block shrink-0 rounded-full bg-white"
-                      style={{ width: 7, height: 7 }}
-                    />
-                  ) : (
-                    <StatusDot status={m.palette} size={7} />
-                  )}
+                  <i className={`mark tone-${m.palette} ${active ? '!text-white' : ''}`} aria-hidden="true" />
                   {opt.label}
-                </motion.button>
+                </button>
               )
             })}
           </div>
@@ -172,9 +153,9 @@ export default function CapEntryCard({
           <button
             type="button"
             onClick={() => onReset(entry.ruleId)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
+            className="btn btn-quiet btn-sm"
           >
-            <RotateCcw size={13} /> Reset to suggestion
+            <RotateCcw size={13} aria-hidden="true" /> Reset to suggestion
           </button>
         )}
 
@@ -183,7 +164,7 @@ export default function CapEntryCard({
           <button
             type="button"
             onClick={() => onArchive(entry.ruleId, !entry.archivedAt)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
+            className="btn btn-quiet btn-sm"
           >
             {entry.archivedAt ? (
               <>

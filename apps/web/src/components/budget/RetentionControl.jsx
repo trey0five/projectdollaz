@@ -17,6 +17,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Percent, ChevronDown, GraduationCap } from 'lucide-react'
 import { sanitizeDecimal } from '../../lib/numericInput.js'
 import { GRADE_ROW, GRADE_LABELS } from './driverModel.js'
+import { Section, Pill } from '../ui/surface/index.js'
+import '../../styles/pending/b2-finance.css'
 
 function clampPct(v) {
   const n = Number(v)
@@ -24,24 +26,26 @@ function clampPct(v) {
   return Math.min(100, Math.max(0, n))
 }
 
-function renderOverrideCell(grade, raw, onCell, disabled) {
+function renderOverrideRow(grade, raw, onCell, disabled) {
   // raw is the stored override (number) or undefined (inherits default).
   const value = raw === undefined || raw === null ? '' : String(raw)
+  const label = GRADE_LABELS[grade] ?? grade
   return (
-    <div key={`ret-${grade}`} className="flex flex-col">
-      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[10.5px] font-semibold leading-tight text-muted">
-        Gr {GRADE_LABELS[grade] ?? grade}
-      </span>
-      <input
-        type="text"
-        inputMode="decimal"
-        disabled={disabled}
-        value={value}
-        placeholder="—"
-        onChange={(e) => onCell(grade, sanitizeDecimal(e.target.value))}
-        className="w-full rounded-md border border-rule bg-white px-1 py-1 text-center text-[12px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
-      />
-    </div>
+    <tr key={`ret-${grade}`}>
+      <td>Gr {label}</td>
+      <td className="dt-num py-1">
+        <input
+          type="text"
+          inputMode="decimal"
+          disabled={disabled}
+          value={value}
+          placeholder="—"
+          aria-label={`Gr ${label} — % returning`}
+          onChange={(e) => onCell(grade, sanitizeDecimal(e.target.value))}
+          className="b2-cell-input ml-auto block max-w-[6rem]"
+        />
+      </td>
+    </tr>
   )
 }
 
@@ -72,30 +76,18 @@ export default function RetentionControl({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="card-soft p-4"
-    >
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Percent size={16} />
+    <Section label="Retention" className="first:mt-0">
+      <p className="mb-3 flex items-start gap-2 text-small text-ink2">
+        <Percent size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
+        <span>
+          Share of each grade that returns and moves up. Applied to the grade students are{' '}
+          <span className="font-semibold text-ink">leaving</span>.
         </span>
-        <div className="flex-1">
-          <h4 className="font-serif text-[15px] font-semibold text-navy">Retention</h4>
-          <p className="text-[12px] text-muted">
-            Share of each grade that returns and moves up. Applied to the grade students are{' '}
-            <span className="font-semibold text-navy">leaving</span>.
-          </p>
-        </div>
-      </div>
+      </p>
 
       <div className="flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            Default retention %
-          </span>
+          <span className="b2-label !mb-0">Default retention %</span>
           <div className="flex items-center gap-1.5">
             <input
               type="text"
@@ -104,21 +96,21 @@ export default function RetentionControl({
               value={retentionPct === undefined || retentionPct === null ? '' : String(retentionPct)}
               placeholder="93"
               onChange={(e) => onDefaultChange(clampPct(sanitizeDecimal(e.target.value)))}
-              className="w-24 rounded-md border border-rule bg-white px-2.5 py-1.5 text-center text-[14px] font-semibold tabular-nums text-navy outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+              className="b2-input w-24 text-center font-semibold tabular-nums disabled:opacity-50"
             />
-            <span className="text-[13px] font-semibold text-muted">%</span>
+            <span className="text-[13px] font-semibold text-ink2">%</span>
           </div>
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-            <GraduationCap size={12} /> Graduating grade
+          <span className="b2-label !mb-0 flex items-center gap-1">
+            <GraduationCap size={12} aria-hidden="true" /> Graduating grade
           </span>
           <select
             disabled={disabled}
             value={grad}
             onChange={(e) => onGraduatingChange(e.target.value)}
-            className="rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] font-semibold text-navy outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+            className="sel h-9 disabled:opacity-50"
           >
             {GRADE_ROW.map((g) => (
               <option key={g} value={g}>
@@ -132,18 +124,12 @@ export default function RetentionControl({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-gold transition-colors hover:text-navy"
+        aria-expanded={open}
+        className="dt-link mt-3"
       >
-        <ChevronDown
-          size={14}
-          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        />
+        <ChevronDown size={14} aria-hidden="true" className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
         Per-grade overrides
-        {overrideCount > 0 && (
-          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] tabular-nums text-gold">
-            {overrideCount}
-          </span>
-        )}
+        {overrideCount > 0 && <Pill variant="count">{overrideCount}</Pill>}
       </button>
 
       <AnimatePresence initial={false}>
@@ -155,15 +141,23 @@ export default function RetentionControl({
             transition={{ duration: 0.22 }}
             className="overflow-hidden"
           >
-            <p className="mb-2 mt-3 text-[11.5px] text-muted">
+            <p className="mb-2 mt-3 text-[12px] text-ink2">
               % of current Gr-N returning. Blank inherits the default ({retentionPct ?? 93}%).
             </p>
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-              {GRADE_ROW.map((g) => renderOverrideCell(g, overrides[g], setOverride, disabled))}
+            <div className="dt-wrap">
+              <table className="dt">
+                <thead>
+                  <tr>
+                    <th scope="col">Leaving grade</th>
+                    <th scope="col" className="dt-num">% returning</th>
+                  </tr>
+                </thead>
+                <tbody>{GRADE_ROW.map((g) => renderOverrideRow(g, overrides[g], setOverride, disabled))}</tbody>
+              </table>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </Section>
   )
 }

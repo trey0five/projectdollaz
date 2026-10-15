@@ -21,6 +21,7 @@ import {
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import PasswordRequirements, { allRequirementsMet } from '../auth/PasswordRequirements.jsx'
 import SettingsCard from './SettingsCard.jsx'
+import Pill from '../ui/surface/Pill.jsx'
 import MfaWizard from './MfaWizard.jsx'
 
 export default function AccountSection() {
@@ -117,17 +118,18 @@ export default function AccountSection() {
           onChange={(e) => setLastName(e.target.value)}
           autoComplete="family-name"
         />
-        <div className="mb-5">
-          <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
-            Email
-          </label>
-          <input
-            value={user?.email || ''}
-            disabled
-            className="w-full cursor-not-allowed rounded-lg border-2 border-border bg-navy/[0.04] px-4 py-3 text-base text-muted outline-none"
-          />
-          <p className="mt-1.5 text-[14px] text-muted">Email is read-only for now.</p>
-        </div>
+        {/* Same Field as the name inputs; TextField has no disabled skin (and a
+            className would replace its input class), so the read-only state is
+            an inline ground fill + ink-2 text. */}
+        <TextField
+          label="Email"
+          value={user?.email || ''}
+          disabled
+          readOnly
+          autoComplete="email"
+          style={{ background: 'rgb(var(--c-ground))', color: 'rgb(var(--c-ink-2))', cursor: 'not-allowed' }}
+        />
+        <p className="-mt-3 mb-5 text-[14px] text-ink2">Email is read-only for now.</p>
 
         {pErr && <FormError>{pErr}</FormError>}
 
@@ -163,7 +165,7 @@ export default function AccountSection() {
           />
         </div>
         {confirm.length > 0 && next !== confirm && (
-          <p className="mb-3 text-[14px] text-danger">Passwords do not match.</p>
+          <p className="mb-3 text-[14px] tone-risk">Passwords do not match.</p>
         )}
 
         {cwErr && <FormError>{cwErr}</FormError>}
@@ -173,7 +175,7 @@ export default function AccountSection() {
           whileTap={{ scale: canChange ? 0.98 : 1 }}
           onClick={changePassword}
           disabled={!canChange}
-          className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-8"
+          className="btn btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-8"
         >
           {cwBusy ? 'Updating…' : 'Change password'}
         </motion.button>
@@ -185,26 +187,26 @@ export default function AccountSection() {
       >
         {mfaErr && !mfa ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="text-[14px] text-muted">{mfaErr}</p>
+            <p className="text-[14px] text-ink2">{mfaErr}</p>
             <button
               type="button"
               onClick={loadMfa}
-              className="text-[14px] font-semibold text-gold hover:underline"
+              className="text-[14px] font-semibold text-ink2 hover:underline"
             >
               Retry
             </button>
           </div>
         ) : !mfa ? (
-          <p className="text-[14px] text-muted">Loading…</p>
+          <p className="text-[14px] text-ink2">Loading…</p>
         ) : mfa.mfa_enabled ? (
           <>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[13px] font-semibold text-emerald-700">
-                <ShieldCheck size={14} />
+              <Pill variant="status" tone="good">
+                <ShieldCheck size={14} aria-hidden="true" />
                 Enabled
-              </span>
+              </Pill>
               {mfa.enrolled_at && (
-                <span className="text-[14px] text-muted">
+                <span className="text-[14px] text-ink2">
                   since{' '}
                   {new Date(mfa.enrolled_at).toLocaleDateString(undefined, {
                     year: 'numeric',
@@ -214,11 +216,11 @@ export default function AccountSection() {
                 </span>
               )}
             </div>
-            <p className="mt-3 flex items-center gap-1.5 text-[14px] text-muted">
+            <p className="mt-3 flex items-center gap-1.5 text-[14px] text-ink2">
               {mfa.backup_codes_remaining <= 3 && (
-                <AlertTriangle size={14} className="shrink-0 text-amber-600" />
+                <AlertTriangle size={14} className="shrink-0 text-ink2" />
               )}
-              <span className={mfa.backup_codes_remaining <= 3 ? 'font-medium text-amber-700' : ''}>
+              <span className={mfa.backup_codes_remaining <= 3 ? 'font-medium text-ink' : ''}>
                 {mfa.backup_codes_remaining} recovery code
                 {mfa.backup_codes_remaining === 1 ? '' : 's'} remaining
                 {mfa.backup_codes_remaining <= 3 ? ' — generate a new set soon.' : '.'}
@@ -228,14 +230,14 @@ export default function AccountSection() {
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setWizard('regenerate')}
-                className="rounded-xl border-2 border-border px-4 py-2.5 text-[14px] font-semibold text-navy transition-colors hover:border-gold"
+                className="rounded-[8px] border border-hair/[0.18] px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-hair/[0.3]"
               >
                 Regenerate recovery codes
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setWizard('disable')}
-                className="rounded-xl border-2 border-danger/30 px-4 py-2.5 text-[14px] font-semibold text-danger transition-colors hover:border-danger/60 hover:bg-danger/5"
+                className="rounded-[8px] border border-hair/[0.18] px-4 py-2.5 text-[14px] font-semibold tone-risk transition-colors hover:bg-ink/[0.04]"
               >
                 Turn off
               </motion.button>
@@ -244,17 +246,17 @@ export default function AccountSection() {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center rounded-full bg-navy/[0.06] px-3 py-1 text-[13px] font-semibold text-muted">
+              <Pill variant="status" tone="neutral">
                 Off
-              </span>
-              <span className="text-[14px] text-muted">
+              </Pill>
+              <span className="text-[14px] text-ink2">
                 Your account is protected by your password only.
               </span>
             </div>
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={() => setWizard('enable')}
-              className="btn-primary mt-4 w-full sm:w-auto sm:px-8"
+              className="btn btn-primary mt-4 w-full sm:w-auto sm:px-8"
             >
               Turn on two-factor
             </motion.button>
@@ -278,8 +280,8 @@ export default function AccountSection() {
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[15px] font-semibold text-navy">Try the new look (beta)</p>
-              <p className="mt-0.5 text-[14px] text-muted">
+              <p className="text-[15px] font-semibold text-ink">Try the new look (beta)</p>
+              <p className="mt-0.5 text-[14px] text-ink2">
                 A brighter, modern theme. The page reloads when you switch — printed
                 reports and board documents keep the classic look either way.
               </p>
@@ -291,7 +293,7 @@ export default function AccountSection() {
               aria-label="Try the new look (beta)"
               onClick={() => setUiV2(!uiV2)}
               className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200 ${
-                uiV2 ? 'border-gold bg-gold' : 'border-border bg-navy/15'
+                uiV2 ? 'border-[#2563EB] bg-[#2563EB]' : 'border-hair/[0.18] bg-ink/15'
               }`}
             >
               <span

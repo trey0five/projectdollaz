@@ -1,69 +1,52 @@
 import { useState } from 'react'
 import { fmtDollar, formatShortDate } from '../../../lib/format.js'
 import { programLabel } from '../../../lib/complianceMeta.js'
+import { DataTable } from '../../ui/surface/index.js'
 
 const PAGE = 25
+
+const COLUMNS = [
+  { key: 'studentRef', header: 'Student', render: (d) => d.studentRef ?? '—' },
+  {
+    key: 'program',
+    header: 'Program',
+    render: (d) => (d.program ? programLabel(d.program) : <span className="text-ink2">Unknown</span>),
+  },
+  { key: 'payDate', header: 'Pay date', className: 'whitespace-nowrap text-ink2', render: (d) => formatShortDate(d.payDate) },
+  { key: 'term', header: 'Term', className: 'text-ink2', render: (d) => d.term ?? '—' },
+  { key: 'batchRef', header: 'Batch', className: 'text-ink2', render: (d) => d.batchRef ?? '—' },
+  {
+    key: 'amount',
+    header: 'Amount',
+    num: true,
+    render: (d) => <span className={d.amount < 0 ? 'amt-neg' : ''}>{fmtDollar(d.amount)}</span>,
+  },
+]
 
 /** The funding-org disbursements table (read view). Paged for large sets. */
 export default function DisbursementsTable({ disbursements }) {
   const [shown, setShown] = useState(PAGE)
 
   if (!disbursements || disbursements.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed border-rule px-4 py-6 text-center text-[15px] italic text-muted">
-        No disbursements imported for this period yet.
-      </p>
-    )
+    return <p className="b2-note">No disbursements imported for this period yet.</p>
   }
 
   const rows = disbursements.slice(0, shown)
 
   return (
-    <div className="overflow-hidden rounded-xl border border-rule/60">
-      <div className="overflow-x-auto">
-        <table className="w-full text-[14px]">
-          <thead>
-            <tr className="border-b border-rule bg-section text-left text-[12px] uppercase tracking-[0.08em] text-muted">
-              <th className="px-3 py-2 font-semibold">Student</th>
-              <th className="px-3 py-2 font-semibold">Program</th>
-              <th className="px-3 py-2 font-semibold">Pay date</th>
-              <th className="px-3 py-2 font-semibold">Term</th>
-              <th className="px-3 py-2 font-semibold">Batch</th>
-              <th className="px-3 py-2 text-right font-semibold">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-rule/40">
-            {rows.map((d) => (
-              <tr key={d.id} className="bg-white hover:bg-section/60">
-                <td className="px-3 py-2 text-navy">{d.studentRef ?? '—'}</td>
-                <td className="px-3 py-2">
-                  {d.program ? (
-                    <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[12px] font-semibold text-[#7a5e00]">
-                      {programLabel(d.program)}
-                    </span>
-                  ) : (
-                    <span className="text-muted">Unknown</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-muted">{formatShortDate(d.payDate)}</td>
-                <td className="px-3 py-2 text-muted">{d.term ?? '—'}</td>
-                <td className="px-3 py-2 text-muted">{d.batchRef ?? '—'}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${d.amount < 0 ? 'text-danger' : 'text-navy'}`}>
-                  {fmtDollar(d.amount)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div>
+      <DataTable
+        columns={COLUMNS}
+        rows={rows}
+        rowKey="id"
+        caption="Funding-org disbursements"
+      />
       {shown < disbursements.length && (
-        <button
-          type="button"
-          onClick={() => setShown((s) => s + PAGE)}
-          className="w-full border-t border-rule bg-section py-2 text-[14px] font-semibold text-gold hover:bg-gold/5"
-        >
-          Show more ({disbursements.length - shown} remaining)
-        </button>
+        <div className="mt-2">
+          <button type="button" onClick={() => setShown((s) => s + PAGE)} className="dt-link">
+            Show more ({disbursements.length - shown} remaining)
+          </button>
+        </div>
       )}
     </div>
   )

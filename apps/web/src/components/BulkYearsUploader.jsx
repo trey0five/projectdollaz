@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import '../styles/pending/b2-finance.css'
 import {
   AlertTriangle,
   CalendarClock,
@@ -238,29 +239,24 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
           depth.current = Math.max(0, depth.current - 1)
           if (depth.current === 0) setDragOver(false)
         }}
-        className={`group flex cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 border-dashed px-5 py-9 text-center outline-none transition-all focus-visible:border-gold focus-visible:shadow-glow ${
-          dragOver ? 'border-gold bg-[#fff8e6] shadow-glow' : 'border-gold/60 bg-section hover:border-gold hover:shadow-glow'
-        }`}
+        data-active={dragOver ? 'true' : undefined}
+        className="b2-drop gap-4 px-5 py-9"
       >
-        <motion.span
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-          animate={reduce ? undefined : { y: [0, -8, 0] }}
-          transition={reduce ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <UploadCloud size={30} />
-        </motion.span>
+        <span className="b2-drop-icon">
+          <UploadCloud size={30} aria-hidden="true" />
+        </span>
         <div>
-          <h3 className="font-serif text-lg font-semibold text-navy sm:text-xl">
+          <h3 className="text-heading font-semibold text-ink sm:text-xl">
             Drop one file per year — or a workbook with a sheet per year
           </h3>
-          <p className="mx-auto mt-1.5 max-w-lg font-serif text-[15px] italic text-muted">
+          <p className="mx-auto mt-1.5 max-w-lg text-small text-ink2">
             We&rsquo;ll detect each year, save it, and light up your trend. Accepts .xlsx, .xls, and
             .csv.
           </p>
         </div>
         <button
           type="button"
-          className="btn-primary"
+          className="btn btn-primary"
           onClick={(e) => {
             e.stopPropagation()
             inputRef.current?.click()
@@ -279,35 +275,38 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
       </motion.div>
 
       {reading && (
-        <p className="flex items-center gap-2 text-[15px] italic text-muted">
-          <Loader2 size={14} className="animate-spin text-gold" /> Reading your files…
+        <p className="flex items-center gap-2 text-[15px] italic text-ink2">
+          <Loader2 size={14} className="animate-spin text-ink2" /> Reading your files…
         </p>
       )}
 
       {/* ── Monthly-only redirect ── */}
       {monthlyOnly && (
-        <div className="flex flex-col items-start gap-2 rounded-xl border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-3 text-[15px] text-[#7a5e00] sm:flex-row sm:items-center sm:justify-between">
+        <div className="b2-callout" data-tone="watch">
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span className="flex items-start gap-2">
-            <CalendarClock size={16} className="mt-0.5 shrink-0" />
+            <CalendarClock size={16} className="mt-0.5 shrink-0 text-ink2" />
             This looks like a month-by-month workbook — those belong under Monthly numbers.
           </span>
           {onOpenMonthly && (
             <button
               type="button"
               onClick={onOpenMonthly}
-              className="shrink-0 rounded-lg border border-gold/60 bg-white px-3 py-1.5 text-[14px] font-semibold text-navy transition-colors hover:bg-gold/10"
+              className="shrink-0 rounded-lg border border-hair/[0.3] bg-white px-3 py-1.5 text-[14px] font-semibold text-ink transition-colors hover:bg-ink/[0.04]"
             >
               Open Monthly numbers
             </button>
           )}
+          </div>
         </div>
       )}
 
       {/* ── Mixed workbook: some sheets are monthly and were skipped ── */}
       {!monthlyOnly && monthly.length > 0 && (
-        <div className="flex flex-col items-start gap-2 rounded-xl border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-2.5 text-[14px] text-[#7a5e00] sm:flex-row sm:items-center sm:justify-between">
+        <div className="b2-callout" data-tone="watch">
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span className="flex items-start gap-2">
-            <CalendarClock size={15} className="mt-0.5 shrink-0" />
+            <CalendarClock size={15} className="mt-0.5 shrink-0 text-ink2" />
             {monthly.length} sheet{monthly.length === 1 ? '' : 's'} look monthly and{' '}
             {monthly.length === 1 ? 'was' : 'were'} skipped — those belong under Monthly numbers.
           </span>
@@ -315,18 +314,19 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             <button
               type="button"
               onClick={onOpenMonthly}
-              className="shrink-0 rounded-lg border border-gold/60 bg-white px-3 py-1 text-[13px] font-semibold text-navy transition-colors hover:bg-gold/10"
+              className="shrink-0 rounded-lg border border-hair/[0.3] bg-white px-3 py-1 text-[13px] font-semibold text-ink transition-colors hover:bg-ink/[0.04]"
             >
               Open Monthly numbers
             </button>
           )}
+          </div>
         </div>
       )}
 
       {/* ── Timeline (annual set) ── */}
       {annual.length > 0 && (
-        <div className="rounded-2xl border-2 border-gold/20 bg-white p-4 shadow-card">
-          <p className="mb-3 flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-gold">
+        <div className="panel p-4">
+          <p className="mb-3 flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-ink2">
             <Sparkles size={13} /> Your year-over-year trend
           </p>
           <YearTimeline
@@ -340,18 +340,19 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
 
       {/* ── Undated files: manual year picker ── */}
       {undated.length > 0 && (
-        <div className="rounded-xl border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-3">
-          <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-[#7a5e00]">
-            <AlertTriangle size={14} /> We couldn&rsquo;t detect the year
+        <div className="b2-callout" data-tone="watch">
+          <div className="min-w-0 flex-1">
+          <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-ink">
+            <AlertTriangle size={14} className="text-ink2" /> We couldn&rsquo;t detect the year
           </p>
-          <div className="space-y-2">
+          <div className="divide-y divide-hair/[0.1]">
             {undated.map((c) => (
               <div
                 key={c.key}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
-                <span className="flex min-w-0 items-center gap-1.5 text-[14px] text-navy">
-                  <FileSpreadsheet size={13} className="shrink-0 text-navy/60" />
+                <span className="flex min-w-0 items-center gap-1.5 text-[14px] text-ink">
+                  <FileSpreadsheet size={13} className="shrink-0 text-ink2" />
                   <span className="truncate">
                     {c.sourceName}
                     {c.sheet ? ` — ${c.sheet}` : ''}
@@ -362,7 +363,7 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
                     aria-label="Pick the fiscal year"
                     defaultValue=""
                     onChange={(e) => setUndatedYear(c.key, e.target.value)}
-                    className="rounded-md border border-gold/40 bg-white px-2 py-1 text-[14px] font-semibold text-navy outline-none ring-gold/40 focus-visible:ring-2"
+                    className="rounded-md border border-hair bg-white px-2 py-1 text-[14px] font-semibold text-ink outline-none ring-[#2563EB]/40 focus-visible:ring-2"
                   >
                     <option value="" disabled>
                       Set year…
@@ -377,13 +378,14 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
                     type="button"
                     aria-label={`Remove ${c.sourceName}`}
                     onClick={() => removeCandidate(c.key)}
-                    className="rounded-md p-1 text-muted transition-colors hover:bg-section hover:text-danger"
+                    className="rounded-md p-1 text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
                   >
                     <X size={15} />
                   </button>
                 </span>
               </div>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -394,10 +396,12 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
           {errors.map((c) => (
             <div
               key={c.key}
-              className="flex items-center justify-between gap-2 rounded-lg border border-[#e0a0a0] bg-[#fdeeee] px-3 py-2 text-[14px] text-danger"
+              className="b2-callout"
+              data-tone="risk"
             >
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 text-[14px]">
               <span className="flex min-w-0 items-center gap-1.5">
-                <AlertTriangle size={14} className="shrink-0" />
+                <AlertTriangle size={14} className="shrink-0 text-ink2" />
                 <span className="truncate">
                   {c.sourceName}: {c.error}
                 </span>
@@ -406,10 +410,11 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
                 type="button"
                 aria-label={`Remove ${c.sourceName}`}
                 onClick={() => removeCandidate(c.key)}
-                className="rounded-md p-1 text-danger transition-colors hover:bg-white"
+                className="rounded-md p-1 text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
               >
                 <X size={15} />
               </button>
+              </div>
             </div>
           ))}
         </div>
@@ -422,16 +427,16 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="rounded-xl border border-gold/30 bg-white p-3.5 shadow-card"
+            className="rounded-[8px] border border-hair bg-white p-3.5 "
           >
-            <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-navy">
-              <Loader2 size={13} className="animate-spin text-gold" />
+            <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-ink">
+              <Loader2 size={13} className="animate-spin text-ink2" />
               Saving year {progress.index + 1} of {progress.total} —{' '}
               {formatShortDate(progress.payload?.periodEndDate)}…
             </p>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-section">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-ground">
               <motion.div
-                className="h-full rounded-full bg-gold-gradient"
+                className="h-full rounded-full bg-[#2563EB]"
                 initial={false}
                 animate={{ width: `${((progress.index + 1) / progress.total) * 100}%` }}
                 transition={{ type: 'spring', stiffness: 120, damping: 20 }}
@@ -446,14 +451,10 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
         <motion.div
           initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
           animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-          className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-[15px] ${
-            summary.blocked
-              ? 'border-[#e0a0a0] bg-[#fdeeee] text-danger'
-              : summary.failed
-                ? 'border-gold/40 bg-[#fff8e6] text-[#7a5e00]'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-          }`}
+          className="b2-callout"
+          data-tone={summary.blocked ? 'risk' : summary.failed ? 'watch' : 'good'}
         >
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 text-[15px]">
           <span className="flex items-center gap-2 font-semibold">
             {summary.blocked ? (
               <>
@@ -474,19 +475,20 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             <button
               type="button"
               onClick={handleRetry}
-              className="shrink-0 rounded-lg border border-gold/60 bg-white px-3 py-1.5 text-[14px] font-semibold text-navy transition-colors hover:bg-gold/10"
+              className="shrink-0 rounded-lg border border-hair/[0.3] bg-white px-3 py-1.5 text-[14px] font-semibold text-ink transition-colors hover:bg-ink/[0.04]"
             >
               Retry failed
             </button>
           )}
+          </div>
         </motion.div>
       )}
 
       {/* ── Save action ── */}
       {canEdit && hasReviewable && (
-        <div className="flex items-center justify-end gap-3 border-t border-rule/60 pt-4">
+        <div className="flex items-center justify-end gap-3 border-t border-hair pt-4">
           {savable.length > 0 && (
-            <span className="text-[14px] text-muted">
+            <span className="text-[14px] text-ink2">
               {savable.length} year{savable.length === 1 ? '' : 's'} ready
             </span>
           )}
@@ -494,7 +496,7 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             type="button"
             onClick={handleSave}
             disabled={saving || savable.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold uppercase tracking-[0.06em] transition-transform disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            className="inline-flex items-center gap-2 rounded-lg btn btn-primary px-5 py-2.5 text-[15px] font-bold uppercase tracking-[0.06em] transition-transform disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
             {saving ? (
               <>

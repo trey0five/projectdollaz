@@ -15,7 +15,7 @@ export default function YearTimeline({ annual, canEdit, onSetEndDate, onRemove }
   return (
     <div className="relative">
       {/* the connecting rail behind the chips */}
-      <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-gold/30 to-transparent" />
+      <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-hair" />
       <div className="relative flex items-stretch gap-3 overflow-x-auto pb-2">
         <AnimatePresence initial={false}>
           {items.map((it) =>
@@ -25,10 +25,10 @@ export default function YearTimeline({ annual, canEdit, onSetEndDate, onRemove }
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex w-[92px] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-border/70 bg-section px-2 py-6 text-center"
+                className="flex w-[92px] shrink-0 flex-col items-center justify-center gap-1 rounded-[8px] border border-dashed border-hair/[0.18] bg-ground px-2 py-6 text-center"
               >
-                <span className="font-serif text-base font-semibold text-muted">FY{it.year}</span>
-                <span className="text-[11px] uppercase tracking-[0.08em] text-muted">Missing</span>
+                <span className="font-serif text-base font-semibold text-ink2">FY{it.year}</span>
+                <span className="text-[11px] uppercase tracking-[0.08em] text-ink2">Missing</span>
               </motion.div>
             ) : (
               <YearChip

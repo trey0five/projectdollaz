@@ -22,7 +22,7 @@
 // microtask-deferred sync-on-key effect (no synchronous setState in the body).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
   Landmark,
   Plus,
@@ -39,6 +39,9 @@ import { useCapitalSchedule } from '../../../hooks/useSchedules.js'
 import { useAutosave } from '../../../hooks/useAutosave.js'
 import { schedulesApi } from '../../../lib/api.js'
 import { CAPITAL_GROUPS, CAPITAL_GROUP_LABELS } from './scheduleEnums.js'
+import { Section, StatStrip, Stat, Pill, Button } from '../../ui/surface/index.js'
+import '../../../styles/pending/b2-finance.css'
+import { statMoney, signedMoney } from '../../budget/StatFigure.jsx'
 
 // Stable id for a fresh row (client-generated; round-trips for React keys).
 function newId() {
@@ -77,61 +80,55 @@ function money(n) {
 function CapitalRow({ row, index, count, disabled, onChange, onRemove, onMove }) {
   const over = toNum(row.actual) - toNum(row.budget)
   return (
-    <tr className="border-t border-rule/50 hover:bg-gold/[0.04]">
-      <td className="px-2 py-1.5">
+    <tr>
+      <td className="py-1">
         <input
           type="text"
           disabled={disabled}
           value={row.label}
           placeholder={disabled ? '' : 'Project name…'}
           onChange={(e) => onChange(row.id, 'label', e.target.value.slice(0, 200))}
-          className="w-full min-w-[160px] rounded-md border border-rule bg-white px-2 py-1 text-[12.5px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-full min-w-[160px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-[12.5px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         <input
           type="number"
           disabled={disabled}
           value={row.actual}
           onChange={(e) => onChange(row.id, 'actual', toNum(e.target.value))}
-          className="w-[110px] rounded-md border border-rule bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-[110px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         <input
           type="number"
           disabled={disabled}
           value={row.budget}
           onChange={(e) => onChange(row.id, 'budget', toNum(e.target.value))}
-          className="w-[110px] rounded-md border border-rule bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-[110px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-right text-[12.5px] tabular-nums text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td
-        className={`px-2 py-1.5 text-right text-[12.5px] tabular-nums ${
-          over < 0 ? 'text-emerald-600' : over > 0 ? 'text-rose-600' : 'text-muted'
-        }`}
-      >
-        {money(over)}
-      </td>
-      <td className="px-2 py-1.5">
+      <OverCell over={over} />
+      <td className="py-1">
         <input
           type="text"
           disabled={disabled}
           value={row.comment}
           placeholder={disabled ? '' : 'Comment…'}
           onChange={(e) => onChange(row.id, 'comment', e.target.value.slice(0, 500))}
-          className="w-full min-w-[140px] rounded-md border border-rule bg-white px-2 py-1 text-[12px] text-ink outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 disabled:opacity-50"
+          className="w-full min-w-[140px] rounded-[4px] border border-hair/[0.18] bg-white px-2 py-1 text-[12px] text-ink outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/25 disabled:opacity-50"
         />
       </td>
-      <td className="px-2 py-1.5">
+      <td className="py-1">
         {!disabled && (
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="dt-actions flex items-center justify-end gap-0.5">
             <button
               type="button"
               onClick={() => onMove(row.id, -1)}
               disabled={index === 0}
               title="Move up"
-              className="rounded p-1 text-muted hover:bg-navy/[0.06] hover:text-navy disabled:opacity-30"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink disabled:opacity-30"
             >
               <ArrowUp size={14} />
             </button>
@@ -140,7 +137,7 @@ function CapitalRow({ row, index, count, disabled, onChange, onRemove, onMove })
               onClick={() => onMove(row.id, 1)}
               disabled={index === count - 1}
               title="Move down"
-              className="rounded p-1 text-muted hover:bg-navy/[0.06] hover:text-navy disabled:opacity-30"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink disabled:opacity-30"
             >
               <ArrowDown size={14} />
             </button>
@@ -148,7 +145,7 @@ function CapitalRow({ row, index, count, disabled, onChange, onRemove, onMove })
               type="button"
               onClick={() => onRemove(row.id)}
               title="Remove project"
-              className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"
+              className="rounded-[4px] p-1 text-ink2 hover:bg-ink/[0.05] hover:text-ink"
             >
               <Trash2 size={14} />
             </button>
@@ -159,25 +156,26 @@ function CapitalRow({ row, index, count, disabled, onChange, onRemove, onMove })
   )
 }
 
+// Over (Under) preview: ink figure + a 2px mark (under budget = good, over = risk).
+function OverCell({ over, bold }) {
+  const tone = over < 0 ? 'good' : over > 0 ? 'risk' : null
+  return (
+    <td className={`dt-num whitespace-nowrap ${bold ? 'font-semibold' : ''}`}>
+      {tone ? <i className={`mark tone-${tone} mr-1.5`} aria-label={tone === 'good' ? 'under budget' : 'over budget'} /> : null}
+      {money(over)}
+    </td>
+  )
+}
+
 // ── Group subtotal row (module scope) ────────────────────────────────────────
 function SubtotalRow({ actual, budget }) {
   const over = toNum(actual) - toNum(budget)
   return (
-    <tr className="border-t border-rule bg-cream/60">
-      <td className="px-2 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">
-        Subtotal
-      </td>
-      <td className="px-2 py-2 text-right text-[13px] font-semibold tabular-nums text-navy">
-        {money(actual)}
-      </td>
-      <td className="px-2 py-2 text-right text-[13px] tabular-nums text-muted">{money(budget)}</td>
-      <td
-        className={`px-2 py-2 text-right text-[13px] font-semibold tabular-nums ${
-          over < 0 ? 'text-emerald-600' : over > 0 ? 'text-rose-600' : 'text-navy'
-        }`}
-      >
-        {money(over)}
-      </td>
+    <tr className="dt-subtotal">
+      <td className="text-[11px] font-semibold uppercase tracking-[0.06em]">Subtotal</td>
+      <td className="dt-num font-semibold">{money(actual)}</td>
+      <td className="dt-num text-ink2">{money(budget)}</td>
+      <OverCell over={over} bold />
       <td />
       <td />
     </tr>
@@ -185,19 +183,16 @@ function SubtotalRow({ actual, budget }) {
 }
 
 // ── Add-row button (module scope) ────────────────────────────────────────────
-function AddRowButton({ onClick, label }) {
+export function AddRowButton({ onClick, label }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gold/50 bg-gold/[0.04] px-3 py-1.5 text-[12.5px] font-semibold text-gold transition-colors hover:bg-gold/10"
-    >
-      <Plus size={14} /> {label}
-    </button>
+    <Button variant="secondary" size="sm" onClick={onClick} icon={<Plus size={13} />}>
+      {label}
+    </Button>
   )
 }
 
 export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }) {
+  const reduce = useReducedMotion()
   const { items: savedItems, updatedAt, loading, refetch } = useCapitalSchedule(schoolId, periodId)
 
   const [rows, setRows] = useState([])
@@ -314,8 +309,8 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
 
   if (loading) {
     return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Loading the capital budget…</p>
+      <div className="b2-note" aria-busy="true">
+        <p>Loading the capital budget…</p>
       </div>
     )
   }
@@ -329,41 +324,27 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
       subB += toNum(r.budget)
     }
     return (
-      <div key={group} className="card-soft overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-rule bg-navy-gradient px-4 py-2.5">
-          <h4 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-gold-light">
-            {CAPITAL_GROUP_LABELS[group]}
-          </h4>
-          {canEdit && <AddRowButton onClick={() => onAdd(group)} label="Add project" />}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+      <Section
+        key={group}
+        label={CAPITAL_GROUP_LABELS[group]}
+        aside={canEdit ? <AddRowButton onClick={() => onAdd(group)} label="Add project" /> : null}
+      >
+        <div className="dt-wrap">
+          <table className="dt">
             <thead>
-              <tr className="bg-cream">
-                <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Project
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Actual YTD
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Budget
-                </th>
-                <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Over (Under)
-                </th>
-                <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
-                  Comment
-                </th>
-                <th className="px-2 py-2" />
+              <tr>
+                <th scope="col">Project</th>
+                <th scope="col" className="dt-num">Actual YTD</th>
+                <th scope="col" className="dt-num">Budget</th>
+                <th scope="col" className="dt-num">Over (Under)</th>
+                <th scope="col">Comment</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {groupRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-[12.5px] italic text-muted">
-                    No capital projects yet — add one.
-                  </td>
+                <tr className="dt-empty">
+                  <td colSpan={6}>No capital projects yet — add one.</td>
                 </tr>
               ) : (
                 groupRows.map((r, i) => (
@@ -383,73 +364,38 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
             </tbody>
           </table>
         </div>
-      </div>
+      </Section>
     )
   }
 
+  const grandOver = grand.actual - grand.budget
   return (
     <motion.div
       key="capital"
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-5"
     >
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-          <Landmark size={20} />
-        </span>
-        <div className="flex-1">
-          <h3 className="font-serif text-lg font-semibold text-navy">Capital Budget Summary</h3>
-          <p className="text-[13px] text-muted">
-            Track capital projects against budget. These flow into the Capital Budget section of your
-            board packet — over/(under) and totals are computed there.
-          </p>
-        </div>
-        {updatedAt && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[11px] font-medium text-muted">
-            <Clock size={12} /> Saved{' '}
-            {new Date(updatedAt).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-          </span>
-        )}
-      </div>
+      <ScheduleHeading
+        icon={Landmark}
+        title="Capital Budget Summary"
+        savedAt={updatedAt}
+        body="Track capital projects against budget. These flow into the Capital Budget section of your board packet — over/(under) and totals are computed there."
+      />
 
       {CAPITAL_GROUPS.map((g) => renderGroup(g))}
 
-      <div className="card-soft flex flex-wrap items-center justify-between gap-3 border-gold/40 bg-gold/[0.06] px-4 py-3">
-        <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
-          Total Capital
-        </span>
-        <div className="flex items-center gap-6 text-[14px] tabular-nums">
-          <span className="text-navy">
-            <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">Actual</span>
-            <span className="font-semibold">{money(grand.actual)}</span>
-          </span>
-          <span className="text-muted">
-            <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">Budget</span>
-            {money(grand.budget)}
-          </span>
-          <span
-            className={`font-semibold ${
-              grand.actual - grand.budget < 0
-                ? 'text-emerald-600'
-                : grand.actual - grand.budget > 0
-                  ? 'text-rose-600'
-                  : 'text-navy'
-            }`}
-          >
-            <span className="mr-1.5 text-[11px] uppercase tracking-[0.06em] text-muted">
-              Over (Under)
-            </span>
-            {money(grand.actual - grand.budget)}
-          </span>
-        </div>
-      </div>
+      <Section label="Total capital">
+        <StatStrip cols={3} className="stats-compact">
+          <Stat label="Actual" value={statMoney(grand.actual)} />
+          <Stat label="Budget" value={statMoney(grand.budget)} />
+          <Stat
+            label="Over (Under)"
+            value={signedMoney(grandOver)}
+            status={grandOver < 0 ? 'good' : grandOver > 0 ? 'risk' : undefined}
+          />
+        </StatStrip>
+      </Section>
 
       <ScheduleSaveBar
         canEdit={canEdit}
@@ -464,54 +410,67 @@ export default function CapitalScheduleWorkspace({ schoolId, periodId, canEdit }
   )
 }
 
-// Shared save bar (module scope) — reused by both schedule workspaces.
+// The schedule's own heading (module scope, shared by the three workspaces):
+// an icon stroke, the title in Garamond, the explainer, the "Saved …" Pill.
+export function ScheduleHeading({ icon: Icon, title, body, savedAt }) {
+  return (
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+      {Icon ? <Icon size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" /> : null}
+      <div className="min-w-0 flex-1">
+        <h3 className="font-serif text-title font-medium text-ink">{title}</h3>
+        <p className="mt-0.5 max-w-3xl text-small text-ink2">{body}</p>
+      </div>
+      {savedAt && (
+        <Pill>
+          <Clock size={11} aria-hidden="true" /> Saved{' '}
+          {new Date(savedAt).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Pill>
+      )}
+    </div>
+  )
+}
+
+// Shared save bar (module scope) — reused by the schedule workspaces. The one
+// raised surface here (an action): a Panel pinned to the viewport bottom while
+// the sheet scrolls — solid white, no glass.
 export function ScheduleSaveBar({ canEdit, saving, saveError, dirty, savedAt, onSave, label }) {
   return (
-    <div
-      key="schedule-save-bar"
-      className="card-soft sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 border-gold/40 bg-white/95 p-4 shadow-glow backdrop-blur"
-    >
-      <div>
-        <p className="font-serif text-[15px] font-semibold text-navy">Save {label}</p>
-        <p className="text-[12px] text-muted">
-          Autosaves as you edit. The next board report will include the updated section.
-        </p>
-      </div>
-      <div className="flex items-center gap-3">
-        {saving && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted">
-            <Loader2 size={16} className="animate-spin" /> Saving…
-          </span>
-        )}
-        {!saving && saveError && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-rose-600">
-            <AlertTriangle size={16} /> {saveError}
-          </span>
-        )}
-        {!saving && !saveError && !dirty && savedAt && (
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-600">
-            <CheckCircle2 size={16} /> Saved
-          </span>
-        )}
-        {!canEdit && (
-          <span className="text-[12px] italic text-muted">View-only — owner/accountant can save.</span>
-        )}
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!canEdit || !dirty || saving}
-          className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Saving…
-            </>
-          ) : (
-            <>
-              <Save size={16} /> Save
-            </>
+    <div key="schedule-save-bar" className="panel sticky bottom-4 z-10 mt-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold text-ink">Save {label}</p>
+          <p className="hidden text-small text-ink2 sm:block">
+            Autosaves as you edit. The next board report will include the updated section.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {!saving && saveError && (
+            <span className="b2-callout py-1" data-tone="risk" role="alert">
+              <AlertTriangle size={14} aria-hidden="true" /> {saveError}
+            </span>
           )}
-        </button>
+          {!saving && !saveError && !dirty && savedAt && (
+            <span className="b2-callout py-1" data-tone="good" role="status">
+              <CheckCircle2 size={14} aria-hidden="true" /> Saved
+            </span>
+          )}
+          {!canEdit && (
+            <span className="text-small italic text-ink2">View-only — owner/accountant can save.</span>
+          )}
+          <Button
+            variant="primary"
+            onClick={onSave}
+            disabled={!canEdit || !dirty || saving}
+            icon={saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </div>
     </div>
   )

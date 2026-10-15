@@ -2,6 +2,7 @@
 // the /organizations/me `can_edit` flag) + a list of the org's schools with
 // quick-switch (reuses SchoolContext.setActiveSchool) and a Create-school
 // affordance. No billing/payments here (Phase 1D).
+import '../../styles/pending/b2-finance.css'
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Building2, Check, Plus } from 'lucide-react'
@@ -15,7 +16,7 @@ import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import SettingsCard from './SettingsCard.jsx'
 
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 export default function OrgSection() {
   const { activeId, setActiveSchool, createSchool } = useSchools()
@@ -102,7 +103,7 @@ export default function OrgSection() {
   if (loading) {
     return (
       <SettingsCard title="Organization">
-        <p className="text-[16px] text-muted">Loading…</p>
+        <p className="text-[16px] text-ink2">Loading…</p>
       </SettingsCard>
     )
   }
@@ -110,7 +111,7 @@ export default function OrgSection() {
   if (!org) {
     return (
       <SettingsCard title="Organization">
-        <p className="text-[16px] text-muted">No organization found.</p>
+        <p className="text-[16px] text-ink2">No organization found.</p>
       </SettingsCard>
     )
   }
@@ -122,7 +123,7 @@ export default function OrgSection() {
         description={canEdit ? 'Rename your organization.' : 'Read-only — only an owner can edit.'}
       >
         <div className="mb-5">
-          <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
             Organization name
           </label>
           <input
@@ -156,7 +157,7 @@ export default function OrgSection() {
           canEdit ? (
             <button
               onClick={() => setShowCreate((s) => !s)}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[15px] font-semibold text-navy transition-colors hover:bg-gold/10"
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-hair px-3 py-1.5 text-[15px] font-semibold text-ink transition-colors hover:bg-ink/[0.04]"
             >
               <Plus size={15} /> Create school
             </button>
@@ -164,7 +165,7 @@ export default function OrgSection() {
         }
       >
         {canEdit && showCreate && (
-          <div className="mb-5 rounded-xl border border-gold/30 bg-navy/[0.02] p-4">
+          <div className="mb-5 rounded-[8px] border border-hair bg-ground p-4">
             <input
               className={`${inputCls} mb-3`}
               value={csName}
@@ -203,7 +204,7 @@ export default function OrgSection() {
               whileTap={{ scale: csName.trim() ? 0.98 : 1 }}
               onClick={createNew}
               disabled={!csName.trim() || csBusy}
-              className="btn-primary mt-3 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary mt-3 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {csBusy ? 'Creating…' : 'Create'}
             </motion.button>
@@ -218,20 +219,20 @@ export default function OrgSection() {
                   onClick={() => setActiveSchool(s.id)}
                   className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                     active
-                      ? 'border-gold bg-gold/10'
-                      : 'border-border bg-white hover:border-gold/40'
+                      ? 'border-[#2563EB]/60 bg-[#2563EB]/[0.06]'
+                      : 'border-hair/[0.18] bg-white hover:border-hair'
                   }`}
                 >
                   <span className="flex items-center gap-2 text-[16px] text-ink">
-                    <Building2 size={16} className="text-gold" />
+                    <Building2 size={16} className="text-ink2" />
                     <span className="font-semibold">{s.name}</span>
-                    <span className="rounded bg-navy/[0.06] px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <span className="rounded bg-ink/[0.06] px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-ink2">
                       {memberRoleLabel(s.role)}
                     </span>
                   </span>
                   {active && (
-                    <span className="flex items-center gap-1 text-[14px] font-semibold text-navy">
-                      <Check size={15} className="text-gold" /> Active
+                    <span className="flex items-center gap-1 text-[14px] font-semibold text-ink">
+                      <Check size={15} className="text-ink2" /> Active
                     </span>
                   )}
                 </button>

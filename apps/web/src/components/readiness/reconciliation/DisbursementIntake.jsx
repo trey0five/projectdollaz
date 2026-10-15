@@ -120,44 +120,53 @@ export default function DisbursementIntake({ existing, onSave, onClear, saving }
         onClick={() => inputRef.current?.click()}
         role="button"
         tabIndex={0}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-9 text-center transition-colors ${
-          dragging ? 'border-gold bg-gold/5' : 'border-border bg-white hover:border-gold/50'
-        }`}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            inputRef.current?.click()
+          }
+        }}
+        data-active={dragging ? 'true' : undefined}
+        className="b2-drop"
       >
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-          <UploadCloud size={22} />
+        <span className="b2-drop-icon">
+          <UploadCloud size={26} aria-hidden="true" />
         </span>
-        <p className="font-serif text-base font-semibold text-navy">
+        <p className="text-heading font-semibold text-ink">
           Drop the funding-org disbursement export
         </p>
-        <p className="text-[14px] text-muted">
+        <p className="text-small text-ink2">
           CSV or Excel from Step Up For Students · parsed in your browser, columns mapped next
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn-ghost">
-          <FileSpreadsheet size={15} /> Choose file
+        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-secondary">
+          <FileSpreadsheet size={14} aria-hidden="true" /> Choose file
         </button>
-        <button type="button" onClick={() => setEditing(true)} className="btn-ghost">
-          <Pencil size={15} /> {existing && existing.length > 0 ? 'Edit rows' : 'Add manually'}
+        <button type="button" onClick={() => setEditing(true)} className="btn btn-secondary">
+          <Pencil size={14} aria-hidden="true" /> {existing && existing.length > 0 ? 'Edit rows' : 'Add manually'}
         </button>
-        <button type="button" onClick={downloadTemplate} className="btn-ghost">
-          <Download size={15} /> Download template
+        <button type="button" onClick={downloadTemplate} className="btn btn-secondary">
+          <Download size={14} aria-hidden="true" /> Download template
         </button>
         {existing && existing.length > 0 && (
           <button
             type="button"
             onClick={onClear}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-50"
+            className="btn btn-quiet"
           >
-            <Trash2 size={15} /> Clear set
+            <Trash2 size={14} aria-hidden="true" /> Clear set
           </button>
         )}
       </div>
 
-      {error && <p className="text-[14px] text-danger">{error}</p>}
+      {error && (
+        <p className="b2-callout b2-risk" role="alert">
+          {error}
+        </p>
+      )}
 
       <input
         ref={inputRef}

@@ -12,6 +12,7 @@ import SummaryStrip from './SummaryStrip.jsx'
 import ExportMenu from './ExportMenu.jsx'
 import SaveBar from './SaveBar.jsx'
 import PromotePyToggle from './PromotePyToggle.jsx'
+import '../styles/pending/b2-finance.css'
 import { SLOT_ROLES, ROLE_META } from '../lib/roleMeta.js'
 
 const ACCEPT = '.xlsx,.xls,.csv'
@@ -129,7 +130,7 @@ export default function IntakeBar() {
   }
 
   return (
-    <section className="no-print relative border-b border-rule bg-section py-4 sm:py-7">
+    <section className="no-print relative py-4 sm:py-6">
       <DragOverlay />
 
       <div className="mx-auto max-w-page px-4 sm:px-10">
@@ -160,11 +161,11 @@ export default function IntakeBar() {
                 </div>
               </>
             ) : (
-              <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-12 text-center">
-                <p className="font-serif text-lg italic text-muted">
+              <div className="rounded-[8px] border border-dashed border-hair/[0.18] bg-white px-6 py-12 text-center">
+                <p className="font-serif text-lg italic text-ink2">
                   No saved statements yet for this school.
                 </p>
-                <p className="mt-1 text-[15px] text-muted">
+                <p className="mt-1 text-[15px] text-ink2">
                   You have view-only access. Saved periods appear in History.
                 </p>
               </div>
@@ -207,7 +208,7 @@ export default function IntakeBar() {
                 period bar. Saving is the job; Add is secondary; Cancel and
                 Export are things you occasionally need and never look for. */}
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="font-serif text-lg font-semibold text-navy sm:text-xl">
+              <h2 className="text-heading font-semibold text-ink">
                 Your files
               </h2>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2">
@@ -215,9 +216,9 @@ export default function IntakeBar() {
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}
-                    className="btn-ghost w-full shrink-0 justify-center whitespace-nowrap sm:h-[52px] sm:w-[120px]"
+                    className="btn btn-secondary w-full shrink-0 whitespace-nowrap sm:w-auto"
                   >
-                    <Plus size={16} /> Add
+                    <Plus size={14} aria-hidden="true" /> Add
                   </button>
                 )}
                 {/* id anchors Penny's "save your trial balance" glide. */}
@@ -232,7 +233,7 @@ export default function IntakeBar() {
 
             {/* same-document warning (e.g. the same TB dropped into every slot) */}
             {duplicateSlots && (
-              <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-3 text-[15px] text-[#7a5e00]">
+              <div className="b2-callout mb-5" data-tone="watch">
                 <Files size={16} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold">The same file looks like it’s in more than one slot.</p>
@@ -252,7 +253,8 @@ export default function IntakeBar() {
                 {conflicts.map((c, i) => (
                   <div
                     key={`${c.kind}-${i}`}
-                    className="flex items-center gap-2 rounded-lg border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-2.5 text-[15px] font-medium text-[#7a5e00]"
+                    className="b2-callout font-medium"
+                    data-tone="watch"
                   >
                     <AlertTriangle size={15} className="shrink-0" />
                     {CONFLICT_COPY[c.kind](c)}
@@ -270,10 +272,8 @@ export default function IntakeBar() {
                 const meta = ROLE_META[role]
                 return (
                   <div key={role} className="flex flex-col">
-                    <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-navy">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gold/15 text-[13px] font-bold text-gold">
-                        {meta.step}
-                      </span>
+                    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+                      <span className="tabular-nums text-ink">{meta.step}</span>
                       {meta.plainLabel}
                     </p>
                     <AnimatePresence mode="wait" initial={false}>
@@ -299,10 +299,10 @@ export default function IntakeBar() {
                       ) : (
                         <div
                           key={`empty-ro-${role}`}
-                          className="flex min-h-[196px] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-section px-4 py-8 text-center"
+                          className="flex min-h-[196px] w-full flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed border-hair/[0.18] bg-ground px-4 py-8 text-center"
                         >
-                          <p className="font-serif text-base font-semibold text-navy">{meta.plainLabel}</p>
-                          <p className="text-[14px] italic text-muted">Not provided</p>
+                          <p className="text-[15px] font-semibold text-ink">{meta.plainLabel}</p>
+                          <p className="text-[14px] italic text-ink2">Not provided</p>
                         </div>
                       )}
                     </AnimatePresence>
@@ -320,8 +320,8 @@ export default function IntakeBar() {
                 RoleChip + remove; confirming a role promotes it into its slot. */}
             {unslotted.length > 0 && (
               <div className="mt-6">
-                <p className="mb-3 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-[0.1em] text-[#7a5e00]">
-                  <AlertTriangle size={14} className="text-gold" /> Needs a role
+                <p className="mb-3 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-[0.1em] text-ink">
+                  <AlertTriangle size={14} className="text-ink2" /> Needs a role
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <AnimatePresence>
@@ -366,7 +366,7 @@ export default function IntakeBar() {
       />
 
       {status && (
-        <p aria-live="polite" className="mt-4 text-[15px] italic text-muted">
+        <p aria-live="polite" className="mt-4 text-[15px] italic text-ink2">
           {status}
         </p>
       )}

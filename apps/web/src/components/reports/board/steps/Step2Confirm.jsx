@@ -3,18 +3,20 @@
 //   (a) !hasSnapshot          -> guidance card + link to /statements, Next disabled
 //   (b) hasSnapshot,!hasBudget -> soft warning (variance shows Actual only), Next ON
 //   (c) all present            -> "ready as of {dataAsOf}" + revenue/expense/surplus
-//                                 tiles + KPI chips, read-only confirmation.
+//                                 StatStrip + ruled KPI lines, read-only confirmation.
 import { Link } from 'react-router-dom'
 import { CheckCircle2, AlertTriangle, FileX2, TrendingUp } from 'lucide-react'
-import { money, formatIndicator, dateTime } from '../boardReportUtils.js'
+import { formatIndicator, dateTime } from '../boardReportUtils.js'
 import WizardNav from './WizardNav.jsx'
+import { StatStrip, Stat } from '../../../ui/surface/index.js'
+import { statMoney, signedMoney } from '../../../budget/StatFigure.jsx'
 
 export default function Step2Confirm({ ctx }) {
   const { data, goTo, loading } = ctx
 
   if (loading || !data) {
     return (
-      <p className="py-10 text-center text-[14px] text-muted">Assembling this period&apos;s financials…</p>
+      <p className="py-10 text-center text-[14px] text-ink2">Assembling this period&apos;s financials…</p>
     )
   }
 
@@ -25,19 +27,16 @@ export default function Step2Confirm({ ctx }) {
     return (
       <div>
         {header()}
-        <div className="rounded-xl border border-amber-300/70 bg-amber-50 px-5 py-6">
-          <div className="mb-2 flex items-center gap-2 text-amber-800">
-            <FileX2 size={20} />
-            <h3 className="font-serif text-lg font-semibold">No statements for this period yet</h3>
+        <div className="b2-callout b2-watch flex-col !gap-1 py-3">
+          <div className="flex items-center gap-2">
+            <FileX2 size={18} aria-hidden="true" className="text-ink2" />
+            <h3 className="text-heading font-semibold text-ink">No statements for this period yet</h3>
           </div>
-          <p className="text-[13.5px] text-amber-900/80">
+          <p className="text-small text-ink2">
             The board report builds from a generated statement snapshot. Generate statements for{' '}
-            <strong>{data.label}</strong> first, then return here.
+            <strong className="text-ink">{data.label}</strong> first, then return here.
           </p>
-          <Link
-            to="/statements"
-            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-amber-400 bg-white px-4 py-2 text-[13px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
-          >
+          <Link to="/statements" className="btn btn-secondary btn-sm mt-2 self-start">
             Go to Statements
           </Link>
         </div>
@@ -56,17 +55,17 @@ export default function Step2Confirm({ ctx }) {
     <div>
       {header()}
 
-      <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-emerald-300/70 bg-emerald-50 px-3.5 py-2 text-[13px] font-semibold text-emerald-800">
-        <CheckCircle2 size={16} />
+      <p className="b2-callout b2-good mb-4 font-semibold">
+        <CheckCircle2 size={14} aria-hidden="true" />
         Financials ready{av.dataAsOf ? ` as of ${dateTime(av.dataAsOf)}` : ''}
-      </div>
+      </p>
 
       {!av.hasBudget && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+        <div className="b2-callout b2-watch mb-4">
+          <AlertTriangle size={14} aria-hidden="true" />
           <span>
             No budget set for this period — variance columns will show <strong>actuals only</strong>.{' '}
-            <Link to="/budget" className="font-semibold underline decoration-amber-400 underline-offset-2">
+            <Link to="/budget" className="font-semibold underline decoration-hair underline-offset-2 hover:decoration-ink">
               Add a budget
             </Link>{' '}
             for full budget-vs-actual.
@@ -74,28 +73,27 @@ export default function Step2Confirm({ ctx }) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {tile('Total revenue', rev?.actual, 'emerald')}
-        {tile('Total expenses', exp?.actual, 'rose')}
-        {tile('Net surplus / (deficit)', net?.actual, 'gold')}
-      </div>
+      <StatStrip cols={3} className="stats-compact border-t border-hair">
+        <Stat label="Total revenue" value={statMoney(rev?.actual)} />
+        <Stat label="Total expenses" value={statMoney(exp?.actual)} />
+        <Stat
+          label="Net surplus / (deficit)"
+          value={signedMoney(net?.actual)}
+          status={!net?.actual ? 'neutral' : net.actual < 0 ? 'risk' : 'good'}
+        />
+      </StatStrip>
 
       {kpis.length > 0 && (
         <div className="mt-5">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-gold">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
             <TrendingUp size={13} /> Key indicators
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="sec-cols">
             {kpis.map((k) => (
-              <span
-                key={k.key}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rule/60 bg-section px-3 py-1.5 text-[12.5px]"
-              >
-                <span className="text-muted">{k.label}</span>
-                <span className="font-semibold tabular-nums text-navy">
-                  {formatIndicator(k.value, k.unit)}
-                </span>
-              </span>
+              <div key={k.key} className="fig">
+                <span className="fig-label">{k.label}</span>
+                <span className="fig-value">{formatIndicator(k.value, k.unit)}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -113,27 +111,10 @@ export default function Step2Confirm({ ctx }) {
 function header() {
   return (
     <header className="mb-5">
-      <h2 className="font-serif text-2xl font-semibold text-navy">Confirm the pulled financials</h2>
-      <p className="mt-1 text-[13.5px] text-muted">
+      <h2 className="font-serif text-title font-medium text-ink">Confirm the pulled financials</h2>
+      <p className="mt-1 text-[13.5px] text-ink2">
         These figures come straight from your saved statements and budget — review before you build.
       </p>
     </header>
-  )
-}
-
-function tile(label, value, tone) {
-  const ring =
-    tone === 'emerald'
-      ? 'border-emerald-200 bg-emerald-50/60'
-      : tone === 'rose'
-        ? 'border-rose-200 bg-rose-50/60'
-        : 'border-gold/30 bg-gold/[0.06]'
-  return (
-    <div className={`rounded-xl border-2 px-4 py-3.5 ${ring}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</p>
-      <p className="mt-1 font-serif text-[22px] font-semibold tabular-nums text-navy">
-        ${money(value)}
-      </p>
-    </div>
   )
 }

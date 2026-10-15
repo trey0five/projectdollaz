@@ -88,12 +88,10 @@ export default function YearEndChecklistSection({ schoolId, periodId, canEdit })
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-start gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-            <ListChecks size={19} />
-          </span>
+          <ListChecks size={18} aria-hidden="true" className="mt-1.5 shrink-0 text-ink2" />
           <div>
-            <h2 className="font-serif text-xl font-semibold text-navy">Year-End Review Checklist</h2>
-            <p className="text-[15px] text-muted">
+            <h2 className="font-serif text-title font-medium text-ink">Year-End Review Checklist</h2>
+            <p className="text-small text-ink2">
               {canEdit
                 ? 'Walk each AUP procedure + gather the documents the reviewer will request. Changes autosave.'
                 : 'Read-only — only an owner or accountant can update the checklist.'}
@@ -104,8 +102,8 @@ export default function YearEndChecklistSection({ schoolId, periodId, canEdit })
       </div>
 
       {loading && !data ? (
-        <div className="card-soft p-8 text-center text-[16px] text-muted">
-          Loading the year-end checklist…
+        <div className="b2-note" aria-busy="true">
+          <p>Loading the year-end checklist…</p>
         </div>
       ) : error ? (
         <FormError>{error}</FormError>
@@ -133,7 +131,7 @@ export default function YearEndChecklistSection({ schoolId, periodId, canEdit })
               dirty={dirtyCount > 0}
               error={!!saveError}
               onSaveNow={saveNow}
-              className="border-t border-rule/60 pt-4"
+              className="border-t border-hair pt-4"
             />
           )}
         </>

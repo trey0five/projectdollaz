@@ -8,11 +8,15 @@
 // local state (no in-render component defs). Animated fill on load. Navy/gold.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
-import { CheckCircle2, Plus, RotateCcw, Trash2, Loader2, FileSpreadsheet } from 'lucide-react'
+import { Plus, RotateCcw, Trash2, Loader2, FileSpreadsheet } from 'lucide-react'
 import { fyMonthKeys } from '../../lib/monthlyShapes.js'
 import { formatRelative } from '../../lib/format.js'
+import { DataTable, Button } from '../ui/surface/index.js'
 
+// Premium UI P4: the twelve fiscal months as ONE DataTable (Month · Source ·
+// Rows · Updated · actions) with a 2px status mark per row (loaded = good),
+// not a wall of month cards. Row actions fade in on hover (always on under
+// touch / focus); the delete keeps its inline two-step confirm.
 export default function LoadedMonthsList({
   fiscalYearStart,
   months = [],
@@ -43,114 +47,88 @@ export default function LoadedMonthsList({
 
   if (!cells.length) return null
 
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {cells.map((cell, i) => {
-        const loaded = byKey.get(cell.monthKey)
-        const isConfirming = confirming === cell.monthKey
-        const isDeleting = deleting === cell.monthKey
-        return (
-          <motion.div
-            key={cell.monthKey}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.02 * i }}
-            className={`flex min-h-[118px] flex-col rounded-xl border p-3.5 transition-colors ${
-              loaded
-                ? 'border-gold/40 bg-white shadow-card'
-                : 'border-dashed border-rule/70 bg-section/40'
-            }`}
+  const rows = cells.map((cell) => ({ ...cell, loaded: byKey.get(cell.monthKey) ?? null }))
+
+  const renderActions = (r) => {
+    if (!canEdit) return r.loaded ? null : <span className="text-[12px] italic text-ink2">Not loaded</span>
+    if (!r.loaded) {
+      return (
+        <span className="dt-actions inline-flex">
+          <Button variant="quiet" size="sm" onClick={() => onReplace?.(r.monthKey)} icon={<Plus size={12} />}>
+            Add
+          </Button>
+        </span>
+      )
+    }
+    const isConfirming = confirming === r.monthKey
+    const isDeleting = deleting === r.monthKey
+    if (isConfirming) {
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-[12px] font-medium text-ink">Delete {r.label}?</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleDelete(r.monthKey)}
+            disabled={isDeleting}
+            icon={isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span
-                className={`text-[14px] font-bold uppercase tracking-[0.08em] ${
-                  loaded ? 'text-navy' : 'text-muted'
-                }`}
-              >
-                {cell.label}
-              </span>
-              {loaded && <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />}
-            </div>
+            Confirm
+          </Button>
+          <Button variant="quiet" size="sm" onClick={() => setConfirming(null)} disabled={isDeleting}>
+            Cancel
+          </Button>
+        </span>
+      )
+    }
+    return (
+      <span className="dt-actions inline-flex items-center gap-1">
+        <Button variant="quiet" size="sm" onClick={() => onReplace?.(r.monthKey)} icon={<RotateCcw size={12} />}>
+          Replace
+        </Button>
+        <Button
+          variant="quiet"
+          size="sm"
+          onClick={() => setConfirming(r.monthKey)}
+          aria-label={`Delete ${r.label}`}
+          icon={<Trash2 size={12} />}
+        />
+      </span>
+    )
+  }
 
-            {loaded ? (
-              <>
-                <div className="mt-2 flex min-w-0 items-center gap-1.5">
-                  <FileSpreadsheet size={13} className="shrink-0 text-gold" />
-                  <span className="truncate text-[14px] font-medium text-ink" title={loaded.sourceName}>
-                    {loaded.sourceName}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-[13px] text-muted">
-                  {loaded.rowCount} rows
-                  {loaded.updatedAt ? ` · ${formatRelative(loaded.updatedAt)}` : ''}
-                </p>
+  const columns = [
+    { key: 'label', header: 'Month', render: (r) => <span className={r.loaded ? 'font-semibold text-ink' : 'text-ink2'}>{r.label}</span> },
+    {
+      key: 'source',
+      header: 'Trial balance',
+      render: (r) =>
+        r.loaded ? (
+          <span className="inline-flex max-w-[260px] items-center gap-1.5" title={r.loaded.sourceName}>
+            <FileSpreadsheet size={13} aria-hidden="true" className="shrink-0 text-ink2" />
+            <span className="truncate">{r.loaded.sourceName}</span>
+          </span>
+        ) : (
+          <span className="text-ink2">—</span>
+        ),
+    },
+    { key: 'rows', header: 'Rows', num: true, render: (r) => (r.loaded ? r.loaded.rowCount : '—') },
+    {
+      key: 'updated',
+      header: 'Updated',
+      className: 'whitespace-nowrap text-ink2',
+      render: (r) => (r.loaded?.updatedAt ? formatRelative(r.loaded.updatedAt) : '—'),
+    },
+    { key: 'actions', header: <span className="sr-only">Actions</span>, className: 'text-right whitespace-nowrap', render: renderActions },
+  ]
 
-                {canEdit && (
-                  <div className="mt-auto pt-2.5">
-                    {isConfirming ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(cell.monthKey)}
-                          disabled={isDeleting}
-                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-rose-600 px-2 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-60"
-                        >
-                          {isDeleting ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Trash2 size={12} />
-                          )}
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirming(null)}
-                          disabled={isDeleting}
-                          className="rounded-lg border border-rule px-2 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-navy"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onReplace?.(cell.monthKey)}
-                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-rule px-2 py-1.5 text-[13px] font-semibold text-navy transition-colors hover:border-gold/60 hover:text-gold"
-                        >
-                          <RotateCcw size={12} /> Replace
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirming(cell.monthKey)}
-                          aria-label={`Delete ${cell.label}`}
-                          className="rounded-lg border border-rule p-1.5 text-muted transition-colors hover:border-rose-300 hover:text-rose-600"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="mt-auto pt-2.5">
-                {canEdit ? (
-                  <button
-                    type="button"
-                    onClick={() => onReplace?.(cell.monthKey)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-dashed border-rule px-2 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:border-gold/60 hover:text-gold"
-                  >
-                    <Plus size={12} /> Add
-                  </button>
-                ) : (
-                  <span className="text-[13px] italic text-muted/70">Not loaded</span>
-                )}
-              </div>
-            )}
-          </motion.div>
-        )
-      })}
-    </div>
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey="monthKey"
+      markOf={(r) => (r.loaded ? 'good' : null)}
+      caption="Monthly trial balances for the fiscal year"
+    />
   )
 }

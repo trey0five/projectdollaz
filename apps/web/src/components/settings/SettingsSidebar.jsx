@@ -42,7 +42,7 @@ export default function SettingsSidebar() {
           value={current}
           onChange={(e) => navigate(`/settings/${e.target.value}`)}
           aria-label="Settings section"
-          className="min-h-[44px] w-full rounded-lg border-2 border-border bg-white px-4 py-2 text-[16px] font-semibold text-navy outline-none focus:border-gold"
+          className="sel h-11 w-full !max-w-none"
         >
           {NAV.map((n) => (
             <option key={n.to} value={n.to}>
@@ -53,22 +53,22 @@ export default function SettingsSidebar() {
       </div>
 
       {/* Desktop: vertical nav */}
-      <nav className="hidden shrink-0 sm:block sm:w-60">
-        <ul className="space-y-1">
+      <nav className="hidden shrink-0 sm:block sm:w-56" aria-label="Settings sections">
+        <ul className="border-t border-hair">
           {/* eslint-disable-next-line no-unused-vars -- Icon is rendered as <Icon /> below */}
           {NAV.map(({ to, label, Icon }) => (
-            <li key={to}>
+            <li key={to} className="border-b border-hair">
               <NavLink
                 to={to}
                 className={({ isActive }) =>
-                  `flex min-h-[44px] items-center gap-3 rounded-lg border-l-[3px] px-4 py-2.5 text-[16px] font-semibold transition-colors ${
+                  `flex min-h-[40px] items-center gap-2.5 border-l-2 py-2 pl-3 pr-2 text-[13px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#2563EB]/50 ${
                     isActive
-                      ? 'border-gold bg-gold/10 text-white'
-                      : 'border-transparent text-white/70 hover:bg-white/5 hover:text-white'
+                      ? 'border-[#2563EB] text-ink'
+                      : 'border-transparent text-ink2 hover:bg-ink/[0.03] hover:text-ink'
                   }`
                 }
               >
-                <Icon size={17} />
+                <Icon size={15} aria-hidden="true" />
                 {label}
               </NavLink>
             </li>

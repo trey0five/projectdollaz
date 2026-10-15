@@ -1,5 +1,6 @@
 import { fmtDollar, formatShortDate } from '../../../lib/format.js'
 import { programLabel } from '../../../lib/complianceMeta.js'
+import { Pill } from '../../ui/surface/index.js'
 
 /** A small preview of the first N mapped rows so the user can sanity-check. */
 export default function MappingPreview({ disbursements, limit = 6 }) {
@@ -14,36 +15,36 @@ export default function MappingPreview({ disbursements, limit = 6 }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3 text-[14px]">
-        <span className="font-semibold text-navy">
+      <div className="flex flex-wrap items-center gap-3 text-[13px]">
+        <span className="font-semibold text-ink">
           {disbursements.length} row{disbursements.length === 1 ? '' : 's'}
         </span>
-        <span className="text-muted">
-          mapped total <span className="font-semibold text-navy tabular-nums">{fmtDollar(mappedTotal)}</span>
+        <span className="text-ink2">
+          mapped total <span className="font-semibold text-ink tabular-nums">{fmtDollar(mappedTotal)}</span>
         </span>
         {badAmount > 0 && (
-          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[13px] font-semibold text-danger">
+          <Pill variant="status" tone="risk">
             {badAmount} row{badAmount === 1 ? '' : 's'} with no parseable amount
-          </span>
+          </Pill>
         )}
       </div>
-      <div className="overflow-hidden rounded-lg border border-rule/60">
-        <table className="w-full text-[14px]">
+      <div className="dt-wrap">
+        <table className="dt">
           <thead>
-            <tr className="border-b border-rule bg-section text-left text-[12px] uppercase tracking-[0.08em] text-muted">
-              <th className="px-3 py-1.5 font-semibold">Student</th>
-              <th className="px-3 py-1.5 font-semibold">Program</th>
-              <th className="px-3 py-1.5 font-semibold">Date</th>
-              <th className="px-3 py-1.5 text-right font-semibold">Amount</th>
+            <tr>
+              <th scope="col">Student</th>
+              <th scope="col">Program</th>
+              <th scope="col">Date</th>
+              <th scope="col" className="dt-num">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-rule/40">
+          <tbody>
             {rows.map((d, i) => (
-              <tr key={i} className="bg-white">
-                <td className="px-3 py-1.5 text-navy">{d.studentRef ?? '—'}</td>
-                <td className="px-3 py-1.5 text-muted">{d.program ? programLabel(d.program) : 'Unknown'}</td>
-                <td className="px-3 py-1.5 text-muted">{formatShortDate(d.payDate)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-navy">
+              <tr key={i}>
+                <td>{d.studentRef ?? '—'}</td>
+                <td className="text-ink2">{d.program ? programLabel(d.program) : 'Unknown'}</td>
+                <td className="whitespace-nowrap text-ink2">{formatShortDate(d.payDate)}</td>
+                <td className="dt-num">
                   {typeof d.amount === 'number' && Number.isFinite(d.amount) ? fmtDollar(d.amount) : '—'}
                 </td>
               </tr>
@@ -52,7 +53,7 @@ export default function MappingPreview({ disbursements, limit = 6 }) {
         </table>
       </div>
       {disbursements.length > limit && (
-        <p className="text-[13px] italic text-muted">…and {disbursements.length - limit} more.</p>
+        <p className="text-[13px] italic text-ink2">…and {disbursements.length - limit} more.</p>
       )}
     </div>
   )

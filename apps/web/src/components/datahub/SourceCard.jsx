@@ -13,7 +13,12 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Maximize2, Sparkles } from 'lucide-react'
 import StatusBadge from './StatusBadge.jsx'
+import { Button } from '../ui/surface/index.js'
 
+// Premium UI P4: each checklist source is a `Tile` (hairline, 2px hue rule,
+// the one-shot hover flood) carrying a status Pill; the active / next step
+// wears a 2px primary frame (static — the old infinite spotlight pulse is
+// gone; motion is one-shot). The action is a real Button / link in the foot.
 export default function SourceCard({
   source, // { key, title, Icon, what, cta, action, to }
   status, // sources[key]: { status, detail, count, total, roles }
@@ -26,78 +31,45 @@ export default function SourceCard({
   const detail = status?.detail || ''
   const isEmbed = source.action === 'embed'
 
-  const ringCls = isActive
-    ? reduce
-      ? 'border-gold ring-2 ring-gold/50'
-      : 'border-gold/70'
-    : 'border-gold/25 hover:border-gold/50'
-
   return (
     <motion.section
       id={`datahub-card-${source.key}`}
       data-card={source.key}
       initial={reduce ? false : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative flex h-full flex-col rounded-2xl border-2 bg-white p-3.5 shadow-card transition-colors sm:p-5 ${ringCls}`}
+      className={`tile h-full ${isActive ? 'outline outline-2 outline-offset-2 outline-[#2563EB]/60' : ''}`}
+      style={{ '--c-module': '37 99 235' }}
     >
-      {/* Animated spotlight pulse (decorative; pointer-events none). */}
-      {isActive && !reduce && (
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-gold/60"
-          animate={{ opacity: [0.15, 0.6, 0.15], scale: [1, 1.012, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      )}
-
-      <div className="relative flex items-start justify-between gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold sm:h-11 sm:w-11">
-          <Icon size={20} className="sm:hidden" />
-          <Icon size={22} className="hidden sm:block" />
-        </span>
+      <div className="tile-head">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="tile-icon">
+            <Icon size={20} aria-hidden="true" />
+          </span>
+          <h3 className="tile-title">{source.title}</h3>
+        </div>
         <StatusBadge status={st} />
       </div>
+      <p className="tile-body">{source.what}</p>
 
-      <h3 className="relative mt-2.5 font-serif text-base font-bold text-navy sm:mt-3 sm:text-xl">
-        {source.title}
-      </h3>
-      <p className="relative mt-1 text-[12.5px] leading-relaxed text-muted sm:mt-1.5 sm:text-[15px]">
-        {source.what}
-      </p>
-
-      {detail && (
-        <p className="relative mt-2 text-[12px] font-medium text-navy/80 sm:mt-2.5 sm:text-[14.5px]">
-          {detail}
-        </p>
-      )}
+      {detail && <p className="text-[12.5px] font-medium text-ink">{detail}</p>}
 
       {isActive && (
-        <p className="relative mt-2 inline-flex items-center gap-1 self-start rounded-full bg-gold/15 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-gold sm:px-2.5 sm:text-[13px]">
-          <Sparkles size={12} aria-hidden="true" /> Start here
+        <p className="inline-flex items-center gap-1 self-start text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+          <Sparkles size={12} aria-hidden="true" className="text-penny" /> Start here
         </p>
       )}
 
-      {/* Flex spacer pins the action to the bottom so every card is the same height. */}
-      <div className="relative mt-3 flex-1 sm:mt-4" />
-
-      {/* Action: open the embed in a modal OR link out. */}
-      <div className="relative">
+      {/* Action: open the embed in a modal OR link out — pinned to the foot. */}
+      <div className="tile-foot">
         {isEmbed ? (
-          <button
-            type="button"
-            onClick={onOpen}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-gold transition-all hover:border-gold/70 hover:bg-gold/5 sm:px-3.5 sm:py-2 sm:text-[14px]"
-          >
+          <Button variant="secondary" size="sm" onClick={onOpen}>
             {source.cta}
-            <Maximize2 size={14} />
-          </button>
+            <Maximize2 size={12} aria-hidden="true" />
+          </Button>
         ) : (
-          <Link
-            to={source.to}
-            className="group inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-gold transition-colors hover:text-gold-light sm:text-[14px]"
-          >
+          <Link to={source.to} className="dt-link group text-small">
             {source.cta}
-            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight size={14} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
           </Link>
         )}
       </div>

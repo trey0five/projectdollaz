@@ -10,17 +10,18 @@ import { CreditCard, Check, AlertTriangle, Loader2, ExternalLink, Lock, Plus } f
 import { useBilling } from '../../context/BillingContext.jsx'
 import { apiErrorMessage } from '../../lib/api.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
+import { Pill } from '../ui/surface/index.js'
 import { TILE_BY_KEY } from '../home/tileRegistry.jsx'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
 import UnlockCelebration from './UnlockCelebration.jsx'
 
 const STATUS_META = {
-  trialing: { label: 'Trial', cls: 'bg-gold/15 text-navy' },
-  active: { label: 'Active', cls: 'bg-emerald-50 text-emerald-700' },
-  past_due: { label: 'Past due', cls: 'bg-amber-50 text-amber-700' },
-  canceled: { label: 'Canceled', cls: 'bg-red-50 text-red-700' },
-  none: { label: 'Inactive', cls: 'bg-navy/[0.06] text-muted' },
+  trialing: { label: 'Trial', cls: 'bg-ink/[0.04] text-ink' },
+  active: { label: 'Active', cls: 'bg-white text-ink' },
+  past_due: { label: 'Past due', cls: 'bg-white text-ink' },
+  canceled: { label: 'Canceled', cls: 'bg-white text-ink' },
+  none: { label: 'Inactive', cls: 'bg-ink/[0.06] text-ink2' },
 }
 
 function StatusPill({ status }) {
@@ -87,14 +88,17 @@ function ModulesManager({ onUnlocked }) {
   }
 
   return (
-    <div ref={rootRef} id="membership-modules" className="mt-8 border-t border-border pt-6">
-      <h3 className="font-serif text-[19px] font-semibold text-navy">Modules</h3>
-      <p className="mt-1 text-[15px] text-muted">
+    <div ref={rootRef} id="membership-modules" className="mt-8 border-t border-hair/[0.18] pt-6">
+      <h3 className="text-heading font-semibold text-ink">Modules</h3>
+      <p className="mt-1 text-small text-ink2">
         Your plan includes Core and Finance. Add the modules your school needs — they unlock
         instantly.
       </p>
 
-      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* Premium UI P4: a ruled list (one row per module — its art, its name
+          and benefit, then the state), not a wall of tinted cards. The module
+          hue lives only in the art and a 2px rule on the left of the row. */}
+      <ul className="mt-4 border-t border-hair">
         {SELLABLE_MODULE_KEYS.map((key) => {
           const tile = TILE_BY_KEY[key]
           if (!tile) return null
@@ -103,55 +107,34 @@ function ModulesManager({ onUnlocked }) {
           const unlocked = hasModule(key)
           const busy = busyKey === key
           return (
-            <li
-              key={key}
-              className="flex h-full flex-col gap-3 rounded-xl border border-border bg-white px-4 py-4"
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="flex h-11 w-11 flex-none items-center justify-center rounded-xl"
-                  style={{ background: `color-mix(in srgb, ${hue} 12%, white)`, color: hue }}
-                >
-                  <Art width={28} height={28} />
-                </span>
-                <div className="min-w-0">
-                  <h4 className="font-serif text-[16px] font-semibold leading-snug text-navy">
-                    {label}
-                  </h4>
-                  <p className="mt-0.5 text-[13px] leading-snug text-muted">{tagline}</p>
-                </div>
+            <li key={key} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-hair py-3 pl-3" style={{ boxShadow: `inset 2px 0 0 ${hue}` }}>
+              <span aria-hidden="true" className="flex h-8 w-8 flex-none items-center justify-center">
+                <Art width={26} height={26} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-[14px] font-semibold leading-snug text-ink">{label}</h4>
+                <p className="mt-0.5 text-[12.5px] leading-snug text-ink2">{tagline}</p>
               </div>
-              <div className="mt-auto">
+              <div className="shrink-0">
                 {unlocked ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12.5px] font-semibold text-emerald-700">
-                    <Check size={12} /> Unlocked
-                  </span>
+                  <Pill variant="status" tone="good">
+                    Unlocked
+                  </Pill>
                 ) : !entitled ? (
                   // Expired trial / canceled sub: hasModule() is false for everything,
-                  // so without this branch every card (finance included) would offer
+                  // so without this branch every row (finance included) would offer
                   // "Add module" that can't take effect. Subscription comes first.
-                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
-                    <Lock size={12} /> Subscribe to add modules
+                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink2">
+                    <Lock size={12} aria-hidden="true" /> Subscribe to add modules
                   </span>
                 ) : isOwner ? (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    type="button"
-                    onClick={() => add(key)}
-                    disabled={!!busyKey}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border-[1.5px] px-4 py-1 text-[12.5px] font-bold uppercase tracking-[0.06em] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{
-                      borderColor: `color-mix(in srgb, ${hue} 60%, transparent)`,
-                      color: hue,
-                    }}
-                  >
-                    {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  <button type="button" onClick={() => add(key)} disabled={!!busyKey} className="btn btn-secondary btn-sm">
+                    {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
                     Add module
-                  </motion.button>
+                  </button>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
-                    <Lock size={12} /> Owner can add
+                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink2">
+                    <Lock size={12} aria-hidden="true" /> Owner can add
                   </span>
                 )}
               </div>
@@ -225,7 +208,7 @@ export default function BillingSection() {
   if (loading) {
     return (
       <SettingsCard title="Billing">
-        <div className="flex items-center gap-2 text-[16px] text-muted">
+        <div className="flex items-center gap-2 text-[16px] text-ink2">
           <Loader2 size={16} className="animate-spin" /> Loading billing status…
         </div>
       </SettingsCard>
@@ -257,21 +240,21 @@ export default function BillingSection() {
       {/* Current state summary */}
       <dl className="mb-6 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
         <div>
-          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
             Plan
           </dt>
-          <dd className="mt-1 text-[16px] font-semibold capitalize text-navy">
+          <dd className="mt-1 text-[16px] font-semibold capitalize text-ink">
             {plan || (isTrial ? 'Free trial' : '—')}
           </dd>
         </div>
         <div>
-          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
             {isTrial ? 'Trial ends' : 'Renews / ends'}
           </dt>
-          <dd className="mt-1 text-[16px] font-semibold text-navy">
+          <dd className="mt-1 text-[16px] font-semibold text-ink">
             {fmtDate(isTrial ? trialEnd : currentPeriodEnd)}
             {typeof daysLeft === 'number' && (
-              <span className="ml-2 text-[15px] font-normal text-muted">
+              <span className="ml-2 text-[15px] font-normal text-ink2">
                 ({daysLeft} day{daysLeft === 1 ? '' : 's'} left)
               </span>
             )}
@@ -282,8 +265,8 @@ export default function BillingSection() {
       {/* Entitlement notice */}
       {isEntitled ? (
         isTrial && (
-          <div className="mb-5 flex items-start gap-2 rounded-lg bg-gold/10 px-4 py-3 text-[15px] text-navy">
-            <Check size={16} className="mt-0.5 shrink-0 text-gold" />
+          <div className="mb-5 flex items-start gap-2 rounded-lg bg-ink/[0.04] px-4 py-3 text-[15px] text-ink">
+            <Check size={16} className="mt-0.5 shrink-0 text-ink2" />
             <span>
               Core and Finance are included during your trial
               {typeof daysLeft === 'number' ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining)` : ''}
@@ -293,7 +276,7 @@ export default function BillingSection() {
           </div>
         )
       ) : (
-        <div className="mb-5 flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-[15px] text-red-700">
+        <div className="b2-callout b2-risk mb-5">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
             Statement generation is paused.{' '}
@@ -314,7 +297,7 @@ export default function BillingSection() {
             whileTap={{ scale: 0.98 }}
             onClick={() => doCheckout('monthly')}
             disabled={!!busy}
-            className="btn-primary inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+            className="btn btn-primary inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             {busy === 'monthly' ? (
               <Loader2 size={15} className="animate-spin" />
@@ -327,7 +310,7 @@ export default function BillingSection() {
             whileTap={{ scale: 0.98 }}
             onClick={() => doCheckout('yearly')}
             disabled={!!busy}
-            className="btn-primary inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+            className="btn btn-primary inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
           >
             {busy === 'yearly' ? (
               <Loader2 size={15} className="animate-spin" />
@@ -341,7 +324,7 @@ export default function BillingSection() {
               type="button"
               onClick={doPortal}
               disabled={!!busy}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-border px-5 py-2 text-[15px] font-semibold text-navy transition-colors hover:border-gold disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-[8px] border border-hair/[0.18] px-5 py-2 text-[15px] font-semibold text-ink transition-colors hover:border-hair/[0.3] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === 'portal' ? (
                 <Loader2 size={15} className="animate-spin" />

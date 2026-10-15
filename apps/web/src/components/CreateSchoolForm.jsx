@@ -9,9 +9,9 @@ import { useSchools } from '../context/SchoolContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
 
-const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
+const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2'
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold'
+  'w-full rounded-lg border border-hair/[0.18] bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-[#2563EB]'
 
 export default function CreateSchoolForm() {
   const { createSchool } = useSchools()
@@ -36,22 +36,22 @@ export default function CreateSchoolForm() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-navy-deep bg-navy-radial px-4 py-6 sm:py-10">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ground px-4 py-6 sm:py-10">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="relative w-full max-w-[520px] rounded-2xl border-t-4 border-gold bg-cream px-6 py-10 shadow-login sm:px-10 sm:py-12"
+        className="panel relative w-full max-w-[520px] border-t-2 !border-t-[#2563EB] px-6 py-10 sm:px-10 sm:py-12"
       >
         <div className="mb-5 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold/15 text-gold">
-            <Building2 size={24} />
+          <span className="flex text-ink2">
+            <Building2 size={24} aria-hidden="true" />
           </span>
           <div>
-            <h1 className="font-serif text-[26px] font-semibold leading-tight text-navy">
+            <h1 className="font-serif text-display font-medium text-ink">
               Create your school
             </h1>
-            <p className="text-[15px] text-muted">Just a name to start — opening balances are read from your first trial-balance upload.</p>
+            <p className="text-[15px] text-ink2">Just a name to start — opening balances are read from your first trial-balance upload.</p>
           </div>
         </div>
 
@@ -65,7 +65,7 @@ export default function CreateSchoolForm() {
           />
         </div>
         {error && (
-          <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-center text-[15px] text-danger">
+          <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-center text-[15px] tone-risk">
             {error}
           </div>
         )}
@@ -74,14 +74,14 @@ export default function CreateSchoolForm() {
           whileTap={{ scale: name.trim() ? 0.98 : 1 }}
           onClick={submit}
           disabled={!name.trim() || busy}
-          className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? 'Creating…' : 'Create School'}
         </motion.button>
 
         <button
           onClick={logout}
-          className="mt-4 w-full text-center text-[15px] font-semibold text-muted hover:text-gold"
+          className="mt-4 w-full text-center text-[15px] font-semibold text-ink2 hover:text-ink2"
         >
           Sign out
         </button>

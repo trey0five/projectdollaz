@@ -1,16 +1,15 @@
-import { motion, useReducedMotion } from 'framer-motion'
+import '../../styles/pending/b2-finance.css'
 import { PROGRAM_OPTIONS } from '../../lib/complianceMeta.js'
 
 /**
  * FTC / FES-EO / FES-UA program-tier pills. Multi-select (programs is an array).
- * Selected -> the good-chip palette; unselected -> neutral section. When read-only
+ * Selected -> the primary chip (b2-chip aria-pressed); unselected -> hairline. When read-only
  * (no onChange) the pills render as static status, pointing the user to the intake
  * form (the canonical source of `programs`).
  */
 export default function TierSelector({ selected = [], onChange, disabled = false, size = 'md' }) {
-  const reduce = useReducedMotion()
   const readOnly = !onChange || disabled
-  const pad = size === 'sm' ? 'px-3 py-1 text-[13px]' : 'px-4 py-1.5 text-[14px]'
+  const pad = size === 'sm' ? '!min-h-[28px] !py-1 !text-[12px]' : ''
 
   const toggle = (value) => {
     if (readOnly) return
@@ -26,21 +25,16 @@ export default function TierSelector({ selected = [], onChange, disabled = false
       {PROGRAM_OPTIONS.map(({ value, label }) => {
         const active = selected.includes(value)
         return (
-          <motion.button
+          <button
             key={value}
             type="button"
             onClick={() => toggle(value)}
             disabled={readOnly}
-            whileTap={reduce || readOnly ? undefined : { scale: 0.97 }}
             aria-pressed={active}
-            className={`rounded-full border font-semibold uppercase tracking-[0.08em] transition-all ${pad} ${
-              active
-                ? 'border-gold bg-gold text-white shadow-[0_3px_12px_-3px_rgba(184,150,80,0.65)]'
-                : 'border-border bg-section text-muted'
-            } ${readOnly ? 'cursor-default' : 'hover:border-gold/50'}`}
+            className={`b2-chip ${pad} ${readOnly ? '!cursor-default !opacity-100' : ''}`}
           >
             {label}
-          </motion.button>
+          </button>
         )
       })}
     </div>

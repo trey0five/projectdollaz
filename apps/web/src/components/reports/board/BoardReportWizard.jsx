@@ -17,7 +17,7 @@
 //     siblings. A refresh re-pulls assemble, which already reflects saved edits.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useReducer } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import { useBoardReport } from '../../../hooks/useBoardReport.js'
 import { useAutosave } from '../../../hooks/useAutosave.js'
@@ -28,6 +28,8 @@ import Step2Confirm from './steps/Step2Confirm.jsx'
 import Step3Variance from './steps/Step3Variance.jsx'
 import Step4Branding from './steps/Step4Branding.jsx'
 import Step5Generate from './steps/Step5Generate.jsx'
+import { PageHeader, Panel } from '../../ui/surface/index.js'
+import '../../../styles/pending/b2-finance.css'
 
 const STEPS = [
   { id: 1, label: 'Period' },
@@ -136,6 +138,7 @@ function editablePayload(d) {
 }
 
 export default function BoardReportWizard({ schoolId, school, periods, initialPeriodId }) {
+  const reduce = useReducedMotion()
   const { isOwner } = useBilling()
   const canEdit = school?.role === 'owner' || school?.role === 'accountant'
 
@@ -220,22 +223,40 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
     goTo: (s) => dispatch({ type: 'setStep', step: s }),
   }
 
+  // Premium UI P4 (plan sketch 5): PageHeader on the hairline, the step rail as
+  // 2px progress rules with numbered labels (no navy band), and the active step
+  // inside ONE Panel — the only raised surface (it is a form).
   return (
-    <div className="card-vital overflow-hidden p-0">
-      {renderRail(step, ctx)}
-      <div className="px-5 py-6 sm:px-7">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -18 }}
-            transition={{ duration: 0.22 }}
-          >
-            {renderStep(step, ctx)}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+    <div>
+      <PageHeader
+        eyebrow={['Reports', school?.name, 'Board report'].filter(Boolean).join(' · ')}
+        title="Board report"
+        meta="A branded finance-committee packet: budget vs. actual, key indicators, MD&A narrative, and the three core statements."
+        hue="37 99 235"
+        actions={
+          canEdit && (saving || saveError) ? (
+            <span className="text-small text-ink2" role="status">
+              {saving ? 'Saving…' : saveError}
+            </span>
+          ) : null
+        }
+      />
+      <div className="mt-5">{renderRail(step, ctx)}</div>
+      <Panel className="mt-5" padded={false}>
+        <div className="px-5 py-6 sm:px-7">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={reduce ? false : { opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, x: -18 }}
+              transition={{ duration: 0.22 }}
+            >
+              {renderStep(step, ctx)}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </Panel>
     </div>
   )
 }
@@ -244,48 +265,33 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
 
 function renderRail(step, ctx) {
   return (
-    <div className="border-b border-rule/60 bg-navy-gradient px-5 py-4 sm:px-7">
-      <div className="flex items-center gap-2">
-        {STEPS.map((s, i) => {
-          const done = s.id < step
-          const active = s.id === step
-          const reachable = ctx.data || s.id === 1
-          return (
-            <div key={s.id} className="flex flex-1 items-center gap-2">
-              <button
-                type="button"
-                disabled={!reachable}
-                onClick={() => reachable && ctx.goTo(s.id)}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-[12px] font-bold transition-all ${
-                  active
-                    ? 'border-gold bg-gold text-navy'
-                    : done
-                      ? 'border-gold/60 bg-gold/20 text-gold-light'
-                      : 'border-white/25 text-white/60'
-                } ${reachable ? '' : 'cursor-not-allowed opacity-50'}`}
-                title={s.label}
-              >
-                {done ? <Check size={15} /> : s.id}
-              </button>
-              <span
-                className={`hidden text-[11px] font-semibold uppercase tracking-[0.08em] sm:inline ${
-                  active ? 'text-gold-light' : 'text-white/55'
-                }`}
-              >
-                {s.label}
+    <ol className="b2-steps" aria-label="Board report steps">
+      {STEPS.map((s) => {
+        const done = s.id < step
+        const active = s.id === step
+        const reachable = ctx.data || s.id === 1
+        return (
+          <li key={s.id} className="min-w-0">
+            <button
+              type="button"
+              disabled={!reachable}
+              onClick={() => reachable && ctx.goTo(s.id)}
+              aria-current={active ? 'step' : undefined}
+              className={`b2-step w-full ${reachable ? '' : 'cursor-not-allowed opacity-50'}`}
+              title={s.label}
+            >
+              <span className="b2-step-rule">
+                <i style={{ transform: `scaleX(${done || active ? 1 : 0})`, transition: 'transform .3s ease' }} />
               </span>
-              {i < STEPS.length - 1 && (
-                <span
-                  className={`mx-1 hidden h-0.5 flex-1 rounded-full sm:block ${
-                    done ? 'bg-gold/50' : 'bg-white/15'
-                  }`}
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
+              <span className="b2-step-label flex items-center gap-1.5">
+                <span className="tabular-nums">{done ? <Check size={12} aria-label="done" /> : s.id}</span>
+                <span className="hidden sm:inline">{s.label}</span>
+              </span>
+            </button>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 

@@ -3,6 +3,7 @@
 // alert ("alert me if days-cash < 30"). Each is evaluated on the server's 30-min
 // tick and emailed. A "Send test" button fires one immediately. Read-only for
 // viewers. Mirrors ReportScheduleSection's idiom + the navy/gold theme.
+import '../../styles/pending/b2-finance.css'
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bell, Send, Trash2, Plus } from 'lucide-react'
@@ -55,14 +56,14 @@ function ruleText(a) {
 
 /** The badge word + tint per type. Three types, three styles. */
 const TYPE_META = {
-  digest: { label: 'digest', chip: 'bg-navy/10 text-navy' },
-  threshold: { label: 'threshold', chip: 'bg-gold/15 text-gold' },
-  warning_digest: { label: 'accreditation', chip: 'bg-amber-100 text-amber-700' },
+  digest: { label: 'digest', chip: 'bg-ink/[0.08] text-ink' },
+  threshold: { label: 'threshold', chip: 'bg-ink/[0.04] text-ink2' },
+  warning_digest: { label: 'accreditation', chip: 'bg-ink/[0.06] text-ink' },
 }
 
-const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
+const labelCls = 'b2-label'
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 export default function AlertsSection() {
   const { activeId, activeSchool } = useSchools()
@@ -163,7 +164,7 @@ export default function AlertsSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="Alerts">
-        <p className="text-[16px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-ink2">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -180,14 +181,14 @@ export default function AlertsSection() {
       {/* Existing alerts */}
       <div className="mb-6 space-y-3">
         {alerts.length === 0 && (
-          <p className="text-[15px] text-muted">No standing alerts yet.</p>
+          <p className="text-[15px] text-ink2">No standing alerts yet.</p>
         )}
         {alerts.map((a) => (
           <motion.div
             key={a.id}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-border bg-white px-4 py-3"
+            className="flex flex-wrap items-center gap-3 rounded-[8px] border border-hair/[0.18] bg-white px-4 py-3"
           >
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide ${
@@ -196,15 +197,15 @@ export default function AlertsSection() {
             >
               <Bell size={12} /> {(TYPE_META[a.type] ?? { label: a.type }).label}
             </span>
-            <span className="flex-1 text-[15px] font-semibold text-navy">{ruleText(a)}</span>
+            <span className="flex-1 text-[15px] font-semibold text-ink">{ruleText(a)}</span>
             {a.lastSentAt && (
-              <span className="text-[13px] text-muted">
+              <span className="text-[13px] text-ink2">
                 Last sent {new Date(a.lastSentAt).toLocaleDateString()}
               </span>
             )}
             {canEdit && (
               <div className="flex items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold text-muted">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold text-ink2">
                   <input
                     type="checkbox"
                     checked={a.enabled}
@@ -215,14 +216,14 @@ export default function AlertsSection() {
                 </label>
                 <button
                   onClick={() => sendTest(a)}
-                  className="inline-flex items-center gap-1 rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[13px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
+                  className="inline-flex items-center gap-1 rounded-lg border border-hair/[0.18] bg-white px-3 py-1.5 text-[13px] font-semibold text-ink transition-all hover:border-hair hover:text-ink2"
                 >
                   <Send size={13} /> Test
                 </button>
                 <button
                   onClick={() => remove(a)}
                   aria-label="Delete alert"
-                  className="inline-flex items-center rounded-lg border-2 border-border bg-white p-1.5 text-muted transition-all hover:border-red-300 hover:text-red-500"
+                  className="inline-flex items-center rounded-lg border border-hair/[0.18] bg-white p-1.5 text-ink2 transition-all hover:border-hair/[0.3] hover:text-ink"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -234,7 +235,7 @@ export default function AlertsSection() {
 
       {/* Create form */}
       {canEdit && (
-        <div className="rounded-xl border-2 border-dashed border-border p-4">
+        <div className="rounded-[8px] border border-dashed border-hair/[0.18] p-4">
           {/* AIC Phase E — the accreditation digest is offered ONLY to a school
               that has licensed the module, because that is the same gate the
               server evaluates the alert behind. Shipping the notification path
@@ -247,8 +248,8 @@ export default function AlertsSection() {
                   onClick={() => setType(t)}
                   className={`rounded-lg px-4 py-2 text-[14px] font-semibold transition-all ${
                     type === t
-                      ? 'bg-navy text-white'
-                      : 'border-2 border-border bg-white text-navy hover:border-gold/50'
+                      ? 'bg-ink text-white'
+                      : 'border border-hair/[0.18] bg-white text-ink hover:border-hair'
                   }`}
                 >
                   {t === 'digest'
@@ -271,7 +272,7 @@ export default function AlertsSection() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1.5 text-[14px] text-muted">
+              <p className="mt-1.5 text-[14px] text-ink2">
                 {type === 'digest'
                   ? 'A financial summary emailed to you on this cadence.'
                   : 'New accreditation early warnings, emailed on this cadence. Nothing new means no email.'}
@@ -324,7 +325,7 @@ export default function AlertsSection() {
             whileTap={{ scale: 0.98 }}
             onClick={create}
             disabled={busy}
-            className="btn-primary mt-2 inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
+            className="btn btn-primary mt-2 inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
           >
             <Plus size={16} /> {busy ? 'Creating…' : 'Create alert'}
           </motion.button>

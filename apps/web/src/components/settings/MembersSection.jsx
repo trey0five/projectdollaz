@@ -5,6 +5,7 @@
 // authoritative (LAST_OWNER 409 is surfaced inline). Refetches after mutations.
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import '../../styles/pending/b2-finance.css'
 import { Trash2, Mail, ShieldAlert, Building2, Building } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
@@ -167,7 +168,7 @@ export default function MembersSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="Members & Roles">
-        <p className="text-[16px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-ink2">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -175,7 +176,7 @@ export default function MembersSection() {
   if (!canView) {
     return (
       <SettingsCard title="Members & Roles" description={activeSchool.name}>
-        <div className="flex items-center gap-2 text-[16px] text-muted">
+        <div className="flex items-center gap-2 text-[16px] text-ink2">
           <ShieldAlert size={16} /> You do not have permission to manage members for this
           school.
         </div>
@@ -184,7 +185,7 @@ export default function MembersSection() {
   }
 
   const inputCls =
-    'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold'
+    'b2-input'
 
   return (
     <>
@@ -193,18 +194,18 @@ export default function MembersSection() {
         description={`Active school: ${activeSchool.name}`}
       >
         {loading ? (
-          <p className="text-[16px] text-muted">Loading…</p>
+          <p className="text-[16px] text-ink2">Loading…</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[16px]">
+          <div className="dt-wrap">
+            <table className="dt">
               <thead>
-                <tr className="border-b border-border text-[14px] uppercase tracking-[0.1em] text-muted">
-                  <th className="py-2 pr-3 font-semibold">Name</th>
-                  <th className="py-2 pr-3 font-semibold">Position</th>
-                  <th className="py-2 pr-3 font-semibold">Email</th>
-                  <th className="py-2 pr-3 font-semibold">Role</th>
-                  <th className="py-2 pr-3 font-semibold">Access</th>
-                  {isOwner && <th className="py-2 font-semibold" />}
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Position</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Access</th>
+                  {isOwner && <th scope="col"><span className="sr-only">Remove</span></th>}
                 </tr>
               </thead>
               <tbody>
@@ -213,11 +214,11 @@ export default function MembersSection() {
                     [m.first_name, m.last_name].filter(Boolean).join(' ') || '—'
                   const isSoleOwner = m.role === 'owner' && ownerCount <= 1
                   return (
-                    <tr key={m.id} className="border-b border-border/60 align-top">
-                      <td className="py-3 pr-3 text-ink">
+                    <tr key={m.id}>
+                      <td className="py-2">
                         {name}
                         {m.id === user?.id && (
-                          <span className="ml-1 text-[14px] text-muted">(you)</span>
+                          <span className="ml-1 text-[12px] text-ink2">(you)</span>
                         )}
                       </td>
                       {/* POSITION — what this person does here, as opposed to
@@ -225,7 +226,7 @@ export default function MembersSection() {
                           owner picker in the app shows beside their name, and
                           what lets an engine-suggested owner resolve to a
                           colleague instead of opening Unassigned. */}
-                      <td className="py-3 pr-3">
+                      <td className="py-2">
                         {isOwner ? (
                           <input
                             type="text"
@@ -236,16 +237,16 @@ export default function MembersSection() {
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') e.currentTarget.blur()
                             }}
-                            className="min-h-[40px] w-44 rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-gold"
+                            className="b2-input h-8 w-32 placeholder:text-ink2"
                           />
                         ) : (
-                          <span className={m.title ? 'text-ink' : 'text-muted'}>
+                          <span className={m.title ? 'text-ink' : 'text-ink2'}>
                             {m.title || '—'}
                           </span>
                         )}
                       </td>
-                      <td className="py-3 pr-3 text-muted">{m.email}</td>
-                      <td className="py-3 pr-3">
+                      <td className="py-2 text-ink2">{m.email}</td>
+                      <td className="py-2">
                         {isOwner ? (
                           <select
                             value={m.role}
@@ -256,7 +257,7 @@ export default function MembersSection() {
                                 ? 'A school must keep at least one owner'
                                 : undefined
                             }
-                            className="min-h-[40px] rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:opacity-60"
+                            className="sel h-8 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {ROLES.map((r) => (
                               <option key={r} value={r}>
@@ -268,17 +269,17 @@ export default function MembersSection() {
                           <span className="text-ink">{memberRoleLabel(m.role)}</span>
                         )}
                         {rowErr[m.id] && (
-                          <p className="mt-1 text-[14px] text-danger">{rowErr[m.id]}</p>
+                          <p className="b2-callout mt-1" data-tone="risk">{rowErr[m.id]}</p>
                         )}
                       </td>
-                      <td className="py-3 pr-3">
+                      <td className="py-2">
                         <div className="flex flex-col items-start gap-1.5">
                           {m.orgWide ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2.5 py-1 text-[13px] font-semibold text-navy">
-                              <Building2 size={13} className="text-gold" /> All schools
+                            <span className="pill">
+                              <Building2 size={13} className="text-ink2" /> All schools
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[13px] font-semibold text-muted">
+                            <span className="pill text-ink2">
                               <Building size={13} /> This school
                             </span>
                           )}
@@ -287,7 +288,7 @@ export default function MembersSection() {
                           {isOwner && m.id !== user?.id && m.role !== 'owner' && (
                             <button
                               onClick={() => onAccessChange(m, !m.orgWide)}
-                              className="text-[13px] font-semibold text-navy underline decoration-gold/60 underline-offset-2 transition-colors hover:text-gold"
+                              className="text-[13px] font-semibold text-ink underline decoration-hair underline-offset-2 transition-colors hover:text-ink2"
                             >
                               {m.orgWide ? 'Restrict to this school' : 'All schools'}
                             </button>
@@ -295,7 +296,7 @@ export default function MembersSection() {
                         </div>
                       </td>
                       {isOwner && (
-                        <td className="py-3 text-right">
+                        <td className="py-2 text-right">
                           <button
                             onClick={() => onRemove(m)}
                             disabled={isSoleOwner}
@@ -304,9 +305,10 @@ export default function MembersSection() {
                                 ? 'A school must keep at least one owner'
                                 : 'Remove member'
                             }
-                            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={`Remove ${name}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))] disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            <Trash2 size={14} /> Remove
+                            <Trash2 size={15} aria-hidden="true" />
                           </button>
                         </td>
                       )}
@@ -325,7 +327,7 @@ export default function MembersSection() {
               characters once Position joined it. Wrap, and give email a floor. */}
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="min-w-[16rem] flex-1">
-              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
                 Email
               </label>
               <input
@@ -337,7 +339,7 @@ export default function MembersSection() {
               />
             </div>
             <div className="min-w-[11rem] flex-1 sm:max-w-[14rem]">
-              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
                 Position
               </label>
               <input
@@ -350,7 +352,7 @@ export default function MembersSection() {
               />
             </div>
             <div className="sm:w-44">
-              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
                 Role
               </label>
               <select
@@ -366,7 +368,7 @@ export default function MembersSection() {
               </select>
             </div>
             <div className="sm:w-52">
-              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
                 Access
               </label>
               <select
@@ -382,7 +384,7 @@ export default function MembersSection() {
               whileTap={{ scale: email.trim() ? 0.98 : 1 }}
               onClick={sendInvite}
               disabled={!email.trim() || inviteBusy}
-              className="btn-primary min-h-[48px] disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary min-h-[48px] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {inviteBusy ? 'Sending…' : 'Send invite'}
             </motion.button>
@@ -397,7 +399,7 @@ export default function MembersSection() {
               <FormSuccess>{inviteOk}</FormSuccess>
             </div>
           )}
-          <p className="mt-3 text-[14px] text-muted">
+          <p className="mt-3 text-[14px] text-ink2">
             Entire organization = sees every school + the consolidated view.
           </p>
         </SettingsCard>
@@ -405,29 +407,29 @@ export default function MembersSection() {
 
       <SettingsCard title="Pending invitations" description="Unaccepted, unexpired invites.">
         {invites.length === 0 ? (
-          <p className="text-[16px] text-muted">No pending invitations.</p>
+          <p className="text-[16px] text-ink2">No pending invitations.</p>
         ) : (
           <ul className="space-y-2">
             {invites.map((inv) => (
               <li
                 key={inv.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-navy/[0.02] px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-hair/[0.18] bg-ground px-4 py-3"
               >
                 <div className="flex items-center gap-2 text-[16px] text-ink">
-                  <Mail size={15} className="text-gold" />
+                  <Mail size={15} className="text-ink2" />
                   <span>{inv.email}</span>
-                  <span className="rounded bg-gold/15 px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-navy">
+                  <span className="rounded bg-ink/[0.04] px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-ink">
                     {memberRoleLabel(inv.role)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   {rowErr[inv.id] && (
-                    <span className="text-[14px] text-danger">{rowErr[inv.id]}</span>
+                    <span className="text-[14px] tone-risk">{rowErr[inv.id]}</span>
                   )}
                   {isOwner && (
                     <button
                       onClick={() => revoke(inv)}
-                      className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/10"
+                      className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-hair/[0.18] px-3 py-1.5 text-[15px] font-semibold tone-risk transition-colors hover:bg-ink/[0.04]"
                     >
                       <Trash2 size={14} /> Revoke
                     </button>

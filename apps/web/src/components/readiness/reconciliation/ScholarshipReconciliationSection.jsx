@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Coins, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { reconciliationApi } from '../../../lib/api.js'
 import { useReconciliation } from '../../../hooks/useReconciliation.js'
-import { MetricCardSkeleton } from '../../analytics/skeletons.jsx'
+import { Section } from '../../ui/surface/index.js'
 import ReconciliationHeadline from './ReconciliationHeadline.jsx'
 import ReconciliationBreakdowns from './ReconciliationBreakdowns.jsx'
 import DisbursementsTable from './DisbursementsTable.jsx'
@@ -64,35 +64,25 @@ export default function ScholarshipReconciliationSection({
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-gradient text-white shadow-glow">
-          <Coins size={18} />
-        </span>
-        <div>
-          <h2 className="font-serif text-lg font-semibold text-navy">Scholarship Reconciliation</h2>
-          <p className="text-[14px] text-muted">
-            Funding-org disbursements vs the recorded scholarship revenue (AUP §IV).
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-start gap-2 rounded-xl border border-gold/30 bg-gold/5 px-4 py-2.5 text-[14px] text-[#7a5e00]">
-        <Info size={14} className="mt-0.5 shrink-0" />
+    <section className="space-y-5">
+      {/* The wizard's step intro titles this step and the page's DisclaimerBanner
+          carries the "pre-flag, not the AUP" framing — only the scope note that
+          is specific to this step stays here. */}
+      <div className="b2-callout">
+        <Info size={14} aria-hidden="true" />
         <span>
-          A readiness pre-flag, not the official AUP or legal/audit advice. Per-student
-          bank-deposit tracing remains a CPA checklist item — this reconciles the funding-org
-          disbursed total against your recorded scholarship revenue.
+          This matches the funding organization&rsquo;s disbursed total against your recorded
+          scholarship revenue (AUP §IV). Tracing each student&rsquo;s bank deposit stays on your
+          CPA checklist.
         </span>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4">
-          <MetricCardSkeleton />
-          <MetricCardSkeleton />
+        <div className="b2-note" aria-busy="true">
+          <p>Loading the reconciliation…</p>
         </div>
       ) : error ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-[15px] text-danger">
+        <p className="b2-callout b2-risk" role="alert">
           {error}
         </p>
       ) : (
@@ -105,7 +95,11 @@ export default function ScholarshipReconciliationSection({
               onClear={clear}
             />
           )}
-          {saveError && <p className="text-[14px] text-danger">{saveError}</p>}
+          {saveError && (
+            <p className="b2-callout b2-risk" role="alert">
+              {saveError}
+            </p>
+          )}
 
           {result && (
             <>
@@ -124,19 +118,13 @@ export default function ScholarshipReconciliationSection({
 
               {result.count > 0 && <ReconciliationBreakdowns result={result} />}
 
-              <div className="card-flashy p-5">
-                <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-                  Anomalies
-                </p>
+              <Section label="Anomalies">
                 <AnomaliesList anomalies={result.anomalies} />
-              </div>
+              </Section>
 
-              <div>
-                <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
-                  Disbursements ({disbursements.length})
-                </p>
+              <Section label={`Disbursements (${disbursements.length})`}>
                 <DisbursementsTable disbursements={disbursements} />
-              </div>
+              </Section>
             </>
           )}
         </>

@@ -10,6 +10,7 @@
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Plug, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react'
+import { Pill } from '../ui/surface/index.js'
 
 export default function QuickBooksCard({ quickbooks }) {
   const reduce = useReducedMotion()
@@ -27,47 +28,36 @@ export default function QuickBooksCard({ quickbooks }) {
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       aria-labelledby="datahub-qbo-title"
-      className="relative mb-6 overflow-hidden rounded-2xl border-2 border-gold/45 bg-white p-5 shadow-card sm:p-6"
+      className={`panel relative mb-6 p-5 sm:p-6 ${connected || orgFed ? '' : 'panel-attention panel-watch'}`}
     >
-      {/* Decorative gold wash so the fast-path reads as the hero action. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-gold/10 blur-2xl"
-      />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3.5">
-          <span
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-              connected || orgFed ? 'bg-emerald-100 text-emerald-700' : 'bg-gold/15 text-gold'
-            }`}
-          >
-            {connected || orgFed ? <CheckCircle2 size={24} /> : <Plug size={22} />}
+          <span className="mt-0.5 flex shrink-0 text-ink2">
+            {connected || orgFed ? <CheckCircle2 size={22} aria-hidden="true" className="tone-good" /> : <Plug size={22} aria-hidden="true" />}
           </span>
           <div className="min-w-0">
             {!configured ? (
               <>
-                <h2 id="datahub-qbo-title" className="font-serif text-lg font-semibold text-navy">
+                <h2 id="datahub-qbo-title" className="text-heading font-semibold text-ink">
                   QuickBooks isn&apos;t set up on this server yet.
                 </h2>
-                <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-muted">
+                <p className="mt-1 max-w-xl text-small leading-relaxed text-ink2">
                   When QuickBooks is enabled, you&apos;ll be able to connect it here and pull your
                   trial balance automatically — no spreadsheet exports.
                 </p>
               </>
             ) : connected ? (
               <>
-                <h2 id="datahub-qbo-title" className="flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-navy">
+                <h2 id="datahub-qbo-title" className="flex flex-wrap items-center gap-2 text-heading font-semibold text-ink">
                   QuickBooks connected
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-bold uppercase tracking-[0.08em] text-emerald-700">
-                    <CheckCircle2 size={12} /> Live
-                  </span>
+                  <Pill variant="status" tone="good">Live</Pill>
                 </h2>
-                <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-muted">
+                <p className="mt-1 max-w-xl text-small leading-relaxed text-ink2">
                   We can pull your current trial balance straight from QuickBooks.
                   {qb.realmId ? (
-                    <span className="text-muted/90">
+                    <span>
                       {' '}
-                      Connected to realm <span className="font-semibold text-navy">{qb.realmId}</span>
+                      Connected to realm <span className="font-semibold text-ink">{qb.realmId}</span>
                       {qb.environment ? ` · ${qb.environment}` : ''}.
                     </span>
                   ) : null}
@@ -75,15 +65,13 @@ export default function QuickBooksCard({ quickbooks }) {
               </>
             ) : orgFed ? (
               <>
-                <h2 id="datahub-qbo-title" className="flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-navy">
+                <h2 id="datahub-qbo-title" className="flex flex-wrap items-center gap-2 text-heading font-semibold text-ink">
                   QuickBooks connected — through your organization
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-bold uppercase tracking-[0.08em] text-emerald-700">
-                    <CheckCircle2 size={12} /> Via organization
-                  </span>
+                  <Pill variant="status" tone="good">Via organization</Pill>
                 </h2>
-                <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-muted">
+                <p className="mt-1 max-w-xl text-small leading-relaxed text-ink2">
                   Your numbers flow in from{' '}
-                  <span className="font-semibold text-navy">
+                  <span className="font-semibold text-ink">
                     {qb.orgFed.companyName || 'your organization’s QuickBooks company'}
                   </span>
                   {orgFedNames.length > 0 && (
@@ -96,7 +84,7 @@ export default function QuickBooksCard({ quickbooks }) {
                         : orgFedNames.length === 1
                           ? 'location'
                           : 'locations'}{' '}
-                      <span className="font-semibold text-navy">{orgFedNames.join(', ')}</span>
+                      <span className="font-semibold text-ink">{orgFedNames.join(', ')}</span>
                     </>
                   )}
                   . Imports run from the organization’s QuickBooks in Settings.
@@ -104,15 +92,15 @@ export default function QuickBooksCard({ quickbooks }) {
               </>
             ) : (
               <>
-                <h2 id="datahub-qbo-title" className="font-serif text-lg font-semibold text-navy">
+                <h2 id="datahub-qbo-title" className="text-heading font-semibold text-ink">
                   The fast way: connect QuickBooks.
                 </h2>
-                <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-muted">
+                <p className="mt-1 max-w-xl text-small leading-relaxed text-ink2">
                   Connect QuickBooks once and we&apos;ll pull your trial balance for you — no
                   spreadsheet exports, no manual entry.
                 </p>
-                <p className="mt-1.5 flex items-center gap-1.5 text-[14px] italic text-muted/80">
-                  <Sparkles size={12} className="text-gold" aria-hidden="true" />
+                <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] italic text-ink2">
+                  <Sparkles size={12} className="text-penny" aria-hidden="true" />
                   Today this brings in your trial balance. Pulling every year and month automatically
                   is coming soon.
                 </p>
@@ -128,13 +116,13 @@ export default function QuickBooksCard({ quickbooks }) {
               <>
                 <Link
                   to="/settings/integrations"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
+                  className="btn btn-primary"
                 >
-                  Sync trial balance now <ArrowRight size={15} />
+                  Sync trial balance now <ArrowRight size={14} aria-hidden="true" />
                 </Link>
                 <Link
                   to="/settings/integrations"
-                  className="text-center text-[14px] font-semibold text-muted underline-offset-2 transition-colors hover:text-gold hover:underline"
+                  className="dt-link justify-center text-small"
                 >
                   Manage connection
                 </Link>
@@ -142,16 +130,16 @@ export default function QuickBooksCard({ quickbooks }) {
             ) : orgFed ? (
               <Link
                 to="/settings/integrations"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
+                className="btn btn-primary"
               >
-                Manage in Settings <ArrowRight size={15} />
+                Manage in Settings <ArrowRight size={14} aria-hidden="true" />
               </Link>
             ) : (
               <Link
                 to="/settings/integrations"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
+                className="btn btn-primary"
               >
-                Connect QuickBooks <ArrowRight size={15} />
+                Connect QuickBooks <ArrowRight size={14} aria-hidden="true" />
               </Link>
             )}
           </div>

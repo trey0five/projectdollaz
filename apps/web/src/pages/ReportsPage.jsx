@@ -1,15 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 — Reports hub. The /reports landing surface. Phase 1 lists ONE report
 // type ("Board Report" — the NBOA-style finance-committee packet); the layout is
-// built so more report types slot in later as additional cards. Selecting the
+// built so more report types slot in later as additional Tiles. Selecting the
 // Board Report opens the 5-step BoardReportWizard inline, with the period
-// preselected to the live (newest snapshot) period. Navy/gold theme, framer-motion
-// polish. Distinct from the compliance "board packet" (/board-packet/print).
+// preselected to the live (newest snapshot) period. Premium UI P4: PageHeader on
+// a hairline + the report catalog as `Tile`s (the one card family that stays —
+// a hub of choices), one-shot page stagger. Distinct from the compliance "board
+// packet" (/board-packet/print).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
+import { FileBarChart2, Landmark, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -17,8 +18,7 @@ import { usePersistence } from '../context/PersistenceContext.jsx'
 import BoardReportWizard from '../components/reports/board/BoardReportWizard.jsx'
 import MonthlyActualsSection from '../components/monthly/MonthlyActualsSection.jsx'
 import ForecastView from '../components/reports/ForecastView.jsx'
-// The legacy `.module-tile` card until P4 moves this page to `Tile`.
-import '../styles/module-tile-legacy.css'
+import { Page, PageHeader, Section, Tile } from '../components/ui/surface/index.js'
 
 // Catalog of report types. Phase 1 ships only the Board Report live; the rest are
 // listed as "coming soon" placeholders so the IA reads as a growing hub.
@@ -106,17 +106,13 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-section">
+    <div className="min-h-screen">
       <BillingBanner />
-      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
+      <main className="mx-auto max-w-page px-4 py-6 sm:px-10">
         {openReport === 'board' ? (
           <>
-            <button
-              type="button"
-              onClick={() => setOpenReport(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-            >
-              <ArrowLeft size={15} /> All reports
+            <button type="button" onClick={() => setOpenReport(null)} className="back-link mb-2">
+              <ArrowLeft size={15} aria-hidden="true" /> All reports
             </button>
             <BoardReportWizard
               key={`board-${boardNonce}`}
@@ -128,23 +124,15 @@ export default function ReportsPage() {
           </>
         ) : openReport === 'monthly' ? (
           <>
-            <button
-              type="button"
-              onClick={() => setOpenReport(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-            >
-              <ArrowLeft size={15} /> All reports
+            <button type="button" onClick={() => setOpenReport(null)} className="back-link mb-2">
+              <ArrowLeft size={15} aria-hidden="true" /> All reports
             </button>
             <MonthlyActualsSection periods={periods || []} initialPeriodId={defaultPeriodId} />
           </>
         ) : openReport === 'forecast' ? (
           <>
-            <button
-              type="button"
-              onClick={() => setOpenReport(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-            >
-              <ArrowLeft size={15} /> All reports
+            <button type="button" onClick={() => setOpenReport(null)} className="back-link mb-2">
+              <ArrowLeft size={15} aria-hidden="true" /> All reports
             </button>
             <ForecastView
               key={`${activeSchool?.id}:${defaultPeriodId}`}
@@ -160,86 +148,66 @@ export default function ReportsPage() {
   )
 }
 
-// Render-helper (not a nested component def) for the report catalog grid.
+// Render-helper (not a nested component def) for the report catalog. The hub
+// IS a set of choices, so each report is a `Tile` (hairline, 2px hue rule, the
+// one-shot flood + arrow on hover); the page staggers in once.
 function renderHub(onSelect) {
   return (
-    <div key="hub">
-      <BackLink className="mb-5" />
-      <motion.header
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-7"
-      >
-        <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
-        <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Board &amp; finance reports</h1>
-        <p className="mt-1.5 max-w-2xl text-[16px] text-muted">
-          Assemble polished, board-ready packets straight from your saved statements and budget. No
-          spreadsheets — pick a period, review the numbers, add your narrative, and print.
-        </p>
-      </motion.header>
-
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-        {REPORTS.map((r, i) => {
-          const Icon = r.Icon || FileBarChart2
-          const cta =
-            r.action === 'navigate'
-              ? 'Open schedules'
-              : r.id === 'forecast'
-                ? 'View forecast'
-                : r.action === 'inline'
-                  ? 'Manage months'
-                  : 'Build report'
-          return (
-            <motion.button
-              key={r.id}
-              id={r.id === 'board' ? 'reports-board-card' : undefined}
-              type="button"
-              disabled={!r.live}
-              onClick={() => r.live && onSelect(r)}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i }}
-              whileHover={r.live ? { y: -4 } : undefined}
-              // Same hue-flood tile as the Home dashboard: on hover the whole card
-              // fills blue and its text flips white (home-tiles.css). Reduced-motion
-              // and focus states come from the shared .module-tile rules for free.
-              className={`module-tile group text-left ${r.live ? '' : 'cursor-not-allowed opacity-70'}`}
-              style={{ '--tile-hue': '#2563eb' }}
-            >
-              <span className="tile-body">
-                <span className={`tile-art ${r.live ? '' : 'opacity-60'}`}>
-                  <Icon aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
-                    {r.title}
-                  </h2>
-                  <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">{r.blurb}</p>
-                </div>
-                <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-                  {r.live ? (
-                    <>
-                      <span
-                        id={r.id === 'board' ? 'reports-generate-button' : undefined}
-                        className="tile-chip tile-chip--clear"
-                      >
-                        {cta}
-                      </span>
-                      <span className="tile-arrow">
-                        <ArrowRight size={16} />
-                      </span>
-                    </>
-                  ) : (
-                    <span className="tile-chip tile-chip--none">
-                      <Lock size={13} /> Coming soon
+    <Page key="hub" as="div" className="!max-w-none !px-0">
+      <BackLink className="mb-2" />
+      <PageHeader
+        eyebrow="Finance · Reports"
+        title="Board & finance reports"
+        meta="Assemble polished, board-ready packets straight from your saved statements and budget. No spreadsheets — pick a period, review the numbers, add your narrative, and print."
+        hue="37 99 235"
+      />
+      <Section label="Reports">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {REPORTS.map((r) => {
+            const Icon = r.Icon || FileBarChart2
+            const cta =
+              r.action === 'navigate'
+                ? 'Open schedules'
+                : r.id === 'forecast'
+                  ? 'View forecast'
+                  : r.action === 'inline'
+                    ? 'Manage months'
+                    : 'Build report'
+            return (
+              <Tile
+                key={r.id}
+                id={r.id === 'board' ? 'reports-board-card' : undefined}
+                icon={<Icon size={22} aria-hidden="true" />}
+                title={r.title}
+                body={r.blurb}
+                hue="37 99 235"
+                locked={!r.live}
+                arrow={r.live}
+                // A locked tile is a plain <div> (Tile has no `disabled`), where an
+                // aria-label is ignored — its visible title + "Coming soon" carry
+                // the name; aria-disabled marks it unavailable.
+                aria-label={r.live ? `${r.title} — ${cta}` : undefined}
+                aria-disabled={r.live ? undefined : 'true'}
+                onClick={r.live ? () => onSelect(r) : undefined}
+                foot={
+                  r.live ? (
+                    <span
+                      id={r.id === 'board' ? 'reports-generate-button' : undefined}
+                      className="text-small font-semibold text-ink"
+                    >
+                      {cta}
                     </span>
-                  )}
-                </div>
-              </span>
-            </motion.button>
-          )
-        })}
-      </div>
-    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-small text-ink2">
+                      <Lock size={12} aria-hidden="true" /> Coming soon
+                    </span>
+                  )
+                }
+              />
+            )
+          })}
+        </div>
+      </Section>
+    </Page>
   )
 }

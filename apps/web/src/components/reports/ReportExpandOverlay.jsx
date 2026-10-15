@@ -40,7 +40,7 @@ export default function ReportExpandOverlay({ open, title, onClose, children }) 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="no-print fixed inset-0 z-[60] flex flex-col bg-navy-deep/95 backdrop-blur-sm"
+          className="no-print fixed inset-0 z-[60] flex flex-col bg-[#0A1628]/95"
         >
           {/* header */}
           <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white sm:px-6">
@@ -53,7 +53,7 @@ export default function ReportExpandOverlay({ open, title, onClose, children }) 
                 type="button"
                 onClick={onClose}
                 aria-label="Close report"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/25 text-white transition-colors hover:bg-white/10"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border border-white/25 text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60"
               >
                 <X size={20} />
               </button>

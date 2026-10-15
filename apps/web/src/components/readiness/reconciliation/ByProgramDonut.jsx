@@ -5,11 +5,13 @@ import { programLabel } from '../../../lib/complianceMeta.js'
 
 // On-theme arc colors (navy/gold family + a muted slate for UNKNOWN). No new
 // brand colors — these are the same hues used across the analytics donuts.
+// Fixed-order categorical hues (the chart palette's A / B / D; never gold, never
+// purple), the unknown bucket in recessive slate. Colour follows the program.
 const ARC_COLORS = {
-  FTC: '#bd9b46', // gold
-  FES_EO: '#1f3a5f', // navy
-  FES_UA: '#6b8cae', // navy-soft
-  UNKNOWN: '#c9c2b4', // muted
+  FTC: '#2563EB',
+  FES_EO: '#D97706',
+  FES_UA: '#059669',
+  UNKNOWN: '#94A3B8',
 }
 
 function polar(cx, cy, r, frac) {
@@ -35,7 +37,7 @@ export default function ByProgramDonut({ byProgram }) {
 
   if (sum <= 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded-xl border border-rule/60 bg-section px-4 py-8 text-center text-[14px] italic text-muted">
+      <div className="flex items-center justify-center border-y border-hair py-6 text-center text-small italic text-ink2">
         No positive disbursement totals to chart yet.
       </div>
     )
@@ -52,39 +54,41 @@ export default function ByProgramDonut({ byProgram }) {
 
   return (
     <div className="flex items-center gap-5">
-      <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#efe9dc" strokeWidth="14" />
+      <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0" role="img" aria-label={`Disbursements by program: ${segments.map((s) => `${s.program === 'UNKNOWN' ? 'Unknown' : programLabel(s.program)} ${Math.round(s.frac * 100)}%`).join(', ')}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgb(16 28 61 / 0.06)" strokeWidth="12" />
         {segments.map((s, i) => (
           <motion.path
             key={s.program}
             d={arcPath(cx, cy, r, s.start, s.end - 0.002)}
             fill="none"
             stroke={ARC_COLORS[s.program] ?? ARC_COLORS.UNKNOWN}
-            strokeWidth="14"
-            strokeLinecap="round"
+            strokeWidth="12"
+            strokeLinecap="butt"
             initial={reduce ? false : { pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
             transition={{ duration: 0.6, delay: i * 0.08, ease: 'easeOut' }}
           />
         ))}
-        <text x={cx} y={cy - 2} textAnchor="middle" className="fill-navy font-serif" fontSize="13" fontWeight="700">
+        <text x={cx} y={cy + 2} textAnchor="middle" className="fill-ink font-serif" fontSize="18" fontWeight="500">
           {positive.length}
         </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" className="fill-muted" fontSize="8">
+        <text x={cx} y={cy + 14} textAnchor="middle" className="fill-ink2" fontSize="8">
           {positive.length === 1 ? 'program' : 'programs'}
         </text>
       </svg>
-      <ul className="space-y-2 text-[14px]">
+      <ul className="min-w-0 flex-1 text-[13px]">
         {segments.map((s) => (
-          <li key={s.program} className="flex items-center gap-2">
+          <li key={s.program} className="fig">
+            <span className="fig-label">
             <span
-              className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px]"
               style={{ background: ARC_COLORS[s.program] ?? ARC_COLORS.UNKNOWN }}
             />
-            <span className="font-semibold text-navy">
+            <span className="font-semibold text-ink">
               {s.program === 'UNKNOWN' ? 'Unknown' : programLabel(s.program)}
             </span>
-            <span className="tabular-nums text-muted">
+            </span>
+            <span className="fig-value">
               {fmtDollar(s.total)} · {Math.round(s.frac * 100)}%
             </span>
           </li>

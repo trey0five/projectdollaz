@@ -2,6 +2,7 @@
 // owner/accountant connect (redirect to Intuit), sync a period's trial balance
 // (which auto-scans), and disconnect. Config-gated: when the server has no QB
 // credentials, the card explains it's disabled rather than offering Connect.
+import '../../styles/pending/b2-finance.css'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -16,7 +17,7 @@ import QboCategoryReviewCard from './QboCategoryReviewCard.jsx'
 import OrgQuickBooksCard from './OrgQuickBooksCard.jsx'
 
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 // Finer-grained than the day-level formatRelative for a just-completed sync:
 // "just now / 5m ago / 3h ago", then defer to formatRelative for ≥1 day.
@@ -36,14 +37,14 @@ function syncRelativeTime(iso) {
 // One line in the scoped-import result (a scope's ok/failed outcome).
 function ScopeRow({ ok, label, detail }) {
   return (
-    <li className="flex items-start gap-2 text-muted">
+    <li className="flex items-start gap-2 text-ink2">
       {ok ? (
-        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-gold" />
+        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-ink2" />
       ) : (
-        <XCircle size={15} className="mt-0.5 shrink-0 text-danger" />
+        <XCircle size={15} className="mt-0.5 shrink-0 tone-risk" />
       )}
       <span>
-        <span className="font-medium text-navy">{label}</span>
+        <span className="font-medium text-ink">{label}</span>
         {detail ? ` — ${detail}` : ''}
       </span>
     </li>
@@ -447,7 +448,7 @@ export default function IntegrationsSection({ embedded = false }) {
   if (!activeSchool) {
     return (
       <SettingsCard title="Integrations">
-        <p className="text-[16px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-ink2">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -463,39 +464,41 @@ export default function IntegrationsSection({ embedded = false }) {
         description="Pull the trial balance straight from QuickBooks instead of uploading a file."
       >
       {status == null ? (
-        <p className="text-[16px] text-muted">Checking connection…</p>
+        <p className="text-[16px] text-ink2">Checking connection…</p>
       ) : !status.configured ? (
-        <div className="rounded-lg border border-border bg-section px-4 py-3 text-[15px] text-muted">
-          The QuickBooks connector isn’t configured on this server yet. An administrator needs to set
+        <div className="b2-callout text-[15px]">
+          <span>The QuickBooks connector isn’t configured on this server yet. An administrator needs to set
           the QuickBooks app credentials (<span className="font-mono">QB_OAUTH_CLIENT_ID</span> /
           <span className="font-mono"> QB_OAUTH_CLIENT_SECRET</span>) to enable it. File upload still
-          works in the meantime.
+          works in the meantime.</span>
         </div>
       ) : status.connected ? (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[15px] text-navy">
-            <Plug size={15} className="text-gold" />
+          <div className="b2-callout mb-3 flex-wrap text-[15px]" data-tone="good">
+            <Plug size={15} className="text-ink2" />
+            <span>
             Connected to QuickBooks ({status.environment})
             {status.companyName ? (
               <>
-                {' '}· <span className="font-semibold">{status.companyName}</span>
-                <span className="font-mono text-[13px] text-muted">#{status.realmId}</span>
+                {' '}· <span className="font-semibold">{status.companyName}</span>{' '}
+                <span className="font-mono text-[13px] text-ink2">#{status.realmId}</span>
               </>
             ) : (
               <>
                 {' '}· company <span className="font-mono">{status.realmId}</span>
               </>
             )}
+            </span>
           </div>
 
           {/* What a sync actually does + where the data lands. */}
-          <p className="mb-3 text-[13.5px] leading-relaxed text-muted">
+          <p className="mb-3 text-[13.5px] leading-relaxed text-ink2">
             A sync pulls the selected period&apos;s{' '}
-            <span className="font-medium text-navy">trial balance</span> from QuickBooks and rebuilds
+            <span className="font-medium text-ink">trial balance</span> from QuickBooks and rebuilds
             your statements — the result lands in{' '}
             <Link
               to="/statements"
-              className="font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+              className="font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
             >
               Statements &amp; Periods
             </Link>{' '}
@@ -503,11 +506,11 @@ export default function IntegrationsSection({ embedded = false }) {
           </p>
 
           {/* Last synced — visible to all roles (not gated by canEdit). */}
-          <p className="mb-4 text-[14px] tracking-[0.01em] text-muted">
+          <p className="mb-4 text-[14px] tracking-[0.01em] text-ink2">
             {status.lastSyncedAt ? (
               <>
                 Last synced{' '}
-                <span className="font-semibold text-navy">
+                <span className="font-semibold text-ink">
                   {syncRelativeTime(status.lastSyncedAt)}
                 </span>
                 {status.lastSyncRowCount != null && <> · {status.lastSyncRowCount} accounts</>}
@@ -519,17 +522,17 @@ export default function IntegrationsSection({ embedded = false }) {
 
           {/* Which source currently drives this period's statements. */}
           {activeCy && (
-            <p className="mb-4 flex flex-wrap items-center gap-x-1.5 text-[14px] text-muted">
+            <p className="mb-4 flex flex-wrap items-center gap-x-1.5 text-[14px] text-ink2">
               <span>Active current-year trial balance:</span>
-              <span className="font-semibold text-navy">
+              <span className="font-semibold text-ink">
                 {activeCy.sourceType === 'quickbooks' ? 'QuickBooks Online' : activeCy.sourceName}
               </span>
               <span>· {activeCy.rowCount} accounts</span>
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] ${
                   activeCy.sourceType === 'quickbooks'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-navy/[0.06] text-navy/70'
+                    ? 'bg-white text-ink'
+                    : 'bg-ink/[0.06] text-ink2'
                 }`}
               >
                 {activeCy.sourceType === 'quickbooks' ? 'Synced' : 'Uploaded file'}
@@ -543,9 +546,9 @@ export default function IntegrationsSection({ embedded = false }) {
               onClick={() =>
                 document.getElementById('qb-review')?.scrollIntoView({ behavior: 'smooth' })
               }
-              className="mb-4 inline-flex items-center gap-2 rounded-full border-2 border-gold/60 bg-gold/10 px-4 py-1.5 text-[13.5px] font-semibold text-navy transition-colors hover:border-gold hover:bg-gold/20"
+              className="mb-4 inline-flex items-center gap-2 rounded-full border border-hair/[0.3] bg-ink/[0.04] px-4 py-1.5 text-[13.5px] font-semibold text-ink transition-colors hover:border-hair/[0.3] hover:bg-ink/[0.06]"
             >
-              <AlertTriangle size={14} className="shrink-0 text-gold" />
+              <AlertTriangle size={14} className="shrink-0 text-ink2" />
               {review.summary.needsReview} account{review.summary.needsReview === 1 ? '' : 's'} to
               review — refine categories
             </button>
@@ -555,11 +558,11 @@ export default function IntegrationsSection({ embedded = false }) {
               hook. Gated by canEdit (owner/accountant); only shown once the API
               reports the autoSync block so an older server degrades gracefully. */}
           {canEdit && status.autoSync && (
-            <div className="mb-5 rounded-lg border border-border bg-section/40 px-4 py-3.5">
+            <div className="mb-5 border-t border-hair pt-4">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 <div className="min-w-[14rem] flex-1">
-                  <p className="text-[15px] font-semibold text-navy">Automatic nightly sync</p>
-                  <p className="mt-0.5 text-[13.5px] leading-relaxed text-muted">
+                  <p className="text-[15px] font-semibold text-ink">Automatic nightly sync</p>
+                  <p className="mt-0.5 text-[13.5px] leading-relaxed text-ink2">
                     Refreshes this school&apos;s trial balance and AR/AP aging every night — no
                     clicks — and keeps your QuickBooks connection from expiring.
                   </p>
@@ -571,8 +574,8 @@ export default function IntegrationsSection({ embedded = false }) {
                   aria-label="Automatic nightly sync"
                   onClick={() => toggleAutoSync(!status.autoSync.enabled)}
                   disabled={autoSyncBusy}
-                  className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${
-                    status.autoSync.enabled ? 'border-gold bg-gold' : 'border-border bg-navy/10'
+                  className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${
+                    status.autoSync.enabled ? 'border-[#2563EB] bg-[#2563EB]' : 'border-hair/[0.18] bg-ink/[0.08]'
                   }`}
                 >
                   <span
@@ -587,38 +590,38 @@ export default function IntegrationsSection({ embedded = false }) {
                   + ✓/⚠) → off. Reuses syncRelativeTime + the shared status icons. */}
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                 {status.autoSync.needsReauth ? (
-                  <span className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-[13.5px] font-medium text-amber-800">
-                    <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                  <span className="inline-flex items-center gap-2 rounded-md border border-hair bg-white px-3 py-1.5 text-[13.5px] font-medium text-ink">
+                    <AlertTriangle size={15} className="shrink-0 text-ink2" />
                     Reconnect QuickBooks to resume auto-sync
                     <button
                       type="button"
                       onClick={connect}
                       disabled={busy}
-                      className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950 disabled:opacity-50"
+                      className="font-semibold text-ink underline underline-offset-2 hover:text-ink2 disabled:opacity-50"
                     >
                       {busy ? 'Redirecting…' : 'Reconnect'}
                     </button>
                   </span>
                 ) : status.autoSync.enabled ? (
-                  <span className="inline-flex items-center gap-1.5 text-[13.5px] text-muted">
+                  <span className="inline-flex items-center gap-1.5 text-[13.5px] text-ink2">
                     Auto-syncs nightly · last run{' '}
-                    <span className="font-semibold text-navy">
+                    <span className="font-semibold text-ink">
                       {syncRelativeTime(status.autoSync.lastRunAt) || 'not yet'}
                     </span>
                     {status.autoSync.lastStatus === 'synced' ? (
-                      <CheckCircle2 size={14} className="shrink-0 text-gold" />
+                      <CheckCircle2 size={14} className="shrink-0 text-ink2" />
                     ) : status.autoSync.lastStatus ? (
-                      <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+                      <AlertTriangle size={14} className="shrink-0 text-ink2" />
                     ) : null}
                   </span>
                 ) : (
-                  <span className="text-[13.5px] text-muted">Automatic sync off</span>
+                  <span className="text-[13.5px] text-ink2">Automatic sync off</span>
                 )}
                 <button
                   type="button"
                   onClick={runAutoSyncNow}
                   disabled={runningNow || autoSyncBusy}
-                  className="text-[13px] font-semibold text-navy underline-offset-2 transition-colors hover:text-gold hover:underline disabled:opacity-50"
+                  className="text-[13px] font-semibold text-ink underline-offset-2 transition-colors hover:text-ink2 hover:underline disabled:opacity-50"
                 >
                   {runningNow ? 'Running…' : 'Run now'}
                 </button>
@@ -629,7 +632,7 @@ export default function IntegrationsSection({ embedded = false }) {
           {canEdit && (
             <>
               {!status.lastSyncedAt && (
-                <p className="mb-3 text-[15px] font-semibold text-navy">
+                <p className="mb-3 text-[15px] font-semibold text-ink">
                   You’re connected — choose what to pull from QuickBooks:
                 </p>
               )}
@@ -638,18 +641,18 @@ export default function IntegrationsSection({ embedded = false }) {
                   trial balance INTO a period, so create one first. Otherwise the
                   dropdown is empty and there's nothing to import into ("0 of 0"). */}
               {(periods || []).length === 0 ? (
-                <div className="mb-4 rounded-lg border-2 border-gold/40 bg-gold/[0.06] p-4">
-                  <p className="text-[15px] font-semibold text-navy">
+                <div className="mb-4 border-t border-hair pt-4">
+                  <p className="text-[15px] font-semibold text-ink">
                     First, add the reporting period to import into.
                   </p>
-                  <p className="mt-1 text-[13.5px] leading-relaxed text-muted">
+                  <p className="mt-1 text-[13.5px] leading-relaxed text-ink2">
                     QuickBooks pulls your trial balance as of a fiscal year-end. Pick a{' '}
-                    <span className="font-semibold text-navy">completed</span> fiscal year QuickBooks
+                    <span className="font-semibold text-ink">completed</span> fiscal year QuickBooks
                     has activity for — a current or future year-end can pull a balance sheet but no
                     income statement yet.
                   </p>
                   <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <label className="flex flex-col gap-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
+                    <label className="flex flex-col gap-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink2">
                       Fiscal year-end
                       <input
                         type="date"
@@ -662,7 +665,7 @@ export default function IntegrationsSection({ embedded = false }) {
                       whileTap={{ scale: 0.98 }}
                       onClick={createPeriod}
                       disabled={creatingPeriod || !newPeriodDate}
-                      className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {creatingPeriod ? 'Creating…' : 'Create period'}
                     </motion.button>
@@ -670,7 +673,7 @@ export default function IntegrationsSection({ embedded = false }) {
                 </div>
               ) : (
                 <>
-                  <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-ink2">
                     Import into period
                   </label>
                   <select
@@ -688,16 +691,16 @@ export default function IntegrationsSection({ embedded = false }) {
               )}
 
               {/* Import-scope chooser: current year is the base; the rest are opt-in. */}
-              <fieldset className="mt-4 rounded-lg border border-border bg-section/40 p-4">
-                <legend className="px-1 text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <fieldset className="mt-5 min-w-0">
+                <legend className="mb-3 w-full border-t border-hair pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                   What to import
                 </legend>
                 <div className="space-y-2.5">
                   <label className="flex items-start gap-2.5">
                     <input type="checkbox" checked disabled className="mt-1 h-4 w-4 accent-gold" />
                     <span className="text-[15px]">
-                      <span className="font-semibold text-navy">Current year</span>{' '}
-                      <span className="text-muted">— this year’s trial balance (the base; always included)</span>
+                      <span className="font-semibold text-ink">Current year</span>{' '}
+                      <span className="text-ink2">— this year’s trial balance (the base; always included)</span>
                     </span>
                   </label>
                   <label className="flex cursor-pointer items-start gap-2.5">
@@ -708,8 +711,8 @@ export default function IntegrationsSection({ embedded = false }) {
                       className="mt-1 h-4 w-4 accent-gold"
                     />
                     <span className="text-[15px]">
-                      <span className="font-semibold text-navy">Prior year</span>{' '}
-                      <span className="text-muted">— last year’s TB for the comparative columns</span>
+                      <span className="font-semibold text-ink">Prior year</span>{' '}
+                      <span className="text-ink2">— last year’s TB for the comparative columns</span>
                     </span>
                   </label>
                   <label className="flex cursor-pointer items-start gap-2.5">
@@ -720,16 +723,16 @@ export default function IntegrationsSection({ embedded = false }) {
                       className="mt-1 h-4 w-4 accent-gold"
                     />
                     <span className="text-[15px]">
-                      <span className="font-semibold text-navy">Monthly actuals</span>{' '}
-                      <span className="text-muted">— a TB as of each month-end (powers the Monthly numbers card)</span>
+                      <span className="font-semibold text-ink">Monthly actuals</span>{' '}
+                      <span className="text-ink2">— a TB as of each month-end (powers the Monthly numbers card)</span>
                     </span>
                   </label>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <span className="text-[15px]">
-                      <span className="font-semibold text-navy">Prior years of history</span>{' '}
-                      <span className="text-muted">— each older year as its own period (multi-year trend)</span>
+                      <span className="font-semibold text-ink">Prior years of history</span>{' '}
+                      <span className="text-ink2">— each older year as its own period (multi-year trend)</span>
                     </span>
-                    <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[14px] font-semibold text-navy">
+                    <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[14px] font-semibold text-ink">
                       <input
                         type="checkbox"
                         checked={scope.allHistory}
@@ -743,7 +746,7 @@ export default function IntegrationsSection({ embedded = false }) {
                       disabled={scope.allHistory}
                       onChange={(e) => setScope((s) => ({ ...s, historyYears: Number(e.target.value) }))}
                       title={scope.allHistory ? 'Using every prior year with data' : undefined}
-                      className="rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.05] disabled:text-muted"
+                      className="rounded-lg border border-hair/[0.18] bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-[#2563EB] disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2"
                     >
                       {Array.from({ length: 26 }, (_, n) => n).map((n) => (
                         <option key={n} value={n}>
@@ -763,7 +766,7 @@ export default function IntegrationsSection({ embedded = false }) {
                   whileTap={{ scale: 0.98 }}
                   onClick={requestImport}
                   disabled={syncing || syncingAll || !selectedPeriod || !!pendingSync}
-                  className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
+                  className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
                 >
                   <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
                   {syncing ? 'Importing…' : 'Import from QuickBooks'}
@@ -772,7 +775,7 @@ export default function IntegrationsSection({ embedded = false }) {
                   whileTap={{ scale: 0.98 }}
                   onClick={requestSyncAll}
                   disabled={syncing || syncingAll || !!pendingSync}
-                  className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/50 bg-gold/10 px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-gold hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-hair bg-ink/[0.04] px-5 py-2.5 text-[15px] font-semibold text-ink transition-all hover:border-hair/[0.3] hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw size={15} className={syncingAll ? 'animate-spin' : ''} />
                   {syncingAll ? 'Re-syncing…' : 'Re-sync all periods'}
@@ -780,7 +783,7 @@ export default function IntegrationsSection({ embedded = false }) {
                 <button
                   onClick={() => setPendingDisconnect(true)}
                   disabled={busy || syncingAll || !!pendingSync || pendingDisconnect}
-                  className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-all hover:border-hair/[0.3] hover:text-[rgb(var(--c-risk))] disabled:opacity-50"
                 >
                   <Unplug size={15} /> Disconnect
                 </button>
@@ -791,14 +794,14 @@ export default function IntegrationsSection({ embedded = false }) {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 rounded-lg border-2 border-gold/40 bg-gold/[0.06] px-4 py-3.5"
+                  className="mt-4 border-t border-hair pt-4"
                 >
-                  <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
-                    <Unplug size={16} className="mt-0.5 shrink-0 text-gold" />
+                  <p className="flex items-start gap-2 text-[15px] font-semibold text-ink">
+                    <Unplug size={16} className="mt-0.5 shrink-0 text-ink2" />
                     Disconnect QuickBooks?
                   </p>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-                    By default we <span className="font-medium text-navy">keep everything already
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-ink2">
+                    By default we <span className="font-medium text-ink">keep everything already
                     imported</span> — your statements and dashboard stay exactly as they are; you just
                     stop syncing. You can also permanently delete the QuickBooks data, which rebuilds
                     your statements from any uploaded files (so the dashboard reverts to those).
@@ -807,21 +810,21 @@ export default function IntegrationsSection({ embedded = false }) {
                     <button
                       onClick={() => doDisconnect(false)}
                       disabled={busy}
-                      className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+                      className="btn btn-primary inline-flex items-center gap-2 disabled:opacity-50"
                     >
                       <Unplug size={15} /> Disconnect (keep data)
                     </button>
                     <button
                       onClick={() => setPendingDisconnect(false)}
                       disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-colors hover:border-hair/[0.3] disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => doDisconnect(true)}
                       disabled={busy}
-                      className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-danger/80 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-50"
+                      className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[rgb(var(--c-risk)/0.8)] underline-offset-2 transition-colors hover:text-[rgb(var(--c-risk))] hover:underline disabled:opacity-50"
                     >
                       <AlertTriangle size={14} /> Disconnect &amp; delete QuickBooks data
                     </button>
@@ -835,16 +838,16 @@ export default function IntegrationsSection({ embedded = false }) {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 rounded-lg border-2 border-gold/50 bg-gold/[0.07] px-4 py-3.5"
+                  className="mt-4 border-t border-hair pt-4"
                 >
-                  <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
-                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-gold" />
+                  <p className="flex items-start gap-2 text-[15px] font-semibold text-ink">
+                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-ink2" />
                     This will make QuickBooks your active current-year trial balance
                     {pendingSync === 'all' ? ' for every period' : ` for ${periodLabel(selectedPeriod)}`}.
                   </p>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-ink2">
                     Your uploaded file{' '}
-                    <span className="font-medium text-navy">{activeCy.sourceName}</span> (
+                    <span className="font-medium text-ink">{activeCy.sourceName}</span> (
                     {activeCy.rowCount} accounts) is kept, but QuickBooks will drive your statements
                     from now on. You can switch back by re-adding the file.
                   </p>
@@ -852,13 +855,13 @@ export default function IntegrationsSection({ embedded = false }) {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={pendingSync === 'all' ? syncAll : importScoped}
-                      className="btn-primary inline-flex items-center gap-2"
+                      className="btn btn-primary inline-flex items-center gap-2"
                     >
                       <RefreshCw size={15} /> Import from QuickBooks
                     </motion.button>
                     <button
                       onClick={() => setPendingSync(null)}
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy"
+                      className="inline-flex items-center gap-2 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-colors hover:border-hair/[0.3]"
                     >
                       Cancel
                     </button>
@@ -871,10 +874,10 @@ export default function IntegrationsSection({ embedded = false }) {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 rounded-lg border border-gold/40 bg-gold/10 px-4 py-3"
+                  className="mt-4 border-t border-hair pt-4"
                 >
-                  <p className="flex items-center gap-2 text-[15px] font-semibold text-navy">
-                    <CheckCircle2 size={16} className="shrink-0 text-gold" />
+                  <p className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                    <CheckCircle2 size={16} className="shrink-0 text-ink2" />
                     Imported from QuickBooks · {scopeResult.label}
                   </p>
                   <ul className="mt-2 space-y-1 text-[14px]">
@@ -927,7 +930,7 @@ export default function IntegrationsSection({ embedded = false }) {
                       onClick={() =>
                         document.getElementById('qb-review')?.scrollIntoView({ behavior: 'smooth' })
                       }
-                      className="mt-2.5 inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[14px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                     >
                       Next step: review {review.summary.needsReview} imported categories{' '}
                       <ArrowRight size={14} />
@@ -936,13 +939,13 @@ export default function IntegrationsSection({ embedded = false }) {
                   <div className="mt-2.5 flex flex-wrap gap-4">
                     <Link
                       to="/statements"
-                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                     >
                       View statements <ArrowRight size={14} />
                     </Link>
                     <Link
                       to="/finance"
-                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                     >
                       Open finance dashboard <ArrowRight size={14} />
                     </Link>
@@ -954,34 +957,32 @@ export default function IntegrationsSection({ embedded = false }) {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`mt-4 rounded-lg border px-4 py-3 ${
-                    syncAllResult.failed > 0
-                      ? 'border-danger/30 bg-danger/[0.06]'
-                      : 'border-gold/40 bg-gold/10'
+                  className={`mt-4 border-l-2 py-1 pl-4 ${
+                    syncAllResult.failed > 0 ? 'border-[rgb(var(--c-risk))]' : 'border-[rgb(var(--c-good))]'
                   }`}
                 >
-                  <p className="text-[15px] font-semibold text-navy">
+                  <p className="text-[15px] font-semibold text-ink">
                     Synced {syncAllResult.succeeded} of {syncAllResult.total} periods
                     {syncAllResult.failed > 0 && (
-                      <span className="text-danger"> · {syncAllResult.failed} skipped</span>
+                      <span className="tone-risk"> · {syncAllResult.failed} skipped</span>
                     )}
                   </p>
-                  <p className="mt-1 text-[13.5px] text-muted">
+                  <p className="mt-1 text-[13.5px] text-ink2">
                     Each pulled that period&apos;s trial balance and rebuilt its statements.
                   </p>
                   <ul className="mt-2 space-y-1">
                     {syncAllResult.results.map((r) => (
                       <li
                         key={r.periodId}
-                        className="flex items-start gap-2 text-[14px] text-muted"
+                        className="flex items-start gap-2 text-[14px] text-ink2"
                       >
                         {r.ok ? (
-                          <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-gold" />
+                          <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-ink2" />
                         ) : (
-                          <XCircle size={15} className="mt-0.5 shrink-0 text-danger" />
+                          <XCircle size={15} className="mt-0.5 shrink-0 tone-risk" />
                         )}
                         <span>
-                          <span className="font-medium text-navy">{r.label}</span>
+                          <span className="font-medium text-ink">{r.label}</span>
                           {r.ok
                             ? ` · ${r.rowCount} accounts`
                             : ` · ${r.error || 'No QuickBooks data for this period.'}`}
@@ -991,7 +992,7 @@ export default function IntegrationsSection({ embedded = false }) {
                   </ul>
                   <Link
                     to="/statements"
-                    className="mt-2 inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    className="mt-2 inline-flex items-center gap-1.5 text-[14px] font-semibold text-ink underline-offset-2 hover:text-ink2 hover:underline"
                   >
                     View statements <ArrowRight size={14} />
                   </Link>
@@ -1001,17 +1002,17 @@ export default function IntegrationsSection({ embedded = false }) {
           )}
 
           {history.length > 0 && (
-            <div className="mt-5 border-t border-border pt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+            <div className="mt-5 border-t border-hair/[0.18] pt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-ink2">
                 <History size={13} /> Recent syncs
               </p>
               <ul className="space-y-1">
                 {history.slice(0, 8).map((h, i) => (
                   <li
                     key={`${h.syncedAt}-${i}`}
-                    className="flex items-center justify-between text-[14px] text-muted"
+                    className="flex items-center justify-between text-[14px] text-ink2"
                   >
-                    <span className="text-navy">{syncRelativeTime(h.syncedAt)}</span>
+                    <span className="text-ink">{syncRelativeTime(h.syncedAt)}</span>
                     <span>{periodLabel(h.fiscalPeriodId)} · {h.rowCount ?? '—'} rows</span>
                   </li>
                 ))}
@@ -1023,16 +1024,18 @@ export default function IntegrationsSection({ embedded = false }) {
         // Diocesan QuickBooks: no direct connection, but this school is mapped in
         // the ORGANIZATION's QuickBooks company — numbers flow from there.
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[15px] text-navy">
-            <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+          <div className="b2-callout mb-3 flex-wrap text-[15px]" data-tone="good">
+            <CheckCircle2 size={15} className="shrink-0 text-ink2" />
+            <span>
             Fed by your organization&apos;s QuickBooks
             {status.orgFed.companyName && (
               <>
                 {' '}· <span className="font-semibold">{status.orgFed.companyName}</span>
               </>
             )}
+            </span>
           </div>
-          <p className="mb-3 text-[14.5px] leading-relaxed text-muted">
+          <p className="mb-3 text-[14.5px] leading-relaxed text-ink2">
             This school&apos;s numbers come from the organization&apos;s QuickBooks company
             {(status.orgFed.valueNames?.length ?? 0) > 0 && (
               <>
@@ -1044,16 +1047,16 @@ export default function IntegrationsSection({ embedded = false }) {
                   : status.orgFed.valueNames.length === 1
                     ? 'location'
                     : 'locations'}{' '}
-                <span className="font-semibold text-navy">{status.orgFed.valueNames.join(', ')}</span>
+                <span className="font-semibold text-ink">{status.orgFed.valueNames.join(', ')}</span>
               </>
             )}
             . An import pulls only this school&apos;s share of the books.
           </p>
-          <p className="mb-4 text-[14px] tracking-[0.01em] text-muted">
+          <p className="mb-4 text-[14px] tracking-[0.01em] text-ink2">
             {status.orgFed.lastImportedAt ? (
               <>
                 Last imported{' '}
-                <span className="font-semibold text-navy">
+                <span className="font-semibold text-ink">
                   {syncRelativeTime(status.orgFed.lastImportedAt)}
                 </span>
               </>
@@ -1071,7 +1074,7 @@ export default function IntegrationsSection({ embedded = false }) {
                 whileTap={{ scale: 0.98 }}
                 onClick={importFromOrg}
                 disabled={orgImporting}
-                className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw size={15} className={orgImporting ? 'animate-spin' : ''} />
                 {orgImporting ? 'Importing…' : 'Import now'}
@@ -1082,7 +1085,7 @@ export default function IntegrationsSection({ embedded = false }) {
               onClick={() =>
                 document.getElementById('org-quickbooks')?.scrollIntoView({ behavior: 'smooth' })
               }
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-gold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hair/[0.18] bg-white px-5 py-2.5 text-[15px] font-semibold text-ink transition-colors hover:border-hair/[0.3] disabled:opacity-50"
             >
               Manage in Organization QuickBooks <ArrowRight size={15} />
             </button>
@@ -1092,7 +1095,7 @@ export default function IntegrationsSection({ embedded = false }) {
               type="button"
               onClick={connect}
               disabled={busy || orgImporting}
-              className="mt-3 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-muted underline-offset-2 transition-colors hover:text-gold hover:underline disabled:opacity-50"
+              className="mt-3 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-ink2 underline-offset-2 transition-colors hover:text-ink2 hover:underline disabled:opacity-50"
             >
               <Plug size={13} /> {busy ? 'Redirecting…' : "Connect this school's own QuickBooks instead"}
             </button>
@@ -1100,7 +1103,7 @@ export default function IntegrationsSection({ embedded = false }) {
         </>
       ) : (
         <>
-          <p className="mb-4 text-[16px] text-muted">
+          <p className="mb-4 text-[16px] text-ink2">
             Connect your school’s QuickBooks Online company to pull the trial balance on demand. Your
             school needs an active QuickBooks Online subscription.
           </p>
@@ -1111,7 +1114,7 @@ export default function IntegrationsSection({ embedded = false }) {
               whileTap={{ scale: 0.98 }}
               onClick={connect}
               disabled={busy}
-              className="btn-primary inline-flex items-center gap-2 disabled:opacity-50 sm:px-8"
+              className="btn btn-primary inline-flex items-center gap-2 disabled:opacity-50 sm:px-8"
             >
               <Plug size={15} /> {busy ? 'Redirecting…' : 'Connect to QuickBooks'}
             </motion.button>

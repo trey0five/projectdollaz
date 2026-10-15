@@ -1,5 +1,5 @@
 // Phase 2A — the compliance intake (attestation inputs). Modeled on
-// OperationalDataPanel: same card-soft container, render-time sync-on-period
+// OperationalDataPanel: one Panel (it is a form), render-time sync-on-period
 // pattern, FormError/FormSuccess, disabled-when-!canEdit, btn-primary save. On
 // save it refetches its own row AND calls onSaved() so the parent re-fetches GET
 // /compliance, refreshing every section badge + the trigger header live.
@@ -13,50 +13,39 @@ import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import TierSelector from './TierSelector.jsx'
 
-const labelCls =
-  'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
-const inputCls =
-  'w-full rounded-lg border border-border bg-white px-4 py-3 text-base text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+const labelCls = 'b2-label'
+const inputCls = 'b2-input disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 const toStr = (v) => (v === null || v === undefined ? '' : String(v))
 
-// Tri-state Yes/No toggle (null = unanswered). On-theme gold-active pills.
+// Tri-state Yes/No toggle (null = unanswered). Premium UI P4: the ledger
+// segmented control — the chosen answer takes the ink fill (unmistakable at a
+// glance), the other stays on white; pressing the chosen one again clears it.
 function YesNo({ label, value, onChange, disabled, hint }) {
-  const reduce = useReducedMotion()
-  // Selected = solid fill (the prior 10%-opacity tint read as barely selected).
-  // Yes → gold, No → navy, so the chosen answer is unmistakable at a glance.
-  const pill = (active, tone) =>
-    `flex-1 rounded-lg border-2 px-3 py-2 text-[14px] font-semibold uppercase tracking-[0.08em] transition-all ${
-      active
-        ? tone === 'yes'
-          ? 'border-gold bg-gold text-white shadow-[0_3px_12px_-3px_rgba(184,150,80,0.65)]'
-          : 'border-navy bg-navy text-white shadow-[0_3px_12px_-3px_rgba(26,39,68,0.5)]'
-        : 'border-border bg-section text-muted'
-    } ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-gold/40'}`
   return (
     <div>
-      <label className={labelCls}>{label}</label>
-      <div className="flex gap-2">
-        <motion.button
+      <span className={labelCls}>{label}</span>
+      <div className="seg w-full" role="group" aria-label={label}>
+        <button
           type="button"
-          whileTap={reduce || disabled ? undefined : { scale: 0.97 }}
           disabled={disabled}
+          aria-pressed={value === true}
           onClick={() => onChange(value === true ? null : true)}
-          className={pill(value === true, 'yes')}
+          className="seg-btn h-8 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-60"
         >
           Yes
-        </motion.button>
-        <motion.button
+        </button>
+        <button
           type="button"
-          whileTap={reduce || disabled ? undefined : { scale: 0.97 }}
           disabled={disabled}
+          aria-pressed={value === false}
           onClick={() => onChange(value === false ? null : false)}
-          className={pill(value === false, 'no')}
+          className="seg-btn h-8 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-60"
         >
           No
-        </motion.button>
+        </button>
       </div>
-      {hint && <p className="mt-1.5 text-[13px] italic text-muted">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[12px] italic text-ink2">{hint}</p>}
     </div>
   )
 }
@@ -190,15 +179,13 @@ export default function ComplianceIntakePanel({
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      className="card-flashy p-5"
+      className="panel p-5"
     >
       <div className="mb-1 flex items-start gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <ClipboardCheck size={17} />
-        </span>
+        <ClipboardCheck size={17} aria-hidden="true" className="mt-1 shrink-0 text-ink2" />
         <div>
-          <h3 className="font-serif text-lg font-semibold text-navy">Compliance intake</h3>
-          <p className="text-[14px] text-muted">
+          <h3 className="text-heading font-semibold text-ink">Compliance intake</h3>
+          <p className="text-small text-ink2">
             {periodLabel ? `${periodLabel} · ` : ''}
             {canEdit
               ? 'Attestation inputs that turn most AUP sections into a real verdict.'
@@ -211,8 +198,8 @@ export default function ComplianceIntakePanel({
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
             <div key={i}>
-              <div className="shimmer-bar h-3 w-28 rounded" />
-              <div className="shimmer-bar mt-2 h-11 w-full rounded-lg" />
+              <div className="h-3 w-28 animate-pulse rounded-[4px] bg-ink/[0.06]" />
+              <div className="mt-2 h-9 w-full animate-pulse rounded-[6px] bg-ink/[0.06]" />
             </div>
           ))}
         </div>
@@ -222,11 +209,11 @@ export default function ComplianceIntakePanel({
             <div>
               <label className={labelCls}>Scholarship funds received</label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink2">
                   $
                 </span>
                 <input
-                  className={`${inputCls} pl-8`}
+                  className={`${inputCls} !pl-7`}
                   inputMode="decimal"
                   value={scholarship}
                   disabled={!canEdit}
@@ -234,7 +221,7 @@ export default function ComplianceIntakePanel({
                   placeholder="e.g. 300000"
                 />
               </div>
-              <p className="mt-1.5 text-[13px] italic text-muted">
+              <p className="mt-1.5 text-[12px] italic text-ink2">
                 Drives the $250k AUP trigger and the §V coverage check.
               </p>
             </div>
@@ -245,7 +232,7 @@ export default function ComplianceIntakePanel({
                 onChange={canEdit ? setPrograms : undefined}
                 disabled={!canEdit}
               />
-              <p className="mt-1.5 text-[13px] italic text-muted">
+              <p className="mt-1.5 text-[12px] italic text-ink2">
                 Scopes the FES-UA-only checks.
               </p>
             </div>
@@ -317,7 +304,7 @@ export default function ComplianceIntakePanel({
             <div className="sm:col-span-2">
               <label className={labelCls}>Notes (optional)</label>
               <textarea
-                className={`${inputCls} min-h-[80px] resize-y`}
+                className={`${inputCls} !h-auto min-h-[80px] resize-y py-2`}
                 value={notes}
                 disabled={!canEdit}
                 onChange={(e) => setNotes(e.target.value)}

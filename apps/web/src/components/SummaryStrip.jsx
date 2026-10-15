@@ -9,10 +9,10 @@ function SlotChip({ label, entry }) {
     <span
       className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[14px] font-semibold ${
         fromHistory
-          ? 'bg-gold/10 text-gold'
+          ? 'bg-ink/[0.04] text-ink2'
           : present
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'bg-section text-muted/60'
+            ? 'bg-white text-ink'
+            : 'bg-ground text-ink2/60'
       }`}
       title={fromHistory ? 'from saved history' : present ? 'loaded' : 'not provided'}
     >
@@ -48,7 +48,7 @@ export default function SummaryStrip() {
             expand()
           }
         }}
-        className="group flex w-full cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-border bg-white px-4 py-2.5 shadow-card outline-none transition-all hover:border-gold/70 hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow sm:h-[52px]"
+        className="group flex w-full cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-[8px] border border-hair/[0.18] bg-white px-4 py-2.5  outline-none transition-all hover:border-hair/[0.3] hover: focus-visible:border-[#2563EB] focus-visible: sm:h-[52px]"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SlotChip label="CY" entry={byRole.cy} />
@@ -57,13 +57,13 @@ export default function SummaryStrip() {
           {shortDateLabel && (
             <>
               <span aria-hidden className="mx-1 hidden h-4 w-px bg-rule sm:inline-block" />
-              <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-navy">
-                <Calendar size={13} className="text-gold" /> {shortDateLabel}
+              <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-ink">
+                <Calendar size={13} className="text-ink2" /> {shortDateLabel}
               </span>
             </>
           )}
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gold/40 bg-gold/5 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-gold transition-colors group-hover:border-gold group-hover:bg-gold/10">
+        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-hair bg-ink/[0.02] px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink2 transition-colors group-hover:border-hair/[0.3] group-hover:bg-ink/[0.04]">
           <PencilLine size={13} /> Edit
         </span>
       </div>

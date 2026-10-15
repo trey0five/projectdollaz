@@ -1,4 +1,5 @@
 import { Copy, Minus, CircleSlash, CalendarX, HelpCircle, FileWarning } from 'lucide-react'
+import { Pill } from '../../ui/surface/index.js'
 
 const ANOMALY_META = {
   duplicate: { label: 'Duplicate', Icon: Copy, tone: 'watch' },
@@ -9,18 +10,12 @@ const ANOMALY_META = {
   missing_amount: { label: 'Missing amount', Icon: FileWarning, tone: 'risk' },
 }
 
-const TONE = {
-  watch: 'bg-navy-soft/10 text-navy-soft border-navy-soft/30',
-  risk: 'bg-danger/10 text-danger border-danger/30',
-}
 
 /** The deterministic anomalies list (duplicates, negatives, out-of-period, etc). */
 export default function AnomaliesList({ anomalies }) {
   if (!anomalies || anomalies.length === 0) {
     return (
-      <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-[15px] text-[#7a5e00]">
-        No anomalies detected in the disbursement set.
-      </div>
+      <p className="b2-callout b2-good">No anomalies detected in the disbursement set.</p>
     )
   }
 
@@ -37,32 +32,28 @@ export default function AnomaliesList({ anomalies }) {
           const meta = ANOMALY_META[type] ?? { label: type, Icon: FileWarning, tone: 'watch' }
           const Icon = meta.Icon
           return (
-            <span
-              key={type}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold ${TONE[meta.tone]}`}
-            >
-              <Icon size={12} /> {meta.label} · {n}
-            </span>
+            <Pill key={type} variant="status" tone={meta.tone}>
+              <Icon size={11} aria-hidden="true" /> {meta.label} · {n}
+            </Pill>
           )
         })}
       </div>
-      <ul className="divide-y divide-rule/50 overflow-hidden rounded-xl border border-rule/60">
+      <ul className="border-t border-hair">
         {anomalies.map((a, i) => {
           const meta = ANOMALY_META[a.type] ?? { label: a.type, Icon: FileWarning, tone: 'watch' }
           const Icon = meta.Icon
           return (
-            <li key={`${a.type}-${a.index ?? 'x'}-${i}`} className="flex items-start gap-3 bg-white px-4 py-2.5">
-              <span className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border ${TONE[meta.tone]}`}>
-                <Icon size={13} />
-              </span>
+            <li key={`${a.type}-${a.index ?? 'x'}-${i}`} className="flex items-start gap-3 border-b border-hair py-2.5">
+              <i className={`mark tone-${meta.tone} mt-1`} aria-hidden="true" />
+              <Icon size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-ink2" />
               <div className="min-w-0">
-                <p className="text-[14px] font-semibold text-navy">
+                <p className="text-[13px] font-semibold text-ink">
                   {meta.label}
                   {a.index != null && (
-                    <span className="ml-1.5 font-normal text-muted">· row {a.index + 1}</span>
+                    <span className="ml-1.5 font-normal text-ink2">· row {a.index + 1}</span>
                   )}
                 </p>
-                <p className="text-[14px] text-muted">{a.detail}</p>
+                <p className="text-[13px] text-ink2">{a.detail}</p>
               </div>
             </li>
           )
