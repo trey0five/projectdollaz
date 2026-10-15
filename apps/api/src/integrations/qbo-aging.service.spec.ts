@@ -17,6 +17,9 @@ const AS_OF_ROW = () => new Date()
  * timezone, happens on the evening of the last day of every month.
  */
 const NOT_YET_DUE = new Date(Date.now() + 45 * 86_400_000).toISOString().slice(0, 10)
+// Relative to today too, so the buckets never rot as the calendar moves on.
+const OVERDUE_30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+const OVERDUE_120 = new Date(Date.now() - 120 * 86_400_000).toISOString().slice(0, 10)
 
 function arDetail(rows: Array<[string, string, string]>) {
   // rows: [party, dueDate, openBal]
@@ -119,8 +122,8 @@ describe('QboAgingService.getAging', () => {
     const { svc, calls } = makeService({
       arReport: arDetail([
         ['Acme', NOT_YET_DUE, '1000.00'], // current (never due yet, on any clock)
-        ['Beta', '2026-06-20', '2000.00'], // overdue
-        ['Beta', '2026-03-01', '3000.00'], // 90+
+        ['Beta', OVERDUE_30, '2000.00'], // overdue
+        ['Beta', OVERDUE_120, '3000.00'], // 90+
       ]),
     })
     const res = await svc.getAging('school-1', { refresh: true })
