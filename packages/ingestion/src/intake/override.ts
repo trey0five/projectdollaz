@@ -5,9 +5,10 @@
 // the grid is walked as a QuickBooks statement is still decided by the
 // existing evidence (banner, file name, section rows), and a Debit | Credit
 // grid — or a person choosing Debit + Credit columns — is ALWAYS a trial
-// balance. Picked budget / variance / prior-year columns are refused, a
-// column of zeros is refused, and text in an amount cell skips the row (it is
-// never read as 0).
+// balance. Picked budget / variance / prior-year columns are refused, an
+// "account numbers" column that holds amounts is refused (columnHoldsAmounts),
+// a column of zeros is refused, and text in an amount cell skips the row (it
+// is never read as 0).
 // ─────────────────────────────────────────────────────────────
 import type { ColumnChoice, IngestionResult, IntakeMemory, NormalizedRow, SavedLayout } from '../types.js'
 import {
@@ -24,13 +25,150 @@ import {
   statementTypeOfGrid,
   type RawGrid,
 } from '../statements/statementAdapter.js'
-import { isPlausibleAcct } from '../adapters/excelAdapter.js'
+import { ACCT_MAX, isPlausibleAcct } from '../adapters/excelAdapter.js'
 import { extractSheetMetadata } from '../metadata.js'
 import { IngestError, type IngestErrorCode } from './errors.js'
 import { columnLetter, explainFailure, findDebitCreditPair, layoutSignature, readGrid, type ColumnRole, type FailureVariant } from './preview.js'
 
 /** A header that names budget, variance, percentage or prior-year figures — never actual balances. */
 export const BUDGETISH = /budget|variance|%|percent|\bprior\b|last\s*year|\bpy\b/i
+
+/**
+ * A header that names a MONEY column — actuals, budget, totals, balances,
+ * variance, a percentage, debits / credits, or a period label ("Jun 2026",
+ * "Jul - Jun 26") — never the account numbers.
+ */
+export const MONEY_HEADER =
+  /\b(actuals?|budget(ed)?|totals?|amounts?|balances?|variance|debits?|credits?|ytd)\b|over\s*budget|%|percent|year\s+to\s+date|^net$/i
+const MONTH = '(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\\.?'
+/** A header that IS a period label: "June", "Jun 2026", "Jul - Jun 26", "Q4 2026". */
+const PERIOD_HEADER = new RegExp(`^(${MONTH}(\\s*[-–]\\s*${MONTH})?\\s*,?\\s*'?(\\d{2}|\\d{4})?|q[1-4]\\s*'?\\d{2,4})$`, 'i')
+/** A header that names the ACCOUNT column: its values are trusted as account numbers (fund / department repeats, 1010.10 sub-accounts). */
+const ACCOUNT_HEADER = /\b(acct|accounts?|gl|number|no\.?|code|id)\b|#/i
+/** A whole cell that is a bare column label, as QuickBooks stacks one on the row above ("Actual", "Budget", "Acct"). */
+const MONEY_LABEL =
+  /^(actuals?|budget(ed)?|totals?|amounts?|balances?|variance|over\s*budget|%\s*of\s*budget|debits?|credits?|ytd|net)$/i
+const ACCOUNT_LABEL = /^(acct|account|gl|number|no\.?|#|account\s*(#|no\.?|number))$/i
+
+/** Body rows judged when deciding whether a column holds amounts. */
+const ACCT_SCAN_ROWS = 500
+
+const nonEmptyCells = (r: unknown[] | undefined): number => (r ?? []).filter((c) => cellText(c) !== '').length
+
+/**
+ * The header text of a would-be account column. The header row's own cell —
+ * unless that row is a banner (its ONLY text: "Trial Balance"). Blank: the
+ * nearest of the two rows above, but only a bare column LABEL stacked there
+ * (QuickBooks prints `_ | Actual | Budget` over the names row) — never banner
+ * text like "Trial Balance" or "As of June 30, 2026".
+ */
+function acctHeaderText(grid: RawGrid, headerRow: number, col: number): string {
+  if (headerRow < 0 || col < 0) return ''
+  const own = grid[headerRow]
+  const t0 = cellText(own?.[col])
+  if (t0 !== '') return nonEmptyCells(own) > 1 ? t0 : ''
+  for (let up = 1; up <= 2; up++) {
+    const r = headerRow - up >= 0 ? grid[headerRow - up] : undefined
+    const t = r ? cellText(r[col]) : ''
+    if (t === '') continue
+    return MONEY_LABEL.test(t) || ACCOUNT_LABEL.test(t) || PERIOD_HEADER.test(t) ? t : ''
+  }
+  return ''
+}
+
+const NUMERIC_TEXT = /^[-–(]?\s*\$?\s*[\d,]*\d(\.\d+)?\s*\)?$/
+
+/**
+ * SINGLE SOURCE OF TRUTH (preview flag + picker refusal): does column `col`
+ * hold AMOUNTS rather than account numbers?
+ *  • Its header names money (Actual / Budget / Total / Amount / Balance /
+ *    over Budget / % / a month) → yes.
+ *  • Its header names an account (Acct / Account / GL / Number / No. / Code /
+ *    ID / #) → no: the values are trusted, as before — multi-fund and
+ *    department-split charts repeat a number, sub-accounts print 1010.10.
+ *  • Otherwise (no / other header), by its numbers: any number over ACCT_MAX
+ *    (2,100,000 is a salary line, not an account), or decimals / negatives on
+ *    at least two rows and a fifth of them (one footer date-time cell or a
+ *    0000 suspense row is just a skipped row, never a refused column).
+ * Text cells ("4000-10", "Total") and zeros are not judged; repeats are allowed
+ * (1000 Cash … 1000 Total Cash; one account in several funds).
+ */
+export function columnHoldsAmounts(grid: RawGrid, headerRow: number, col: number): boolean {
+  return acctColumnVerdict(grid, headerRow, col) === 'amounts'
+}
+
+/**
+ * columnHoldsAmounts with one more answer: 'header-row' when the only
+ * evidence is money words in a header row that is not column names at all (a
+ * banner such as `Trial Balance | | | As of June 30, 2026` picked as the
+ * header, over a column of plausible account numbers) — the row is wrong,
+ * not the column.
+ */
+export function acctColumnVerdict(grid: RawGrid, headerRow: number, col: number): 'ok' | 'amounts' | 'header-row' {
+  if (!grid || col < 0) return 'ok'
+  const h = acctHeaderText(grid, headerRow, col)
+  const values = valueVerdict(grid, headerRow, col)
+  if (h && (MONEY_HEADER.test(h) || BUDGETISH.test(h) || PERIOD_HEADER.test(h))) {
+    // Column names label most of the columns below them; a banner labels at
+    // most half (`Trial Balance | | | As of June 30, 2026` over Acct | Desc | Dr | Cr).
+    const row = grid[headerRow]
+    const sparse = nonEmptyCells(row) * 2 <= populatedColumns(grid, headerRow + 1)
+    return values === 'accounts' && sparse && cellText(row?.[col]) !== '' ? 'header-row' : 'amounts'
+  }
+  if (h && ACCOUNT_HEADER.test(h)) return 'ok'
+  return values === 'amounts' ? 'amounts' : 'ok'
+}
+
+/** Columns holding any text in the 50 rows from `start`. */
+function populatedColumns(grid: RawGrid, start: number): number {
+  const cols = new Set<number>()
+  for (let i = Math.max(0, start); i < Math.min(grid.length, start + 50); i++) {
+    ;(grid[i] ?? []).forEach((c, j) => {
+      if (cellText(c) !== '') cols.add(j)
+    })
+  }
+  return cols.size
+}
+
+/** By the numbers alone: 'amounts', 'accounts' (≥ 1 plausible number, nothing odd) or 'none'. */
+function valueVerdict(grid: RawGrid, headerRow: number, col: number): 'amounts' | 'accounts' | 'none' {
+  const start = Math.max(0, headerRow + 1)
+  const end = Math.min(grid.length, start + ACCT_SCAN_ROWS)
+  let numbers = 0
+  let odd = 0
+  for (let i = start; i < end; i++) {
+    const v = grid[i]?.[col]
+    const t = cellText(v)
+    if (t === '') continue
+    if (typeof v !== 'number' && !NUMERIC_TEXT.test(t)) continue
+    const n = typeof v === 'number' ? v : parseMoney(t)
+    if (n === null || n === 0) continue
+    numbers++
+    if (Math.abs(n) > ACCT_MAX) return 'amounts'
+    if (!isPlausibleAcct(n)) odd++
+  }
+  if (odd >= 2 && odd >= numbers * 0.2) return 'amounts'
+  return numbers > odd ? 'accounts' : 'none'
+}
+
+/**
+ * columnHoldsAmounts for every column of a file's sheet at a given header row
+ * — the picker re-asks when the person moves the header row. [] when the file
+ * cannot be read as a grid.
+ */
+export function columnsHoldingAmounts(
+  fileName: string,
+  bytes: ArrayBuffer,
+  opts: { sheet?: string | null; headerRow: number },
+): boolean[] {
+  let grid: RawGrid
+  try {
+    grid = readGrid(fileName, bytes, opts.sheet ?? null).grid
+  } catch {
+    return []
+  }
+  return Array.from({ length: widthOf(grid) }, (_, c) => columnHoldsAmounts(grid, opts.headerRow, c))
+}
 
 /**
  * Single source of truth (preview + override) for "will this grid be walked
@@ -132,6 +270,20 @@ export function parseWithColumns(
         throw fail('budget-column', { column: c, colOffset, variant: 'budget-report' })
       }
     }
+  }
+
+  // 2b. An account-number column that is really MONEY (the 2026-10-15 live
+  //    garble: "Budget" picked as the account numbers gave rows like
+  //    { acct: 2100000, desc: '60100 Salaries - Faculty' }). Refused on every
+  //    picker path — picked, remembered, statement or trial balance.
+  const acctVerdict = choice.acct >= 0 ? acctColumnVerdict(grid, choice.headerRow, choice.acct) : 'ok'
+  if (acctVerdict === 'header-row') throw fail('bad-choice', { variant: 'header-row' })
+  if (acctVerdict === 'amounts') {
+    throw fail('acct-is-money', {
+      column: choice.acct,
+      colOffset,
+      ...(gridReadsAsStatement(fileName, grid, sheet ?? '') ? { variant: 'can-number' as const } : {}),
+    })
   }
 
   const layout: SavedLayout = {

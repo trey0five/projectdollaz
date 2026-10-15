@@ -43,7 +43,7 @@ export {
   findDebitCreditPair,
   unassignedNumericColumns,
 } from './intake/preview.js'
-export { parseWithColumns, gridReadsAsStatement, BUDGETISH } from './intake/override.js'
+export { parseWithColumns, gridReadsAsStatement, columnHoldsAmounts, columnsHoldingAmounts, BUDGETISH, MONEY_HEADER } from './intake/override.js'
 export { EMPTY_INTAKE_MEMORY, buildIntakeMemory } from './intake/memory.js'
 export type { StatementHalf, PairResult } from './statements/pairing.js'
 export {

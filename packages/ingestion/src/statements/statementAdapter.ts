@@ -537,13 +537,29 @@ export function stackedHeaderAt(grid: RawGrid, headerRow: number, col: number): 
 /** The ColumnPlan for a person's picked columns (no detection). */
 function pickedPlan(grid: RawGrid, picked: NonNullable<StatementParseOptions['plan']>): ColumnPlan {
   const headerRow = picked.headerRow >= 0 ? picked.headerRow : -1
+  // A picked header row that is itself a SECTION opener — "Income" (or "Bank
+  // Accounts") under a stacked `_ | Actual | Budget` row, which the preview
+  // takes for the header because its names fill from the rows above — is
+  // WALKED, with the known section rows straight above it ("ASSETS",
+  // "Current Assets"), so the opening sections sign their accounts instead of
+  // being swallowed as column names.
+  let startRow = headerRow >= 0 ? headerRow + 1 : 0
+  const labelOnly = (r: unknown[] | undefined): string => {
+    if (!r || headerCandidate(r)) return ''
+    const cells = r.filter((c) => text(c) !== '')
+    return cells.length === 1 && typeof cells[0] === 'string' && !isMoneyCell(cells[0]) ? text(cells[0]) : ''
+  }
+  if (headerRow >= 0 && labelOnly(grid[headerRow]) !== '') {
+    startRow = headerRow
+    while (startRow > 0 && SECTION_LABELS.has(normalizeGroup(labelOnly(grid[startRow - 1])))) startRow--
+  }
   return {
     value: picked.value,
     valueHeader: stackedHeaderAt(grid, headerRow, picked.value),
     acct: picked.acct,
     desc: picked.desc,
     headerRow,
-    startRow: headerRow >= 0 ? headerRow + 1 : 0,
+    startRow,
   }
 }
 

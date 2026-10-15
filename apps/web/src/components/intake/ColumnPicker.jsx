@@ -4,7 +4,8 @@
 // When KYRO can't read a trial balance on its own, the person sees the top of
 // their own file, KYRO's best guess pre-selected, and four plain selects: which
 // row holds the column names, and which columns hold the account numbers, the
-// names and the amounts. Every change re-reads the file LIVE with the real
+// names and the amounts (a column of amounts is greyed out for the account
+// numbers). Every change re-reads the file LIVE with the real
 // parser (ingest with `columns`) — pure and synchronous, inside a useMemo, no
 // effect — and the line under the table says what that read produced, or why
 // not. Nothing is applied until somebody presses "Use these columns": the guess
@@ -17,7 +18,13 @@ import { useId, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, ChevronDown, Columns3 } from 'lucide-react'
 import '../../styles/pending/c1-flows.css'
-import { ingest, previewFile, statementLabel, unassignedNumericColumns } from '@finrep/ingestion'
+import {
+  columnsHoldingAmounts,
+  ingest,
+  previewFile,
+  statementLabel,
+  unassignedNumericColumns,
+} from '@finrep/ingestion'
 import { failureFromError, failureText } from '../../lib/ingestFailure.js'
 import { fmt } from '../../lib/format.js'
 import { validateDataset } from '@finrep/engine'
@@ -83,6 +90,20 @@ export function numberColumns(cols, choice) {
   )
 }
 
+/**
+ * A column that holds amounts, never account numbers — the parser's own rule
+ * (columnHoldsAmounts: its header names money, or its numbers are not account
+ * numbers). `flags` = that rule re-run at the header row the person chose
+ * (columnsHoldingAmounts); without them, the preview's flag for its guessed
+ * header row. NOT budgetish: on a budget report an "Acct" column is flagged
+ * budgetish too, and it is the account numbers.
+ */
+export function isAmountsColumn(col, flags = null) {
+  if (!col) return false
+  if (Array.isArray(flags) && flags.length > col.index) return flags[col.index] === true
+  return col.holdsAmounts === true
+}
+
 /** What a trial-balance read is off by (0 when it balances, or for a statement). */
 export function readImbalance(result) {
   if (!result || result.metadata?.statement) return 0
@@ -133,6 +154,17 @@ export default function ColumnPicker({
     () => readWithChoice(fileName, bytes, choice, memory),
     [fileName, bytes, choice, memory],
   )
+
+  // The account-number test depends on the header row: re-judge every column
+  // whenever the person moves it (the preview's flags are for its guess only).
+  const amountFlags = useMemo(() => {
+    if (!current || !bytes || choice.headerRow === current.guess?.headerRow) return null
+    try {
+      return columnsHoldingAmounts(fileName, bytes, { sheet: current.sheet ?? null, headerRow: choice.headerRow })
+    } catch {
+      return null
+    }
+  }, [fileName, bytes, current, choice.headerRow])
 
   if (!current) return null
   const cols = current.columns || []
@@ -212,11 +244,15 @@ export default function ColumnPicker({
   }
   const colOption = (c, self, suffix = '') => {
     const by = usedFor(c.index, self)
+    // A column of amounts is never the account numbers (the parser refuses it
+    // as 'acct-is-money'): greyed out and labelled, like a used column.
+    const amounts = self === 'acct' && !by && isAmountsColumn(c, amountFlags)
     return (
-      <option key={c.index} value={String(c.index)} disabled={!!by}>
+      <option key={c.index} value={String(c.index)} disabled={!!by || amounts}>
         {colLabel(c)}
         {suffix}
         {by ? ` · used for ${by}` : ''}
+        {amounts ? ' · amounts' : ''}
       </option>
     )
   }

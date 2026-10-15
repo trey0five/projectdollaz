@@ -30,7 +30,7 @@ import {
   stackedHeaderCells,
   totalColumnFromHeaders,
 } from '../adapters/excelAdapter.js'
-import { BUDGETISH, gridReadsAsStatement } from './override.js'
+import { BUDGETISH, columnHoldsAmounts, gridReadsAsStatement } from './override.js'
 import type { IngestErrorCode } from './errors.js'
 
 export const PREVIEW_ROWS = 25
@@ -65,6 +65,14 @@ export interface PreviewColumn {
    * "Balance"/"Total" column, never reported as unassigned beside the pair.
    */
   netOfPair: boolean
+  /**
+   * ADDITIVE. This column holds AMOUNTS, never account numbers — its header
+   * names money (Actual / Budget / Total / a month …) or its numbers are not
+   * plausible, unique account numbers (columnHoldsAmounts, the same rule the
+   * picker path refuses with 'acct-is-money'). The picker disables it for
+   * "Account numbers".
+   */
+  holdsAmounts: boolean
 }
 
 /** A preview note the picker shows beside the table (letters only — never cell text). */
@@ -445,6 +453,9 @@ export function analyzeGrid(fileName: string, read: ReadGrid): FileAnalysis | nu
     (h, i) => (h !== '' && BUDGETISH.test(h)) || (budgetReport && (stats[i]?.kind === 'money' || stats[i]?.kind === 'acct') && h !== '' && !ACTUAL_HEADER.test(h)),
   )
 
+  // Columns that hold amounts, never account numbers (judged on the guessed header row).
+  const holdsAmounts = stats.map((_, i) => columnHoldsAmounts(grid, headerRow, i))
+
   // ── The guess ──
   let acct = nameMapped.acct
   let desc = nameMapped.desc
@@ -453,7 +464,10 @@ export function analyzeGrid(fileName: string, read: ReadGrid): FileAnalysis | nu
     // column the header row names as the balance ("Amount", "Total") for the
     // account numbers.
     const amountByHeader = totalColumnFromHeaders(stackedHeaderCells(grid as any[][], startRow), [])
-    acct = stats.findIndex((s, i) => s.kind === 'acct' && i !== amountByHeader)
+    // Nor a column that holds amounts (a Budget vs. Actual's "Budget" column of
+    // whole dollars is 'acct'-kind; its header names money): a statement whose names carry the numbers
+    // ("40100 Tuition") is read by name, account numbers = None.
+    acct = stats.findIndex((s, i) => s.kind === 'acct' && i !== amountByHeader && !holdsAmounts[i])
     desc = stats.findIndex((s, i) => i !== acct && s.kind === 'text')
   }
   let amount = -1
@@ -503,7 +517,8 @@ export function analyzeGrid(fileName: string, read: ReadGrid): FileAnalysis | nu
     // Whole-dollar amounts look like account numbers ('acct'-kind): once the
     // account column is known, any OTHER acct-kind column is money, so the
     // picker offers it for Amounts / Debit / Credit.
-    const kind = stats[c]!.kind === 'acct' && acct >= 0 && c !== acct ? 'money' : stats[c]!.kind
+    // A column that holds amounts is money whether or not an account column was found.
+    const kind = stats[c]!.kind === 'acct' && c !== acct && (acct >= 0 || holdsAmounts[c]) ? 'money' : stats[c]!.kind
     columns.push({
       index: c,
       letter: columnLetter(c, read.colOffset),
@@ -514,6 +529,7 @@ export function analyzeGrid(fileName: string, read: ReadGrid): FileAnalysis | nu
       budgetish: budgetish[c] ?? false,
       numeric: stats[c]!.numeric,
       netOfPair: suggestedDebitCredit ? isNetOfPair(grid, c, suggestedDebitCredit, bodyStart) : false,
+      holdsAmounts: holdsAmounts[c] ?? false,
     })
   }
   const rows: string[][] = []
@@ -555,7 +571,8 @@ export function previewFile(fileName: string, bytes: ArrayBuffer, opts?: { sheet
 
 // ── Plain reasons ─────────────────────────────────────────────────────────────
 
-export type FailureVariant = 'zeros' | 'same-column' | 'no-sign' | 'no-rows' | 'need-acct' | 'budget-report'
+/** 'can-number' (acct-is-money): the picker offers "None — KYRO numbers them" for this grid (it reads as a statement). */
+export type FailureVariant = 'zeros' | 'same-column' | 'no-sign' | 'no-rows' | 'need-acct' | 'budget-report' | 'can-number' | 'header-row'
 
 /** A column-picker role, as the picker labels it. */
 export type ColumnRole = 'acct' | 'desc' | 'amount' | 'debit' | 'credit'
@@ -645,6 +662,16 @@ export function explainFailure(
         ask: "Pick the column with this period's actual balances.",
       }
     }
+    case 'acct-is-money': {
+      const l = letterOf(detail?.column)
+      const canNumber = detail?.variant === 'can-number' || !!preview?.readsAsStatement
+      return {
+        reason: `${l ? `Column ${l}` : 'That column'} holds amounts, not account numbers.`,
+        ask: canNumber
+          ? 'Pick the column with your account numbers, or “None — KYRO numbers them” if there isn’t one.'
+          : 'Pick the column with your account numbers.',
+      }
+    }
     case 'bad-choice':
       switch (detail?.variant) {
         case 'same-column': {
@@ -664,6 +691,11 @@ export function explainFailure(
           return {
             reason: "We couldn't tell income from expenses in this layout.",
             ask: 'Pick the account-number column so we can sign each row.',
+          }
+        case 'header-row':
+          return {
+            reason: "That row doesn't look like your column names.",
+            ask: 'Pick the row with the column names.',
           }
         case 'need-acct':
           return {

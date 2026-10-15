@@ -21,6 +21,7 @@ export type IngestErrorCode =
   | 'budget-only' // StatementExportError (Budget Overview)        → no preview
   | 'budget-column' // a picked amount/debit/credit header is budget/variance/%/prior  (picker only)
   | 'bad-choice' // the picked columns produced no usable rows    (picker only)
+  | 'acct-is-money' // the picked account-number column holds amounts (picker only)
 
 export class IngestError extends Error {
   override readonly name = 'IngestError'

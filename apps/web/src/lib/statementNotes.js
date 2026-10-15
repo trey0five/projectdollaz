@@ -179,7 +179,12 @@ export function statementLines(file) {
       text: 'Read with your saved columns',
       action: canChange ? { kind: 'columns', label: 'Change' } : null,
     })
-  } else if (canChange) {
+  } else if (canChange && !st) {
+    // NOT on a QuickBooks statement the automatic read walked (metadata.statement):
+    // it was read by its STRUCTURE — sections, Total rows, names that carry
+    // the numbers — not by columns, and a flat column pick on it garbled the
+    // books live (2026-10-15: Budget taken as the account numbers, signs and
+    // the Balance Sheet lost). The picker stays for failed reads and plain tables.
     lines.push({
       key: 'layout',
       tone: 'faint',
