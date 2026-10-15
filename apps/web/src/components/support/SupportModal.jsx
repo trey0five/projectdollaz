@@ -2,7 +2,8 @@
 // SupportModal — the in-app "Contact support" form that replaces the AvatarMenu
 // mailto. Subject + message → POST /support; the BACKEND emails support@ourkyro.com
 // with replyTo = the signed-in user's email (the client never sends a from/replyTo
-// field). Navy-deep dialog matching the app chrome; Esc / backdrop / focus-return,
+// field). A Panel-styled dialog at the float elevation (Premium UI P4); Esc /
+// backdrop / focus-return,
 // reduced-motion safe. On success it shows an inline confirmation (no global toast
 // provider) reassuring the user we'll reply to their address.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12,6 +13,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { LifeBuoy, X, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { authApi, apiErrorMessage } from '../../lib/api.js'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/c1-flows.css'
 
 const SUBJECT_MAX = 200
 const MESSAGE_MAX = 5000
@@ -38,6 +41,15 @@ export default function SupportModal({ open, onClose }) {
       setError('')
       setSent(false)
       setBusy(false)
+    }
+  }, [open])
+
+  // Focus returns to the opener (the Support button) when the dialog closes.
+  useEffect(() => {
+    if (!open) return undefined
+    const opener = document.activeElement
+    return () => {
+      if (opener && opener !== document.body && opener.isConnected) opener.focus?.()
     }
   }, [open])
 
@@ -91,9 +103,6 @@ export default function SupportModal({ open, onClose }) {
     }
   }
 
-  const inputCls =
-    'w-full rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-[14px] text-white outline-none ring-gold/50 placeholder:text-white/35 focus:border-white/30 focus-visible:ring-2'
-
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -101,112 +110,97 @@ export default function SupportModal({ open, onClose }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-navy-deep/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           onClick={onClose}
         >
+          <div className="dlg-scrim" aria-hidden="true" />
           <motion.div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Contact support"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/12 bg-navy-deep shadow-2xl"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="dlg w-full max-w-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-coral/15 text-coral">
-                  <LifeBuoy size={18} />
-                </span>
-                <h2 className="font-serif text-[18px] text-white">Contact support</h2>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
-              >
+            <span className="dlg-rule" aria-hidden="true" />
+            <div className="dlg-head items-center">
+              <LifeBuoy size={20} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-ink2" />
+              <h2 className="dlg-title min-w-0 flex-1">Contact support</h2>
+              <button type="button" onClick={onClose} aria-label="Close" className="dlg-x">
                 <X size={16} />
               </button>
             </div>
 
             {sent ? (
-              <div className="flex flex-col items-center px-6 py-10 text-center">
-                <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
-                  <CheckCircle2 size={30} />
-                </span>
-                <p className="text-[15px] leading-relaxed text-white/85">
-                  Message sent — we’ll reply to <strong className="text-white">{email}</strong>.
-                </p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="mt-6 rounded-lg bg-coral px-5 py-2 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <div className="px-5 py-4">
-                <p className="mb-4 text-[13px] text-white/60">
-                  From <span className="font-medium text-white/80">{email || 'your account'}</span> —
-                  we’ll reply to this address.
-                </p>
-
-                <label className="mb-1 block text-[12px] font-semibold uppercase tracking-wide text-white/55">
-                  Subject
-                </label>
-                <input
-                  ref={firstFieldRef}
-                  value={subject}
-                  maxLength={SUBJECT_MAX}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="What can we help with?"
-                  className={inputCls}
-                />
-
-                <label className="mb-1 mt-4 block text-[12px] font-semibold uppercase tracking-wide text-white/55">
-                  Message
-                </label>
-                <textarea
-                  value={message}
-                  maxLength={MESSAGE_MAX}
-                  rows={6}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Tell us what’s going on…"
-                  className={`${inputCls} resize-y`}
-                />
-                <div className="mt-1 text-right text-[11px] text-white/35 tabular-nums">
-                  {message.length}/{MESSAGE_MAX}
-                </div>
-
-                {error && (
-                  <p className="mt-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-red-200">
-                    {error}
+              <>
+                <div className="dlg-body flex items-start gap-3">
+                  <CheckCircle2 size={22} strokeWidth={1.75} aria-hidden="true" className="mt-0.5 shrink-0 tone-good" />
+                  <p className="text-[15px] leading-[23px] text-ink">
+                    Message sent — we’ll reply to <strong className="font-semibold">{email}</strong>.
                   </p>
-                )}
-
-                <div className="mt-4 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-lg px-4 py-2 text-[14px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={!canSubmit}
-                    className="rounded-lg bg-coral px-5 py-2 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy ? 'Sending…' : 'Send'}
-                  </button>
                 </div>
-              </div>
+                <div className="dlg-foot">
+                  <Button variant="primary" onClick={onClose}>
+                    Done
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="dlg-body">
+                  <p className="mb-4 text-[13px] text-ink2">
+                    From <span className="font-medium text-ink">{email || 'your account'}</span> —
+                    we’ll reply to this address.
+                  </p>
+
+                  <label htmlFor="support-subject" className="fld-label block">
+                    Subject
+                  </label>
+                  <input
+                    id="support-subject"
+                    ref={firstFieldRef}
+                    value={subject}
+                    maxLength={SUBJECT_MAX}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="What can we help with?"
+                    className="field-plain"
+                  />
+
+                  <label htmlFor="support-message" className="fld-label mt-4 block">
+                    Message
+                  </label>
+                  <textarea
+                    id="support-message"
+                    value={message}
+                    maxLength={MESSAGE_MAX}
+                    rows={6}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Tell us what’s going on…"
+                    className="field-plain field-area"
+                  />
+                  <div className="mt-1 text-right text-[11px] tabular-nums text-ink2">
+                    {message.length}/{MESSAGE_MAX}
+                  </div>
+
+                  {error && (
+                    <p className="dlg-error mt-2" role="alert">
+                      {error}
+                    </p>
+                  )}
+                </div>
+                <div className="dlg-foot">
+                  <Button variant="secondary" onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={submit} disabled={!canSubmit}>
+                    {busy ? 'Sending…' : 'Send'}
+                  </Button>
+                </div>
+              </>
             )}
           </motion.div>
         </motion.div>

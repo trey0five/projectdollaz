@@ -252,13 +252,13 @@ export default function PennyStudio() {
 
   return (
     <div
-      className="relative h-full overflow-hidden bg-page-glow"
+      className="relative h-full overflow-hidden bg-ground"
       onDragOver={onRootDragOver}
       onDragLeave={onRootDragLeave}
       onDrop={onRootDrop}
     >
-      {/* Ambient drifting-particle field behind a conversation so the light page
-          doesn't read as flat while KYRO works. Landing has its own hero backdrop. */}
+      {/* A one-shot field of motes behind a conversation (settles, never loops)
+          so the light page doesn't read as flat. Landing has its own stage. */}
       {inConversation && <StudioParticles />}
       {inConversation ? (
         /* Conversation: a FIXED-HEIGHT flex column (viewport minus the app-shell's
@@ -273,7 +273,7 @@ export default function PennyStudio() {
           <div className="mt-4 min-h-0 flex-1">
             <StudioConversation chat={engagedChat} />
           </div>
-          <div className="mt-3 shrink-0 rounded-t-2xl border-t border-rule/60 bg-cream/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+          <div className="mt-3 shrink-0 border-t border-hair bg-ground px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
             <div className="mx-auto max-w-[820px]">{askBar}</div>
           </div>
         </div>
@@ -281,17 +281,17 @@ export default function PennyStudio() {
         /* Landing: scrolls internally (the page itself doesn't scroll). */
         <div className="relative z-10 mx-auto h-full max-w-[1160px] overflow-y-auto px-4 py-6 sm:px-6">
           <StudioHero compact={false} name={name} chat={engagedChat} askBar={askBar} onNewChat={chat.newChat} />
-          <motion.div {...swap} className="mt-6 space-y-10 pb-24">
+          <motion.div {...swap} className="mt-2 pb-24">
             <StudioCapabilityTiles onSelect={onSelectTile} canEdit={canEdit} />
             <StudioRecipes onRun={runPrompt} />
             {/* min-w-0 on both tracks so the fr ratios are honoured — without it
                 a grid child defaults to min-content width (long activity rows that
                 won't wrap), ballooning the right track and crushing the inbox. */}
-            <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
+            <div className="grid items-start gap-x-10 lg:grid-cols-[1.35fr_1fr]">
               <div className="min-w-0">
                 <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
               </div>
-              <div className="min-w-0 space-y-5">
+              <div className="min-w-0">
                 <StudioRail chat={engagedChat} onPick={runPrompt} />
                 <StudioActivity schoolId={activeId} canEdit={canEdit} />
               </div>
@@ -310,13 +310,11 @@ export default function PennyStudio() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
             aria-hidden
-            className="pointer-events-none fixed inset-0 z-[65] flex items-center justify-center bg-navy-deep/40 backdrop-blur-sm"
+            className="pointer-events-none fixed inset-0 z-[65] flex items-center justify-center bg-[#0a1628]/40"
           >
-            <div className="mx-4 flex items-center gap-3 rounded-2xl border-2 border-dashed border-penny bg-[#fffef8] px-6 py-5 text-center shadow-login">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow">
-                <UploadCloud size={22} aria-hidden />
-              </span>
-              <p className="max-w-[38ch] text-[14px] font-semibold text-navy">
+            <div className="mx-4 flex items-center gap-3 rounded-lg border-2 border-dashed border-penny bg-white px-6 py-5 text-center shadow-float">
+              <UploadCloud size={24} aria-hidden strokeWidth={1.6} className="shrink-0 text-penny" />
+              <p className="max-w-[38ch] text-[14px] font-semibold text-ink">
                 Drop a trial balance, budget, invoice, policy, or minutes — KYRO files it automatically.
               </p>
             </div>

@@ -57,7 +57,7 @@ export default function VerifyEmailPage() {
         <div className="flex flex-col items-center text-center">
           <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300" />
           <p className="text-[16px] text-white/85">{message}</p>
-          <Link to="/login" className="btn-gold mt-6 inline-block">
+          <Link to="/login" className="btn btn-primary btn-lg mt-6">
             Continue to sign in
           </Link>
         </div>
@@ -90,7 +90,7 @@ export default function VerifyEmailPage() {
       />
       <GlassFormError>{null}</GlassFormError>
       <GlassFormSuccess>{resent}</GlassFormSuccess>
-      <button onClick={resend} disabled={!email} className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:opacity-50">
+      <button type="button" onClick={resend} disabled={!email} className="btn btn-primary btn-lg btn-block mt-3">
         Resend verification link
       </button>
       <div className="mt-6 text-center text-[15px] text-white/60">

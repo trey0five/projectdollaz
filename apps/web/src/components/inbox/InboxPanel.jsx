@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// InboxPanel — a large, flashy MASTER-DETAIL inbox modal. Portalled to <body> with
+// InboxPanel — a large MASTER-DETAIL inbox dialog (Premium UI P4: a Panel at the
+// float elevation, messages as ruled rows with a 2px unread/selected mark). Portalled to <body> with
 // a dimmed backdrop, so it always sits center-screen. Left = the message list
 // (newest-first), right = a reading pane that opens the selected message in full.
 // On mobile the two collapse into one column: tapping a message slides to the
@@ -14,37 +15,21 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCheck, X, Inbox as InboxIcon, ChevronLeft, Mail, ArrowRight } from 'lucide-react'
 import { inboxApi, apiErrorMessage } from '../../lib/api.js'
 import { LoadState, ErrorState, relTime, fmtDateTime } from '../../pages/admin/_ui.jsx'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/c1-flows.css'
 
-// Deterministic gradient per sender label so avatars feel varied but stable.
-const AVATAR_TONES = [
-  ['#2563EB', '#3b82f6'],
-  ['#8b5cf6', '#a78bfa'],
-  ['#FF6B5E', '#ff9182'],
-  ['#06b6d4', '#22d3ee'],
-  ['#6366f1', '#818cf8'],
-  ['#f59e0b', '#fbbf24'],
-]
-function toneFor(label = '') {
-  let h = 0
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0
-  return AVATAR_TONES[h % AVATAR_TONES.length]
-}
 function initialOf(label = '') {
   return label.trim().charAt(0).toUpperCase() || 'K'
 }
 
-function Avatar({ label, size = 40 }) {
-  const [a, b] = toneFor(label)
+// The sender as a quiet ink initial on a hairline square — one shape, no
+// per-sender colour (the old gradient avatars were noise, and two were purple).
+function Avatar({ label, size = 36 }) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-xl font-semibold text-white"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.42,
-        background: `linear-gradient(135deg,${a},${b})`,
-        boxShadow: `0 8px 20px -8px ${a}`,
-      }}
+      className="flex shrink-0 items-center justify-center rounded-md border border-hair/15 bg-ground font-semibold text-ink2"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+      aria-hidden="true"
     >
       {initialOf(label)}
     </span>
@@ -130,88 +115,63 @@ export default function InboxPanel({ setUnread, onClose }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
-      {/* Backdrop */}
+      {/* Scrim */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
         onClick={onClose}
-        className="absolute inset-0 bg-[#060b1c]/70 backdrop-blur-md"
+        className="dlg-scrim"
         aria-hidden
       />
 
-      {/* Dialog */}
+      {/* Dialog — a Panel at the float elevation (Premium UI P4). */}
       <motion.div
         role="dialog"
         aria-modal="true"
         aria-label="Inbox"
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.985 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.985 }}
-        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        className="relative flex h-[82vh] max-h-[760px] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#0a1229] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.85)]"
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="dlg flex h-[82vh] max-h-[760px] w-full max-w-4xl flex-col"
       >
-        {/* Flashy accent bar + aurora glow */}
-        <span
-          aria-hidden
-          className="absolute inset-x-0 top-0 h-[3px]"
-          style={{ background: 'linear-gradient(90deg,#2563EB,#8b5cf6 45%,#FF6B5E)' }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(620px 240px at 18% -8%, rgba(37,99,235,0.20), transparent 60%), radial-gradient(520px 260px at 92% 0%, rgba(139,92,246,0.16), transparent 60%)',
-          }}
-        />
+        <span className="dlg-rule" aria-hidden />
 
         {/* Header */}
-        <div className="relative flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span
-              className="flex h-11 w-11 items-center justify-center rounded-2xl text-white"
-              style={{ background: 'linear-gradient(135deg,#2563EB,#8b5cf6)', boxShadow: '0 10px 26px -10px #2563EB' }}
-            >
-              <InboxIcon size={22} />
-            </span>
-            <div>
-              <h2 className="font-serif text-[20px] leading-tight text-white">Inbox</h2>
-              <p className="text-[12px] text-white/45">
-                {loading
-                  ? 'Loading…'
-                  : unreadInList > 0
-                    ? `${unreadInList} unread · ${list.length} message${list.length === 1 ? '' : 's'}`
-                    : `${list.length} message${list.length === 1 ? '' : 's'}`}
-              </p>
-            </div>
+        <div className="dlg-head items-center">
+          <InboxIcon size={20} strokeWidth={1.75} aria-hidden className="shrink-0 text-ink2" />
+          <div className="min-w-0 flex-1">
+            <h2 className="dlg-title">Inbox</h2>
+            <p className="dlg-sub tabular-nums">
+              {loading
+                ? 'Loading…'
+                : unreadInList > 0
+                  ? `${unreadInList} unread · ${list.length} message${list.length === 1 ? '' : 's'}`
+                  : `${list.length} message${list.length === 1 ? '' : 's'}`}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={markAll}
-              disabled={unreadInList === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/12 px-3 py-1.5 text-[12.5px] font-medium text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <CheckCheck size={14} /> <span className="hidden sm:inline">Mark all read</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close inbox"
-              className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
-            >
-              <X size={17} />
-            </button>
-          </div>
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={markAll}
+            disabled={unreadInList === 0}
+            icon={<CheckCheck size={14} />}
+            aria-label="Mark all read"
+          >
+            <span className="hidden sm:inline">Mark all read</span>
+          </Button>
+          <button type="button" onClick={onClose} aria-label="Close inbox" className="dlg-x !ml-0">
+            <X size={17} />
+          </button>
         </div>
 
         {/* Body: master (list) + detail (reading pane) */}
-        <div className="relative flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1">
           {/* ── List ── */}
           <div
-            className={`flex min-h-0 w-full flex-col border-white/10 md:w-[40%] md:border-r ${
+            className={`flex min-h-0 w-full flex-col border-hair md:w-[40%] md:border-r ${
               selected ? 'hidden md:flex' : 'flex'
             }`}
           >
@@ -225,7 +185,7 @@ export default function InboxPanel({ setUnread, onClose }) {
               ) : list.length === 0 ? (
                 <EmptyInbox />
               ) : (
-                <ul className="p-2">
+                <ul className="ruled">
                   {list.map((m) => {
                     const unread = !m.readAt
                     const active = m.id === selectedId
@@ -234,34 +194,29 @@ export default function InboxPanel({ setUnread, onClose }) {
                         <button
                           type="button"
                           onClick={() => select(m)}
-                          className={`group relative flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left outline-none ring-inset ring-gold/50 transition-colors focus-visible:ring-2 ${
-                            active ? 'bg-white/[0.08]' : 'hover:bg-white/[0.05]'
+                          aria-current={active ? 'true' : undefined}
+                          className={`relative flex w-full items-start gap-3 px-4 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2563eb]/50 ${
+                            active ? 'bg-ink/[0.04]' : 'hover:bg-ink/[0.025]'
                           }`}
                         >
-                          {active && (
+                          {/* 2px mark: the selected row in the module hue, unread in coral. */}
+                          {(active || unread) && (
                             <span
                               aria-hidden
-                              className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-full"
-                              style={{ background: 'linear-gradient(#2563EB,#8b5cf6)' }}
+                              className={`absolute inset-y-0 left-0 w-0.5 ${active ? 'tone-hue bg-current' : 'bg-coral'}`}
                             />
                           )}
-                          <Avatar label={m.senderLabel} size={38} />
+                          <Avatar label={m.senderLabel} size={34} />
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">
-                              <span
-                                className={`truncate text-[14px] ${
-                                  unread ? 'font-semibold text-white' : 'font-medium text-white/70'
-                                }`}
-                              >
+                              <span className={`truncate text-[14px] ${unread ? 'font-semibold text-ink' : 'font-medium text-ink2'}`}>
                                 {m.subject}
                               </span>
-                              <span className="shrink-0 text-[11px] text-white/40">{relTime(m.createdAt)}</span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-ink2">{relTime(m.createdAt)}</span>
                             </span>
                             <span className="mt-0.5 flex items-center gap-1.5">
-                              {unread && (
-                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-coral shadow-[0_0_8px_#FF6B5E]" />
-                              )}
-                              <span className="truncate text-[12px] text-white/45">{m.senderLabel}</span>
+                              {unread && <span className="sr-only">Unread · </span>}
+                              <span className="truncate text-[12px] text-ink2">{m.senderLabel}</span>
                             </span>
                           </span>
                         </button>
@@ -279,33 +234,33 @@ export default function InboxPanel({ setUnread, onClose }) {
               {selected ? (
                 <motion.div
                   key={selected.id}
-                  initial={reduce ? { opacity: 0 } : { opacity: 0, x: 12 }}
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, x: 8 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={reduce ? { opacity: 0 } : { opacity: 0, x: -8 }}
-                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  exit={reduce ? { opacity: 0 } : { opacity: 0, x: -6 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                   className="flex min-h-0 flex-1 flex-col"
                 >
                   {/* Reading header */}
-                  <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+                  <div className="border-b border-hair px-5 py-4 sm:px-6">
                     <button
                       type="button"
                       onClick={() => setSelectedId(null)}
-                      className="mb-3 inline-flex items-center gap-1 text-[12.5px] font-medium text-white/60 transition-colors hover:text-white md:hidden"
+                      className="back-link mb-3 md:hidden"
                     >
-                      <ChevronLeft size={15} /> Back to inbox
+                      <ChevronLeft size={15} aria-hidden /> Back to inbox
                     </button>
-                    <h3 className="font-serif text-[21px] leading-snug text-white">{selected.subject}</h3>
+                    <h3 className="font-serif text-title font-medium text-ink">{selected.subject}</h3>
                     <div className="mt-3 flex items-center gap-2.5">
-                      <Avatar label={selected.senderLabel} size={34} />
+                      <Avatar label={selected.senderLabel} size={30} />
                       <div className="leading-tight">
-                        <div className="text-[13px] font-medium text-white/85">{selected.senderLabel}</div>
-                        <div className="text-[11.5px] text-white/40">{fmtDateTime(selected.createdAt)}</div>
+                        <div className="text-[13px] font-medium text-ink">{selected.senderLabel}</div>
+                        <div className="text-[11.5px] tabular-nums text-ink2">{fmtDateTime(selected.createdAt)}</div>
                       </div>
                     </div>
                   </div>
                   {/* Reading body */}
                   <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-                    <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-white/80">
+                    <p className="max-w-[65ch] whitespace-pre-wrap text-[14.5px] leading-[23px] text-ink">
                       {selected.body}
                     </p>
                     {/* THE DOOR. "You've been assigned X" without a way to reach
@@ -313,16 +268,16 @@ export default function InboxPanel({ setUnread, onClose }) {
                         only when the message carries a destination — broadcasts
                         have nothing to point at and get no dangling button. */}
                     {selected.link ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        className="mt-5"
                         onClick={() => {
                           onClose?.()
                           navigate(selected.link)
                         }}
-                        className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition hover:brightness-105"
                       >
-                        Open <ArrowRight size={14} />
-                      </button>
+                        Open <ArrowRight size={14} aria-hidden />
+                      </Button>
                     ) : null}
                   </div>
                 </motion.div>
@@ -333,11 +288,9 @@ export default function InboxPanel({ setUnread, onClose }) {
                   animate={{ opacity: 1 }}
                   className="flex flex-1 flex-col items-center justify-center px-8 text-center"
                 >
-                  <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/30">
-                    <Mail size={30} />
-                  </span>
-                  <p className="text-[15px] font-medium text-white/70">Select a message</p>
-                  <p className="mt-1 max-w-[240px] text-[12.5px] text-white/40">
+                  <Mail size={28} strokeWidth={1.5} aria-hidden className="mb-3 text-ink2/50" />
+                  <p className="text-[15px] font-medium text-ink">Select a message</p>
+                  <p className="mt-1 max-w-[240px] text-[12.5px] text-ink2">
                     Pick a message on the left to read it here.
                   </p>
                 </motion.div>
@@ -354,11 +307,9 @@ export default function InboxPanel({ setUnread, onClose }) {
 function EmptyInbox() {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
-      <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/25">
-        <InboxIcon size={26} />
-      </span>
-      <p className="text-sm font-medium text-white/60">No messages yet</p>
-      <p className="mt-1 text-xs text-white/35">Notes from the KYRO team will show up here.</p>
+      <InboxIcon size={26} strokeWidth={1.5} aria-hidden className="mb-3 text-ink2/50" />
+      <p className="text-sm font-medium text-ink">No messages yet</p>
+      <p className="mt-1 text-xs text-ink2">Notes from the KYRO team will show up here.</p>
     </div>
   )
 }

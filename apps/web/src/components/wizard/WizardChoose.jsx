@@ -1,59 +1,47 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// WizardChoose — step 1. A grid of the module's add-data options as the shared
-// Home-dashboard hue-flood tiles (home-tiles.css): on hover the whole card fills
-// the module colour and its text flips white. Each card is a real <button> (full
-// keyboard + focus ring from the shared .module-tile rules). The module accent is
-// the per-module hue from the config (--tile-hue — the one non-token colour).
+// WizardChoose — step 1. The module's add-data options as `Tile`s (the ONE card
+// family that stays — Premium UI §2.4): hairline, a 2px module-hue bottom rule,
+// the hue flood rising once on hover while the arrow slides. A Tile with an
+// onClick stays a <div> and is covered by a stretched `.tile-hit` <button>
+// (full keyboard + focus ring); the `adddata-card-<key>` id stays on the tile —
+// it is the anchor KYRO's walkthrough glides to (penny/guide/targetRegistry.js).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
-import '../../styles/module-tile-legacy.css'
+import Tile from '../ui/surface/Tile.jsx'
 
 export default function WizardChoose({ options, hue, onChoose }) {
   const reduce = useReducedMotion()
   const single = options.length === 1
 
   return (
-    <ul role="list" className={`grid list-none gap-3 sm:gap-4 ${single ? '' : 'sm:grid-cols-2'}`}>
+    <ul
+      role="list"
+      className={`grid list-none gap-4 ${single ? 'max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}
+    >
       {options.map((opt, i) => {
         const Icon = opt.Icon
         return (
           <motion.li
             key={opt.key}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: reduce ? 0 : 0.05 * i + 0.04, duration: 0.3 }}
-            whileHover={reduce ? undefined : { y: -4 }}
-            className="list-none"
+            transition={{ delay: reduce ? 0 : 0.04 * i + 0.04, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="flex list-none"
           >
-            <button
-              type="button"
-              // Stable anchor for Penny's walkthrough glide: under ui.v2 the
-              // Data-hub cards are gone, and these chooser cards are their
+            <Tile
+              // Stable anchor for KYRO's walkthrough glide: under ui.v2 the
+              // Data-hub cards are gone, and these chooser tiles are their
               // successors — the target registry's v2 overrides point here.
               id={`adddata-card-${opt.key}`}
               onClick={() => onChoose(opt.key)}
-              className="module-tile group w-full text-left"
-              style={{ '--tile-hue': hue }}
-            >
-              <span className="tile-body">
-                <span className="tile-art">
-                  <Icon aria-hidden="true" />
-                </span>
-                <div>
-                  <h3 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
-                    {opt.label}
-                  </h3>
-                  <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">{opt.blurb}</p>
-                </div>
-                <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-                  <span className="tile-chip tile-chip--clear">{opt.cta}</span>
-                  <span className="tile-arrow">
-                    <ArrowRight size={16} />
-                  </span>
-                </div>
-              </span>
-            </button>
+              aria-label={`${opt.label} — ${opt.cta}`}
+              hue={hue}
+              icon={<Icon aria-hidden="true" strokeWidth={1.6} />}
+              title={opt.label}
+              body={opt.blurb}
+              foot={<span className="text-[13px] font-semibold text-ink2">{opt.cta}</span>}
+              className="w-full"
+            />
           </motion.li>
         )
       })}

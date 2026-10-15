@@ -1,16 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WizardConfirm — step 3, the success state. Shown after a modal save, after the
-// user finishes an embedded importer ("Done"), or after a Penny handoff. Offers
-// "Add another" (back to Choose) and "Done" (leave). For external connectors
-// (QBO/SIS) the copy covers the OAuth round-trip ("once you're back, connected").
+// user finishes an embedded importer ("I'm done"), or after a KYRO handoff.
+// Offers "Add another" (back to Choose) and "Done" (leave). For external
+// connectors (QBO/SIS) the copy covers the OAuth round-trip.
+//
+// Premium UI P4: the step renders inside the wizard's ONE Panel — a quiet
+// statement on the panel body (hue glyph stroke, Garamond title, ink-2 line) and
+// the actions on the panel's hairline footer as flat Buttons.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { CircleCheck, Plus, Sparkles } from 'lucide-react'
-import { hueRgba } from './wizardConfigs.jsx'
+import Panel from '../ui/surface/Panel.jsx'
+import Button from '../ui/surface/Button.jsx'
 
 export default function WizardConfirm({
   option,
-  hue,
   moduleLabel,
   onAddAnother,
   onDone,
@@ -38,56 +42,43 @@ export default function WizardConfirm({
       ? 'Finish in the window that opened. Once you’re back, your connection shows here and your data syncs automatically.'
       : `Your ${moduleLabel.toLowerCase()} record is in. Add another, or head back to review it.`
 
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border-2 bg-white p-8 text-center shadow-card"
-      style={{ borderColor: hueRgba(hue, 0.28) }}
-    >
-      <span
-        className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
-        style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
-      >
-        {isHandoff ? <Sparkles size={28} /> : <CircleCheck size={28} />}
-      </span>
-      <h3 className="font-serif text-xl font-semibold text-navy">{title}</h3>
-      <p className="mx-auto mt-1.5 max-w-md text-[15px] leading-relaxed text-muted">{body}</p>
+  // Own wrapping row: Panel's .panel-foot is a nowrap flex-end row, and three
+  // buttons do not fit at phone width — they would overflow off the START edge
+  // (left overflow never scrolls, so "Add another" was cut by the panel).
+  const footer = (
+    <div className="flex w-full flex-wrap items-center justify-end gap-2">
+      {!isHandoff && (
+        <Button variant="quiet" icon={<Plus size={15} />} onClick={onAddAnother} className="mr-auto">
+          Add another
+        </Button>
+      )}
+      <Button variant={onSeeResult ? 'secondary' : 'primary'} onClick={onDone}>
+        Done
+      </Button>
+      {onSeeResult && (
+        <Button variant="primary" icon={<Sparkles size={15} />} onClick={onSeeResult}>
+          {seeResultLabel}
+        </Button>
+      )}
+    </div>
+  )
 
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-        {!isHandoff && (
-          <button
-            type="button"
-            onClick={onAddAnother}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 bg-white px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] transition-colors"
-            style={{ borderColor: hueRgba(hue, 0.4), color: hue }}
-          >
-            <Plus size={15} /> Add another
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onDone}
-          className={
-            onSeeResult
-              ? 'inline-flex items-center gap-1.5 rounded-lg border-2 border-border bg-white px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-muted transition-colors hover:border-navy hover:text-navy'
-              : 'inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5'
-          }
-          style={onSeeResult ? undefined : { backgroundColor: hue }}
-        >
-          Done
-        </button>
-        {onSeeResult && (
-          <button
-            type="button"
-            onClick={onSeeResult}
-            className="inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5"
-            style={{ backgroundColor: hue }}
-          >
-            <Sparkles size={15} /> {seeResultLabel}
-          </button>
-        )}
-      </div>
-    </motion.div>
+  return (
+    <Panel footer={footer}>
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="flex items-start gap-3.5 py-2"
+      >
+        <span className="tone-hue mt-1 shrink-0" aria-hidden="true">
+          {isHandoff ? <Sparkles size={24} strokeWidth={1.6} /> : <CircleCheck size={24} strokeWidth={1.6} />}
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-serif text-title font-medium text-ink">{title}</h3>
+          <p className="mt-1 max-w-[60ch] text-[14px] leading-[22px] text-ink2">{body}</p>
+        </div>
+      </motion.div>
+    </Panel>
   )
 }

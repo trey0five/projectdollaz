@@ -1,25 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// FlowBasket — the queued-items chip strip. Lives OUTSIDE the animated step
-// panel (transforms would wreck the DatePicker portals and layout animations)
-// and persists across steps so the basket is always visible. Chips carry the
-// item headline + subline, Edit/Remove actions (≥44px targets), an "editing"
-// pulse outline while their values are back in the editor, and per-item status
-// decorations during submit (spinner / ✓ / ✗). Remove moves focus to the next
-// chip, else the strip heading — the caller only mutates state.
+// FlowBasket — the queued-items strip. Lives OUTSIDE the animated step body
+// (transforms would wreck the DatePicker portals and layout animations) and
+// persists across steps so the basket is always visible. Each item carries its
+// headline + subline, Edit/Remove actions (40px targets), an "editing" state
+// while its values are back in the editor, and per-item status during submit
+// (spinner / saved mark / failed mark). Remove moves focus to the next item,
+// else the strip heading — the caller only mutates state.
+//
+// Premium UI P4: a ruled strip on the panel (hairline below), items as Pills —
+// one shape, colour only in the 2px status mark; the old infinitely breathing
+// "editing" ring is now a static 2px primary outline.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Pencil, X, Check, Loader2, AlertCircle } from 'lucide-react'
-import { hueRgba } from '../wizard/wizardConfigs.jsx'
+import { Pencil, X, Loader2 } from 'lucide-react'
 import { flowCount } from './flowRuntime.js'
 
-export default function FlowBasket({ basket, flow, data, hue, reduce, editingId, disabled, onEdit, onRemove }) {
+const MARK = { done: 'tone-good', error: 'tone-risk' }
+
+export default function FlowBasket({ basket, flow, data, reduce, editingId, disabled, onEdit, onRemove }) {
   const headingRef = useRef(null)
   const removeRefs = useRef(new Map())
 
   const labelOf = (item) => flow.itemLabel(item.values) || `Untitled ${flow.noun}`
 
-  // Focus contract: after a remove, land on the next chip's Remove button (or
+  // Focus contract: after a remove, land on the next item's Remove button (or
   // the previous one), else the strip heading. rAF waits for React to commit.
   const handleRemove = (item) => {
     const idx = basket.findIndex((it) => it.id === item.id)
@@ -32,13 +37,8 @@ export default function FlowBasket({ basket, flow, data, hue, reduce, editingId,
   }
 
   return (
-    <div className="border-b border-rule/60 bg-white/70 px-5 py-3">
-      <p
-        ref={headingRef}
-        tabIndex={-1}
-        className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] outline-none"
-        style={{ color: hue }}
-      >
+    <div className="border-b border-hair bg-ground/60 px-5 py-3">
+      <p ref={headingRef} tabIndex={-1} className="fld-label mb-2 outline-none">
         In this batch — {flowCount(basket.length, flow.noun, flow.nounPlural)}
       </p>
       <ul className="flex flex-wrap items-center gap-2">
@@ -46,61 +46,43 @@ export default function FlowBasket({ basket, flow, data, hue, reduce, editingId,
           {basket.map((item) => {
             const editing = item.id === editingId
             const locked = item.status === 'done' || item.status === 'saving' || disabled
+            const mark = MARK[item.status]
             return (
               <motion.li
                 key={item.id}
                 layout={!reduce}
-                initial={reduce ? false : { opacity: 0, scale: 0.8, y: 6 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={reduce ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 26 }}
-                className="relative flex items-center gap-1 rounded-full bg-white py-1 pl-3.5 pr-1"
-                style={{
-                  border: `1.5px solid ${hueRgba(hue, 0.35)}`,
-                  boxShadow: editing ? `0 0 0 2px ${hueRgba(hue, 0.6)}` : undefined,
-                }}
+                initial={reduce ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduce ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className={`flex min-w-0 max-w-full items-center gap-1.5 rounded-md border bg-white py-0.5 pl-2.5 pr-0.5 ${
+                  editing ? 'border-[#2563eb] ring-1 ring-[#2563eb]' : 'border-hair/20'
+                }`}
               >
-                {/* Editing pulse — a soft breathing ring while this chip's
-                    values are open in the editor. */}
-                {editing && !reduce && (
-                  <motion.span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-px rounded-full border-2"
-                    style={{ borderColor: hueRgba(hue, 0.6) }}
-                    initial={{ scale: 1, opacity: 0.8 }}
-                    animate={{ scale: 1.12, opacity: 0 }}
-                    transition={{ duration: 1.4, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.4 }}
-                  />
-                )}
+                {/* Status during/after submit: spinner, or the 2px semantic mark. */}
+                {item.status === 'saving' ? (
+                  <Loader2 size={13} className="shrink-0 animate-spin text-ink2" aria-hidden />
+                ) : mark ? (
+                  <i className={`h-3 w-0.5 shrink-0 bg-current ${mark}`} aria-hidden />
+                ) : null}
 
-                {/* Status decoration during/after submit. */}
-                {item.status === 'saving' && (
-                  <Loader2 size={14} className="animate-spin" style={{ color: hue }} aria-hidden />
-                )}
-                {item.status === 'done' && (
-                  <Check size={14} className="text-emerald-600" strokeWidth={3} aria-hidden />
-                )}
-                {item.status === 'error' && (
-                  <AlertCircle size={14} className="text-danger" aria-hidden />
-                )}
-
-                <span className="max-w-[220px] truncate text-[13px] font-semibold text-navy">
+                <span className="min-w-0 truncate text-[13px] font-semibold text-ink sm:max-w-[220px]">
                   {labelOf(item)}
                 </span>
                 {flow.itemSub && (
-                  <span className="hidden max-w-[160px] truncate text-[12px] text-muted sm:inline">
+                  <span className="hidden max-w-[160px] truncate text-[12px] text-ink2 sm:inline">
                     {flow.itemSub(item.values, data)}
                   </span>
                 )}
+                {editing && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#2563eb]">Editing</span>}
 
                 {!locked ? (
-                  <span className="ml-0.5 flex items-center">
+                  <span className="flex shrink-0 items-center">
                     <button
                       type="button"
                       onClick={() => onEdit(item.id)}
                       aria-label={`Edit ${flow.noun} ${labelOf(item)}`}
-                      className="flex h-11 w-11 items-center justify-center rounded-full text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2"
-                      style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
+                      className="flex h-10 w-10 items-center justify-center rounded-md text-ink2 outline-none transition-colors hover:bg-ink/[0.05] hover:text-ink focus-visible:ring-2 focus-visible:ring-[#2563eb]/50"
                     >
                       <Pencil size={14} />
                     </button>
@@ -112,14 +94,13 @@ export default function FlowBasket({ basket, flow, data, hue, reduce, editingId,
                       }}
                       onClick={() => handleRemove(item)}
                       aria-label={`Remove ${flow.noun} ${labelOf(item)}`}
-                      className="flex h-11 w-11 items-center justify-center rounded-full text-muted outline-none transition-colors hover:text-danger focus-visible:ring-2"
-                      style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
+                      className="flex h-10 w-10 items-center justify-center rounded-md text-ink2 outline-none transition-colors hover:bg-ink/[0.05] hover:text-ink focus-visible:ring-2 focus-visible:ring-[#2563eb]/50"
                     >
                       <X size={15} />
                     </button>
                   </span>
                 ) : (
-                  <span className="w-2" aria-hidden />
+                  <span className="w-1.5" aria-hidden />
                 )}
               </motion.li>
             )

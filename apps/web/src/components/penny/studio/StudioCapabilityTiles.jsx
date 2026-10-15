@@ -1,46 +1,49 @@
 // StudioCapabilityTiles — the "Get something done" grid. Each tile either prefills
 // the ask bar or sends straight into a conversation (handled by the parent via
-// onSelect). Cards use the app's soft surface with a gold sheen sweep on hover.
-import { ArrowRight } from 'lucide-react'
-import { STUDIO_TILES } from './studioTiles.js'
+// onSelect). Premium UI P4: `Tile`s (the one card family that stays) in KYRO's
+// gold as the 2px rule + icon stroke — no gradient chips, no sheen sweep.
+import { motion, useReducedMotion } from 'framer-motion'
+import { Section, Tile } from '../../ui/surface/index.js'
+import { STUDIO_TILES, KYRO_HUE } from './studioTiles.js'
 
 export default function StudioCapabilityTiles({ onSelect, canEdit = false }) {
+  const reduce = useReducedMotion()
   const tiles = STUDIO_TILES.filter((t) => !t.ownerOnly || canEdit)
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="font-serif text-[22px] font-semibold text-navy">Get something done</h2>
-        <span className="text-[13.5px] text-muted">
-          One tap — KYRO does the work and shows you the result to approve.
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-        {tiles.map((t) => (
-          <button
+    <Section
+      label="Get something done"
+      aside={
+        <span className="text-[13px] normal-case tracking-normal text-ink2">One tap — KYRO does the work and shows you the result to approve.</span>
+      }
+    >
+      <ul role="list" className="grid list-none grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tiles.map((t, i) => (
+          // One-shot arrival stagger (the WizardChoose pattern).
+          <motion.li
             key={t.id}
-            type="button"
-            onClick={() => onSelect(t)}
-            className="card-soft group relative overflow-hidden p-[18px] text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-penny/50 hover:shadow-penny-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: reduce ? 0 : 0.04 * i + 0.04,
+              duration: 0.32,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="flex list-none"
           >
-            {/* Gold sheen sweep on hover */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 -translate-x-[130%] bg-gradient-to-r from-transparent via-penny/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[130%] motion-reduce:hidden"
+            <Tile
+              hue={KYRO_HUE}
+              className="w-full"
+              onClick={() => onSelect(t)}
+              aria-label={`${t.title} — ${t.cta}`}
+              icon={<t.Icon aria-hidden strokeWidth={1.6} />}
+              title={t.title}
+              body={t.blurb}
+              foot={<span className="text-[13px] font-semibold text-ink2">{t.cta}</span>}
             />
-            <span className="relative mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow">
-              <t.Icon size={20} aria-hidden />
-            </span>
-            <h3 className="relative text-[15.5px] font-bold text-navy">{t.title}</h3>
-            <p className="relative mt-1 text-[13px] leading-relaxed text-muted">{t.blurb}</p>
-            <span className="relative mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-penny">
-              {t.cta}
-              <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </button>
+          </motion.li>
         ))}
-      </div>
-    </section>
+      </ul>
+    </Section>
   )
 }

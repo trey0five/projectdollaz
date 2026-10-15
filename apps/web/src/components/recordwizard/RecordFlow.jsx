@@ -12,15 +12,15 @@
 // stepper tablist and URL) and never navigates: onDone(result) hands the batch
 // outcome up for the FlowConfirm step, onCancel() leaves, and registerGuard()
 // gives the parent a "safe to leave?" hook that opens our own discard dialog.
-// Directional slide transitions + the hue step rail + a celebration beat all
+// Directional slide transitions + the step rule + a celebration beat all
 // stand down under reduced motion; focus + two live regions carry the whole
 // journey for screen readers.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, ChevronRight, ChevronLeft, Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react'
-import { hueRgba } from '../wizard/wizardConfigs.jsx'
-import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
+import { Check, ChevronDown, ChevronRight, ChevronLeft, CircleCheck, Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/c1-flows.css'
 import { apiErrorMessage } from '../../lib/api.js'
 import { makeItemId } from './flowSchema.js'
 import { validateStep, validateItem, isDirty, flowCount, submitQueue } from './flowRuntime.js'
@@ -29,13 +29,13 @@ import FlowField from './FlowField.jsx'
 import FlowBasket from './FlowBasket.jsx'
 import FlowReview from './FlowReview.jsx'
 
-// Directional glide with depth: the entering step slides in from the travel
-// direction while sharpening from a soft blur + slight zoom; the leaving step
-// recedes the opposite way. Reduced motion crossfades opacity only (below).
+// Directional glide: the entering step slides a short way in from the travel
+// direction; the leaving step recedes the opposite way. One-shot per step.
+// Reduced motion crossfades opacity only (below).
 const panelVariants = {
-  enter: (dir) => ({ x: dir >= 0 ? 60 : -60, opacity: 0, scale: 0.965, filter: 'blur(10px)' }),
-  center: { x: 0, opacity: 1, scale: 1, filter: 'blur(0px)' },
-  exit: (dir) => ({ x: dir >= 0 ? -44 : 44, opacity: 0, scale: 0.985, filter: 'blur(7px)' }),
+  enter: (dir) => ({ x: dir >= 0 ? 24 : -24, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir) => ({ x: dir >= 0 ? -16 : 16, opacity: 0 }),
 }
 const reducedVariants = {
   enter: { opacity: 0 },
@@ -46,7 +46,6 @@ const reducedVariants = {
 export default function RecordFlow({
   flow,
   ctx,
-  hue,
   title,
   subtitle,
   onDone,
@@ -573,62 +572,15 @@ export default function RecordFlow({
     else if (reviewN > 0) reviewAndSave()
   }
 
-  // ── Shared hue button recipes (§4) ─────────────────────────────────────────
-  const primaryBtn = {
-    className:
-      'inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[14px] font-bold uppercase tracking-[0.06em] text-white outline-none transition-all hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0',
-    style: {
-      backgroundColor: hue,
-      boxShadow: `0 6px 20px ${hueRgba(hue, 0.35)}`,
-      '--tw-ring-color': hueRgba(hue, 0.5),
-    },
-  }
-  const outlineBtn = {
-    className:
-      'inline-flex items-center gap-1.5 rounded-lg border-2 bg-white px-4 py-2 text-[14px] font-bold uppercase tracking-[0.06em] outline-none transition-colors focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
-    style: { borderColor: hueRgba(hue, 0.4), color: hue, '--tw-ring-color': hueRgba(hue, 0.5) },
-  }
-
   const railLabels = [...flow.steps.map((s) => s.label), 'Review']
   const Icon = flow.Icon
-  // Contextual name for the prominent back control: the previous step's label,
-  // or "options" on the first step (where Back leaves the flow to the picker).
-  const backLabel = stepIdx === 0 ? exitLabel : railLabels[stepIdx - 1]
 
   return (
-    <div className="relative">
-      {/* A soft, restrained pool of hue light behind the pane. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-3 rounded-[34px] opacity-45 blur-3xl"
-        style={{
-          background: `radial-gradient(65% 55% at 30% 6%, ${hueRgba(hue, 0.26)}, transparent 72%)`,
-        }}
-      />
-      <div
-        ref={rootRef}
-        className="relative overflow-hidden rounded-[22px] border border-white/60 backdrop-blur-[26px]"
-        style={{
-          // Milky frosted glass: mostly translucent white with only a WHISPER of
-          // hue. Three background layers — a top-left specular sheen, a faint hue
-          // film, then the frost base — bake the "glass" look into the element
-          // itself (no overlays to fight the content's paint order).
-          background: [
-            'radial-gradient(closest-side at 14% -6%, rgba(255,255,255,0.9), transparent 42%)',
-            `linear-gradient(158deg, ${hueRgba(hue, 0.06)}, transparent 48%)`,
-            'linear-gradient(158deg, rgba(255,255,255,0.8), rgba(255,255,255,0.64))',
-          ].join(', '),
-          // Layered depth: contact + mid + a soft hue ambient, a bright top bevel,
-          // and an inner floor shade — reads as a lifted 3-D pane.
-          boxShadow: [
-            '0 2px 6px rgba(16,28,61,0.05)',
-            '0 16px 32px -12px rgba(16,28,61,0.14)',
-            `0 44px 78px -34px ${hueRgba(hue, 0.38)}`,
-            'inset 0 1px 0 rgba(255,255,255,0.95)',
-            'inset 0 -24px 44px -32px rgba(16,28,61,0.07)',
-          ].join(', '),
-        }}
-      >
+    // Premium UI P4: ONE Panel — the only raised surface on the screen. Head:
+    // contextual back + hue glyph stroke + title + the queued count; the step
+    // rule on a hairline; the batch strip; the step body; the actions on the
+    // hairline footer. No frosted glass, no hue pool, no breathing ring.
+    <div ref={rootRef} className="panel relative overflow-hidden">
       {/* Live regions — polite carries steps/queue/progress, assertive the
           batch outcome + validation summaries. */}
       <p className="sr-only" aria-live="polite">
@@ -639,111 +591,78 @@ export default function RecordFlow({
       </p>
 
       {phase === 'loading' ? (
-        <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-          {reduce ? null : <Loader2 size={22} className="animate-spin" style={{ color: hue }} />}
-          <p className="text-[14px] font-medium text-muted">Getting things ready…</p>
+        <div className="flex items-center gap-3 px-5 py-12">
+          {reduce ? null : <Loader2 size={18} className="animate-spin text-ink2" />}
+          <p className="text-[14px] text-ink2">Getting things ready…</p>
         </div>
       ) : phase === 'gated' && gate ? (
-        <div className="px-6 py-12 text-center">
-          <span
-            className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl"
-            style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
-          >
-            {Icon ? <Icon size={22} /> : <AlertCircle size={22} />}
+        <div className="flex items-start gap-3.5 px-5 py-8">
+          <span className="tone-hue mt-1 shrink-0" aria-hidden="true">
+            {Icon ? <Icon size={22} strokeWidth={1.6} /> : <AlertCircle size={22} strokeWidth={1.6} />}
           </span>
-          <h4 className="font-serif text-lg font-semibold text-navy">{gate.title}</h4>
-          <p className="mx-auto mt-1.5 max-w-md text-[15px] leading-relaxed text-muted">
-            {gate.body}
-          </p>
-          {gate.action && (
-            <button
-              type="button"
-              onClick={() => goToOption?.(gate.action.goToOptionKey)}
-              {...primaryBtn}
-              className={`${primaryBtn.className} mt-5`}
-            >
-              {gate.action.label}
-            </button>
-          )}
+          <div className="min-w-0">
+            <h4 className="font-serif text-title font-medium text-ink">{gate.title}</h4>
+            <p className="mt-1 max-w-[60ch] text-[14px] leading-[22px] text-ink2">{gate.body}</p>
+            {gate.action && (
+              <Button
+                variant="primary"
+                className="mt-4"
+                onClick={() => goToOption?.(gate.action.goToOptionKey)}
+              >
+                {gate.action.label}
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <>
-          {/* 1 · Header: contextual back + glowing record icon + title + queue
-              badge over a faint hue aurora, with the sleek progress rail beneath. */}
-          <div className="relative px-6 pt-5 pb-4">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background: `radial-gradient(120% 150% at 0% -10%, ${hueRgba(hue, 0.1)}, transparent 55%)`,
-              }}
-            />
-            <div className="relative">
-              <div className="mb-3.5 flex items-center justify-between gap-3">
-                {/* Same pill as "Back to dashboard"/"Back to overview" — one
-                    back-control family. Stays a BUTTON (not a Link) so the
-                    unsaved-work discard guard in back() still runs. */}
-                <button
-                  type="button"
-                  onClick={back}
-                  disabled={submitting}
-                  className={`${BACK_PILL} disabled:opacity-50`}
+          {/* 1 · Header: contextual back · hue glyph · title · queued count,
+              with the step rule on the hairline beneath. */}
+          <div className="steprule-on-rule relative border-b border-hair px-5 pb-0 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              {/* The head link LEAVES the flow (to the options picker, or the
+                  module overview for a sole option) from any step — it says
+                  where it goes and goes there. Step-back is the footer's job.
+                  Stays a BUTTON (not a Link) so attemptLeave's unsaved-work
+                  discard guard still runs. */}
+              <button
+                type="button"
+                onClick={attemptLeave}
+                disabled={submitting}
+                className="back-link disabled:opacity-50"
+              >
+                <ChevronLeft size={15} aria-hidden="true" />
+                Back to {exitLabel}
+              </button>
+              {basket.length > 0 && (
+                <motion.span
+                  key={pulseKey}
+                  initial={reduce ? false : { opacity: 0.4 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.45 }}
+                  className="pill pill-count"
                 >
-                  <BackPillBody label={`Back to ${backLabel}`} />
-                </button>
-                {basket.length > 0 && (
-                  <motion.span
-                    key={pulseKey}
-                    initial={false}
-                    animate={reduce ? undefined : { scale: [1, 1.18, 1] }}
-                    transition={{ duration: 0.45 }}
-                    className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold"
-                    style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
-                  >
-                    {flowCount(basket.length, flow.noun, flow.nounPlural)} queued
-                  </motion.span>
-                )}
-              </div>
+                  {flowCount(basket.length, flow.noun, flow.nounPlural)} queued
+                </motion.span>
+              )}
+            </div>
 
-              <div className="flex items-center gap-3.5">
-                <span
-                  className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
-                  style={{
-                    background: `linear-gradient(135deg, ${hue}, ${hueRgba(hue, 0.72)})`,
-                    boxShadow: `0 10px 26px ${hueRgba(hue, 0.4)}`,
-                  }}
-                >
-                  {!reduce && (
-                    <motion.span
-                      aria-hidden="true"
-                      className="absolute inset-0 rounded-2xl"
-                      animate={{
-                        boxShadow: [`0 0 0 0 ${hueRgba(hue, 0.45)}`, `0 0 0 9px ${hueRgba(hue, 0)}`],
-                      }}
-                      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut' }}
-                    />
-                  )}
-                  {Icon ? <Icon size={24} /> : <AlertCircle size={24} />}
-                </span>
-                <div className="min-w-0">
-                  <h3 className="font-serif text-[20px] font-semibold leading-tight text-navy">
-                    {title || flow.nounPlural}
-                  </h3>
-                  {subtitle && <p className="truncate text-[13px] text-muted">{subtitle}</p>}
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <FlowStepRail
-                  labels={railLabels}
-                  current={stepIdx}
-                  hue={hue}
-                  reduce={reduce}
-                  disabled={phase !== 'editing'}
-                  onGoTo={(i) => phase === 'editing' && go(i, -1)}
-                />
+            <div className="mt-3 flex items-start gap-3">
+              <span className="tone-hue mt-1 shrink-0" aria-hidden="true">
+                {Icon ? <Icon size={22} strokeWidth={1.6} /> : <AlertCircle size={22} strokeWidth={1.6} />}
+              </span>
+              <div className="min-w-0">
+                <h3 className="font-serif text-title font-medium text-ink">{title || flow.nounPlural}</h3>
+                {subtitle && <p className="mt-0.5 text-[13px] leading-[18px] text-ink2">{subtitle}</p>}
               </div>
             </div>
+
+            <FlowStepRail
+              labels={railLabels}
+              current={stepIdx}
+              disabled={phase !== 'editing'}
+              onGoTo={(i) => phase === 'editing' && go(i, -1)}
+            />
           </div>
 
           {/* 2 · The basket strip — OUTSIDE the transformed step panel. */}
@@ -752,7 +671,6 @@ export default function RecordFlow({
               basket={basket}
               flow={flow}
               data={data}
-              hue={hue}
               reduce={reduce}
               editingId={editingId}
               disabled={phase !== 'editing'}
@@ -761,7 +679,7 @@ export default function RecordFlow({
             />
           )}
 
-          {/* 3 · Animated step panel — a frosted white pane on the glass card. */}
+          {/* 3 · The step body, on the panel itself (no inner card). */}
           <div className="px-5 py-5">
             <AnimatePresence mode="wait" custom={dir} initial={false}>
               <motion.div
@@ -771,126 +689,99 @@ export default function RecordFlow({
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={
-                  reduce ? { duration: 0.15 } : { duration: 0.44, ease: [0.22, 1, 0.36, 1] }
-                }
+                transition={reduce ? { duration: 0.15 } : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div
-                  className="rounded-xl border border-white/70 bg-white/60 p-5 backdrop-blur-md"
-                  style={{
-                    boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.9), 0 12px 28px -18px rgba(16,28,61,0.18)',
-                  }}
-                >
-                  {isReview ? (
-                    <FlowReview
-                      basket={basket}
-                      flow={flow}
-                      data={data}
-                      hue={hue}
-                      submitting={submitting}
-                      onEditItem={chipEdit}
-                      onRemoveItem={chipRemove}
-                      onRetryItem={(id) => runSubmit([id])}
-                    />
-                  ) : (
-                    <FlowFieldStep
-                      flow={flow}
-                      step={flow.steps[stepIdx]}
-                      values={values}
-                      errors={errors}
-                      showErrors={showErrors}
-                      data={data}
-                      loadErrors={loadErrors}
-                      hue={hue}
-                      reduce={reduce}
-                      idBase={idBase}
-                      finishNotice={finishNotice}
-                      onChange={handleFieldChange}
-                      onSkip={reviewAndSave}
-                      onDiscardDraft={discardDraft}
-                      onSubmitStep={submitStep}
-                    />
-                  )}
-                </div>
+                {isReview ? (
+                  <FlowReview
+                    basket={basket}
+                    flow={flow}
+                    data={data}
+                    submitting={submitting}
+                    onEditItem={chipEdit}
+                    onRemoveItem={chipRemove}
+                    onRetryItem={(id) => runSubmit([id])}
+                  />
+                ) : (
+                  <FlowFieldStep
+                    flow={flow}
+                    step={flow.steps[stepIdx]}
+                    values={values}
+                    errors={errors}
+                    showErrors={showErrors}
+                    data={data}
+                    loadErrors={loadErrors}
+                    reduce={reduce}
+                    idBase={idBase}
+                    finishNotice={finishNotice}
+                    onChange={handleFieldChange}
+                    onSkip={reviewAndSave}
+                    onDiscardDraft={discardDraft}
+                    onSubmitStep={submitStep}
+                  />
+                )}
                 <PanelFocus onReady={consumePendingFocus} />
               </motion.div>
             </AnimatePresence>
           </div>
 
-          {/* 4 · Footer — outside the animated panel so buttons never slide. */}
-          <div
-            className="flex items-center justify-between gap-3 border-t px-5 py-3.5 backdrop-blur-md"
-            style={{ borderColor: 'rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.5)' }}
-          >
-            <button
-              type="button"
-              onClick={back}
-              disabled={submitting}
-              className="inline-flex items-center gap-1 rounded-lg border border-rule px-3.5 py-2 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:border-navy/30 hover:text-navy focus-visible:ring-2 disabled:opacity-50"
-              style={{ '--tw-ring-color': hueRgba(hue, 0.4) }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
-            <div className="flex flex-wrap items-center justify-end gap-2.5">
+          {/* 4 · Footer — outside the animated body so buttons never slide. */}
+          <div className="panel-foot justify-between">
+            <Button variant="quiet" onClick={back} disabled={submitting} icon={<ChevronLeft size={15} />}>
+              Back
+            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {!isReview && !lastFieldStep && (
-                <button type="button" onClick={next} {...primaryBtn}>
-                  Next <ChevronRight size={15} />
-                </button>
+                <Button variant="primary" onClick={next}>
+                  Next <ChevronRight size={15} aria-hidden="true" />
+                </Button>
               )}
 
               {lastFieldStep && editingId && (
-                <button type="button" onClick={updateInList} {...primaryBtn}>
-                  <Check size={15} /> Update in list
-                </button>
+                <Button variant="primary" onClick={updateInList} icon={<Check size={15} />}>
+                  Update in list
+                </Button>
               )}
               {lastFieldStep && !editingId && (
                 <>
-                  <button type="button" onClick={addAndStartAnother} {...outlineBtn}>
-                    <Plus size={15} /> Add &amp; start another
-                  </button>
-                  <button
-                    type="button"
-                    onClick={reviewAndSave}
-                    disabled={reviewN === 0}
-                    {...primaryBtn}
-                  >
+                  <Button variant="secondary" onClick={addAndStartAnother} icon={<Plus size={15} />}>
+                    Add &amp; start another
+                  </Button>
+                  <Button variant="primary" onClick={reviewAndSave} disabled={reviewN === 0}>
                     Review &amp; save{reviewN > 0 ? ` (${reviewN})` : ''}
-                  </button>
+                  </Button>
                 </>
               )}
 
               {isReview &&
                 (errCount > 0 ? (
                   <>
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
                       ref={retryBtnRef}
                       onClick={() => runSubmit()}
                       disabled={submitting}
-                      {...outlineBtn}
+                      icon={<RefreshCw size={14} />}
                     >
-                      <RefreshCw size={14} /> Retry failed ({errCount})
-                    </button>
+                      Retry failed ({errCount})
+                    </Button>
                     {okCount > 0 && (
-                      <button type="button" onClick={finishAnyway} disabled={submitting} {...primaryBtn}>
+                      <Button variant="primary" onClick={finishAnyway} disabled={submitting}>
                         Finish anyway — keep the {okCount} saved
-                      </button>
+                      </Button>
                     )}
                   </>
                 ) : (
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
                     onClick={() => runSubmit()}
                     disabled={submitting || remaining === 0}
-                    {...primaryBtn}
                   >
                     {submitting
                       ? 'Saving…'
                       : okCount > 0
                         ? `Save the rest (${remaining})`
                         : `Save all ${basket.length}`}
-                  </button>
+                  </Button>
                 ))}
             </div>
           </div>
@@ -902,10 +793,10 @@ export default function RecordFlow({
         {submitNotice && (
           <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex justify-center">
             <motion.p
-              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="rounded-full bg-navy px-4 py-2 text-[13px] font-semibold text-white shadow-card"
+              className="rounded-md bg-[#0a1628] px-3.5 py-2 text-[13px] font-semibold text-white shadow-float"
             >
               Hang on — still saving your items.
             </motion.p>
@@ -913,13 +804,12 @@ export default function RecordFlow({
         )}
       </AnimatePresence>
 
-      {/* Discard-guard dialog — inside the card, never fullscreen. */}
+      {/* Discard-guard dialog — inside the panel, never fullscreen. */}
       {guardOpen && (
         <GuardDialog
           count={unsavedCount}
           noun={flow.noun}
           nounPlural={flow.nounPlural}
-          hue={hue}
           reduce={reduce}
           onKeep={() => {
             setGuardOpen(false)
@@ -929,42 +819,27 @@ export default function RecordFlow({
         />
       )}
 
-      {/* Celebration beat — success only; reduced motion gets a static check. */}
+      {/* Celebration beat — success only; one-shot; reduced motion gets a static check. */}
       {phase === 'celebrating' && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/95">
-          <span
-            className="relative flex h-16 w-16 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
+          <motion.span
+            initial={reduce ? false : { scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+            className="tone-hue flex"
+            aria-hidden="true"
           >
-            {!reduce && (
-              <motion.span
-                aria-hidden
-                className="absolute inset-0 rounded-2xl border-2"
-                style={{ borderColor: hueRgba(hue, 0.5) }}
-                initial={{ scale: 1, opacity: 0.9 }}
-                animate={{ scale: 2.1, opacity: 0 }}
-                transition={{ duration: 0.9, ease: 'easeOut' }}
-              />
-            )}
-            <motion.span
-              initial={reduce ? false : { scale: 0.4 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-              className="flex"
-            >
-              <Check size={30} strokeWidth={3} />
-            </motion.span>
-          </span>
+            <CircleCheck size={36} strokeWidth={1.5} />
+          </motion.span>
           <h4
             ref={celebrateRef}
             tabIndex={-1}
-            className="font-serif text-xl font-semibold text-navy outline-none"
+            className="font-serif text-title font-medium text-ink outline-none"
           >
-            {flowCount(celebrateN, flow.noun, flow.nounPlural)} in ✨
+            {flowCount(celebrateN, flow.noun, flow.nounPlural)} in
           </h4>
         </div>
       )}
-      </div>
     </div>
   )
 }
@@ -984,7 +859,6 @@ function FlowFieldStep({
   showErrors,
   data,
   loadErrors,
-  hue,
   reduce,
   idBase,
   finishNotice,
@@ -1016,7 +890,6 @@ function FlowFieldStep({
       data={data}
       loadErrors={loadErrors}
       error={showErrors ? errors[f.key] : undefined}
-      hue={hue}
       reduce={reduce}
       index={i}
       onChange={onChange}
@@ -1034,7 +907,7 @@ function FlowFieldStep({
         <h4
           data-rf-heading
           tabIndex={-1}
-          className="font-serif text-[17px] font-semibold text-navy outline-none"
+          className="font-serif text-heading font-medium text-ink outline-none"
         >
           {step.title}
         </h4>
@@ -1042,46 +915,39 @@ function FlowFieldStep({
           <button
             type="button"
             onClick={onSkip}
-            className="text-[13px] font-semibold underline-offset-2 outline-none hover:underline focus-visible:underline"
-            style={{ color: hue }}
+            className="dt-link text-[13px] font-semibold"
           >
             Skip details →
           </button>
         )}
       </div>
-      {step.blurb && <p className="mt-0.5 text-[13.5px] leading-snug text-muted">{step.blurb}</p>}
+      {step.blurb && <p className="mt-0.5 text-[13px] leading-[18px] text-ink2">{step.blurb}</p>}
 
       {finishNotice && (
-        <div
-          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3.5 py-2.5"
-          style={{ borderColor: hueRgba(hue, 0.35), backgroundColor: hueRgba(hue, 0.06) }}
-        >
-          <p className="text-[13px] font-medium text-navy">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-2 border-watch bg-watch/[0.04] py-1.5 pl-3 pr-1">
+          <p className="text-[13px] font-medium text-ink">
             Finish this one or discard it before reviewing.
           </p>
-          <button
-            type="button"
-            onClick={onDiscardDraft}
-            className="min-h-[44px] text-[13px] font-semibold text-muted transition-colors hover:text-danger"
-          >
+          <Button variant="quiet" size="sm" onClick={onDiscardDraft}>
             Discard this item
-          </button>
+          </Button>
         </div>
       )}
 
-      <div data-rf-fields className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
+      <div data-rf-fields className="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
         {mainFields.map(renderField)}
         {foldFields.length > 0 && (
-          <div className="sm:col-span-2">
+          <div className="border-t border-hair pt-1 sm:col-span-2">
             <button
               type="button"
               onClick={() => setMoreOpen((o) => !o)}
               aria-expanded={moreOpen}
-              className="flex min-h-[44px] items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] outline-none focus-visible:ring-2"
-              style={{ color: hue, '--tw-ring-color': hueRgba(hue, 0.5) }}
+              className="steprule-btn min-h-[44px] items-center"
+              data-state="done"
             >
               <ChevronDown
-                size={15}
+                size={14}
+                aria-hidden="true"
                 className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`}
               />
               More
@@ -1095,7 +961,7 @@ function FlowFieldStep({
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   className="overflow-hidden"
                 >
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 pt-1 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-4 pt-1 sm:grid-cols-2">
                     {foldFields.map((f, i) => renderField(f, mainFields.length + i))}
                   </div>
                 </motion.div>
@@ -1132,7 +998,7 @@ function PanelFocus({ onReady }) {
 // and "Keep editing" stay (the opener restores focus); "Discard" leaves via
 // the parent's onCancel.
 // ─────────────────────────────────────────────────────────────────────────────
-function GuardDialog({ count, noun, nounPlural, hue, reduce, onKeep, onDiscard }) {
+function GuardDialog({ count, noun, nounPlural, reduce, onKeep, onDiscard }) {
   const dialogId = useId()
   const boxRef = useRef(null)
   const keepRef = useRef(null)
@@ -1162,7 +1028,7 @@ function GuardDialog({ count, noun, nounPlural, hue, reduce, onKeep, onDiscard }
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-navy-deep/30 p-4 backdrop-blur-[2px]"
+      className="absolute inset-0 z-30 flex items-center justify-center bg-[#0a1628]/30 p-4"
       onKeyDown={onKeyDown}
     >
       <motion.div
@@ -1171,41 +1037,28 @@ function GuardDialog({ count, noun, nounPlural, hue, reduce, onKeep, onDiscard }
         aria-modal="true"
         aria-labelledby={`${dialogId}-t`}
         aria-describedby={`${dialogId}-b`}
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-        className="w-full max-w-sm rounded-2xl border-2 bg-white p-5 text-center shadow-card"
-        style={{ borderColor: hueRgba(hue, 0.3) }}
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="dlg w-full max-w-sm"
       >
-        <h4 id={`${dialogId}-t`} className="font-serif text-[17px] font-semibold text-navy">
-          Discard this batch?
-        </h4>
-        <p id={`${dialogId}-b`} className="mt-1 text-[14px] leading-relaxed text-muted">
-          You have {count} unsaved {count === 1 ? noun : nounPlural} — discard{' '}
-          {count === 1 ? 'it' : 'them'}?
-        </p>
-        <div className="mt-4 flex items-center justify-center gap-2.5">
-          <button
-            type="button"
-            ref={keepRef}
-            onClick={onKeep}
-            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[14px] font-bold uppercase tracking-[0.06em] text-white outline-none transition-all hover:-translate-y-0.5 focus-visible:ring-2"
-            style={{
-              backgroundColor: hue,
-              boxShadow: `0 6px 20px ${hueRgba(hue, 0.35)}`,
-              '--tw-ring-color': hueRgba(hue, 0.5),
-            }}
-          >
-            Keep editing
-          </button>
-          <button
-            type="button"
-            onClick={onDiscard}
-            className="min-h-[44px] rounded-lg px-3 text-[14px] font-semibold text-muted outline-none transition-colors hover:text-danger focus-visible:ring-2"
-            style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-          >
+        <span className="dlg-rule" aria-hidden="true" />
+        <div className="dlg-body">
+          <h4 id={`${dialogId}-t`} className="dlg-title">
+            Discard this batch?
+          </h4>
+          <p id={`${dialogId}-b`} className="mt-1 text-[14px] leading-[22px] text-ink2">
+            You have {count} unsaved {count === 1 ? noun : nounPlural} — discard{' '}
+            {count === 1 ? 'it' : 'them'}?
+          </p>
+        </div>
+        <div className="dlg-foot">
+          <Button variant="quiet" onClick={onDiscard}>
             Discard
-          </button>
+          </Button>
+          <Button variant="primary" ref={keepRef} onClick={onKeep}>
+            Keep editing
+          </Button>
         </div>
       </motion.div>
     </div>

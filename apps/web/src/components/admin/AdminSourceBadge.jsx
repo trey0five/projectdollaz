@@ -3,7 +3,7 @@
 //   • superadmin → navy "Super-admin" (the bootstrap founder; never revocable)
 //   • db         → coral "Granted" (DB isAdmin flag; the ONLY revocable source)
 //   • env        → slate "Allowlist" (ADMIN_EMAILS env; not DB-revocable)
-// ui.v2 tokens only; matches the admin _ui.jsx badge family.
+// One Pill shape (surface.css .pill); the revocable source carries the mark.
 // ─────────────────────────────────────────────────────────────────────────────
 import { ShieldCheck, UserCheck, ListChecks } from 'lucide-react'
 
@@ -11,19 +11,19 @@ const STYLES = {
   superadmin: {
     label: 'Super-admin',
     Icon: ShieldCheck,
-    cls: 'bg-navy text-white',
+    tone: 'neutral',
     title: 'The bootstrap founder account — always an admin, never revocable.',
   },
   db: {
     label: 'Granted',
     Icon: UserCheck,
-    cls: 'bg-coral/15 text-coral',
+    tone: 'hue',
     title: 'Granted in-app by a super-admin. Revocable here.',
   },
   env: {
     label: 'Allowlist',
     Icon: ListChecks,
-    cls: 'bg-section text-muted',
+    tone: null,
     title: 'From the ADMIN_EMAILS environment allowlist — managed by ops, not revocable here.',
   },
 }
@@ -32,11 +32,11 @@ export default function AdminSourceBadge({ source }) {
   const s = STYLES[source] || STYLES.env
   const { Icon } = s
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${s.cls}`}
-      title={s.title}
-    >
-      <Icon size={12} /> {s.label}
+    // One Pill shape for every source (Premium UI §2.4); only the revocable
+    // "Granted" source carries a hue mark — colour never fills the badge.
+    <span className={`pill ${s.tone ? `pill-status tone-${s.tone}` : ''}`} title={s.title}>
+      {s.tone === 'hue' ? <i className="pill-mark bg-coral" aria-hidden="true" /> : null}
+      <Icon size={12} aria-hidden="true" /> {s.label}
     </span>
   )
 }

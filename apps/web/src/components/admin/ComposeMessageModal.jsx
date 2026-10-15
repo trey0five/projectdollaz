@@ -12,6 +12,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Send, X } from 'lucide-react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/c1-flows.css'
 
 const LABEL_MAX = 80
 const SUBJECT_MAX = 200
@@ -91,9 +93,6 @@ export default function ComposeMessageModal({ open, onClose, audience, headerLab
     }
   }
 
-  const inputCls =
-    'w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-navy'
-
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -101,103 +100,89 @@ export default function ComposeMessageModal({ open, onClose, audience, headerLab
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-navy/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           onClick={onClose}
         >
+          <div className="dlg-scrim" aria-hidden="true" />
           <motion.div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Compose message"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="dlg w-full max-w-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-coral/15 text-coral">
-                  <Send size={16} />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="font-serif text-[18px] text-ink">Send message</h2>
-                  {headerLabel && <p className="truncate text-xs text-muted">{headerLabel}</p>}
-                </div>
+            <span className="dlg-rule" aria-hidden="true" />
+            <div className="dlg-head items-center">
+              <Send size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-ink2" />
+              <div className="min-w-0 flex-1">
+                <h2 className="dlg-title">Send message</h2>
+                {headerLabel && <p className="dlg-sub truncate">{headerLabel}</p>}
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:bg-section hover:text-ink"
-              >
+              <button type="button" onClick={onClose} aria-label="Close" className="dlg-x">
                 <X size={16} />
               </button>
             </div>
 
-            <div className="px-5 py-4">
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <div className="dlg-body">
+              <label htmlFor="compose-sender" className="fld-label block">
                 From (sender label)
               </label>
               <input
+                id="compose-sender"
                 ref={firstRef}
                 value={senderLabel}
                 maxLength={LABEL_MAX}
                 onChange={(e) => setSenderLabel(e.target.value)}
                 placeholder="KYRO Team"
-                className={inputCls}
+                className="field-plain"
               />
 
-              <label className="mb-1 mt-4 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <label htmlFor="compose-subject" className="fld-label mt-4 block">
                 Subject
               </label>
               <input
+                id="compose-subject"
                 value={subject}
                 maxLength={SUBJECT_MAX}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Subject"
-                className={inputCls}
+                className="field-plain"
               />
 
-              <label className="mb-1 mt-4 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <label htmlFor="compose-body" className="fld-label mt-4 block">
                 Message
               </label>
               <textarea
+                id="compose-body"
                 value={body}
                 maxLength={BODY_MAX}
                 rows={6}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Write your message…"
-                className={`${inputCls} resize-y`}
+                className="field-plain field-area"
               />
-              <div className="mt-1 text-right text-[11px] text-muted tabular-nums">
+              <div className="mt-1 text-right text-[11px] tabular-nums text-ink2">
                 {body.length}/{BODY_MAX}
               </div>
 
               {error && (
-                <p className="mt-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+                <p className="dlg-error mt-2" role="alert">
                   {error}
                 </p>
               )}
-
-              <div className="mt-4 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-section hover:text-ink"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  className="inline-flex items-center gap-2 rounded-lg bg-coral px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Send size={15} /> {busy ? 'Sending…' : 'Send'}
-                </button>
-              </div>
+            </div>
+            <div className="dlg-foot">
+              <Button variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={submit} disabled={!canSubmit} icon={<Send size={14} />}>
+                {busy ? 'Sending…' : 'Send'}
+              </Button>
             </div>
           </motion.div>
         </motion.div>

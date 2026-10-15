@@ -1,9 +1,9 @@
-// StudioBackdrop — the living navy hero backdrop for Penny Studio. Reuses the
-// HomeCommandCenter LivingBackdrop language (gold top hairline + drifting glow
-// orbs + a slow diagonal gold light-sweep) and layers ~26 gold motes that rise
-// ONCE on mount (framer one-shot — Premium UI P1 deleted the looping CSS
-// `studio-mote` keyframe). Purely decorative (aria-hidden); the whole mote layer
-// is skipped under reduced motion. NO <canvas> — all framer so it degrades cleanly.
+// StudioBackdrop — the KYRO stage backdrop for Penny Studio: a gold top
+// hairline, two light pools (KYRO gold + one blue counter-light) that drift into
+// place, ONE diagonal gold light-sweep, and ~26 gold motes that rise ONCE on
+// mount. Strictly one-shot (Premium UI §2.5): every layer settles and rests —
+// no repeat, no loop. Purely decorative (aria-hidden); the motion layer is
+// skipped under reduced motion. NO <canvas> — all framer so it degrades cleanly.
 import { motion, useReducedMotion } from 'framer-motion'
 
 const MOTE_COUNT = 26
@@ -13,13 +13,12 @@ const MOTE_COUNT = 26
 const MOTES = Array.from({ length: MOTE_COUNT }, () => ({
   left: Math.random() * 100,
   bottom: Math.random() * 55,
-  delay: Math.random() * 12,
-  duration: 9 + Math.random() * 7,
+  delay: Math.random() * 2.5,
+  duration: 5 + Math.random() * 3,
 }))
 
-// `sweep` toggles the diagonal gold light-sweep. It's on by default (Penny
-// Studio keeps it), but the marketing hero passes sweep={false} — that looping
-// sheen is the "overused fold shimmer" the landing intentionally retired.
+// `sweep` toggles the single diagonal gold light-sweep. It's on by default (Penny
+// Studio keeps it); the marketing hero passes sweep={false}.
 export default function StudioBackdrop({ sweep = true }) {
   const reduce = useReducedMotion()
 
@@ -34,32 +33,31 @@ export default function StudioBackdrop({ sweep = true }) {
       {reduce ? (
         <>
           <span className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-penny/10 blur-3xl" />
-          <span className="absolute -bottom-28 -left-16 h-60 w-60 rounded-full bg-navy-soft/20 blur-3xl" />
+          <span className="absolute -bottom-28 -left-16 h-60 w-60 rounded-full bg-[#2563eb]/15 blur-3xl" />
         </>
       ) : (
         <>
+          {/* Two light pools that drift INTO place once and rest (no loop). */}
           <motion.span
             className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-penny/10 blur-3xl"
-            animate={{ x: [0, -30, 10, 0], y: [0, 26, -14, 0], scale: [1, 1.14, 0.94, 1], opacity: [0.55, 0.9, 0.6, 0.55] }}
-            transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+            initial={{ x: 30, y: -20, opacity: 0 }}
+            animate={{ x: 0, y: 0, opacity: 0.8 }}
+            transition={{ duration: 2.4, ease: [0.22, 1, 0.36, 1] }}
           />
           <motion.span
-            className="absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-navy-soft/25 blur-3xl"
-            animate={{ x: [0, 34, -12, 0], y: [0, -20, 12, 0], scale: [1, 1.1, 0.96, 1], opacity: [0.5, 0.82, 0.55, 0.5] }}
-            transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-[#2563eb]/15 blur-3xl"
+            initial={{ x: -30, y: 20, opacity: 0 }}
+            animate={{ x: 0, y: 0, opacity: 0.7 }}
+            transition={{ duration: 2.8, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
           />
-          <motion.span
-            className="absolute left-1/3 top-1/2 h-44 w-44 rounded-full bg-penny-light/10 blur-3xl"
-            animate={{ x: [0, 66, -44, 0], y: [0, -32, 32, 0], opacity: [0.3, 0.6, 0.35, 0.3] }}
-            transition={{ duration: 23, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          {/* Diagonal gold light-sweep gliding across the hero (opt-out via sweep). */}
+          {/* Diagonal gold light-sweep: ONE pass across the hero on arrival. */}
           {sweep && (
             <motion.span
               className="absolute inset-y-[-20%] -left-1/3 w-1/3 -skew-x-12"
               style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.05), rgba(212,180,122,0.16), rgba(255,255,255,0.05), transparent)' }}
-              animate={{ x: ['0%', '440%'] }}
-              transition={{ duration: 6, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
+              initial={{ x: '0%' }}
+              animate={{ x: '440%' }}
+              transition={{ duration: 2.2, ease: 'easeInOut', delay: 0.4 }}
             />
           )}
 

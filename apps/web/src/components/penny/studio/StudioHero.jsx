@@ -1,4 +1,6 @@
-// StudioHero — the navy command hero. `motion.section layout` so it morphs
+// StudioHero — the ONE dark stage on /penny (ink ground + KYRO gold light,
+// .stage-kyro; Premium UI §2.1 allows exactly two stages, this and the Home
+// briefing band). `motion.section layout` so it morphs
 // smoothly between the tall landing hero and the slim conversation bar.
 //
 // The hands-free control lives here in BOTH states and is rendered at a STABLE
@@ -15,11 +17,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Headphones, Plus } from 'lucide-react'
+import { Headphones, Mic, Paperclip, Plus, Zap } from 'lucide-react'
 import PennyAvatar from '../PennyAvatar.jsx'
 import { BACK_PILL_DARK, BackPillBody } from '../../ui/BackLink.jsx'
 import { useSpeechInput } from '../hooks/useSpeechInput.js'
 import StudioBackdrop from './StudioBackdrop.jsx'
+import Button from '../../ui/surface/Button.jsx'
+import '../../../styles/pending/c1-flows.css'
 
 function greeting() {
   const h = new Date().getHours()
@@ -124,24 +128,19 @@ function HandsFree({ chat }) {
   return (
     <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
       {on && listening && transcript && (
-        <span className="max-w-[24ch] break-words text-[13px] italic text-penny-light">“{transcript}”</span>
+        <span className="max-w-[24ch] break-words text-[13px] italic text-white/70">“{transcript}”</span>
       )}
       <button
         type="button"
         onClick={() => (on ? disable() : enable())}
         aria-pressed={on}
         aria-label={on ? 'Turn off hands-free voice' : 'Turn on hands-free voice'}
-        className={`relative inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 ${
-          on
-            ? 'border-danger bg-danger text-white'
-            : 'border-penny/40 bg-penny/10 text-penny-light hover:border-penny/70 hover:text-white'
-        }`}
+        className={`btn btn-sm btn-on-dark ${on ? 'border-white/50 bg-white/10 text-white' : ''}`}
       >
-        {on && (
-          <span aria-hidden className="absolute inset-0 rounded-full bg-danger/40 motion-safe:animate-ping motion-reduce:hidden" />
-        )}
-        <Headphones size={14} className="relative" aria-hidden />
-        <span className="relative">{on ? 'Listening…' : 'Hands-free'}</span>
+        {/* Recording state: a static 2px risk mark (no ping loop). */}
+        {on && <i aria-hidden className="h-3 w-0.5 bg-[rgb(var(--c-risk))]" />}
+        <Headphones size={14} aria-hidden />
+        <span>{on ? 'Listening…' : 'Hands-free'}</span>
       </button>
     </div>
   )
@@ -156,7 +155,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
       layout
       layoutId="studio-hero"
       transition={layoutTransition}
-      className={`relative overflow-hidden rounded-2xl border border-penny/20 bg-studio-hero shadow-navy-glow ${
+      className={`stage-kyro ${
         // In a conversation the slim header stays pinned so "New chat" (the way back
         // to the Studio landing) is always reachable, even after scrolling a long
         // reply. `top-16` clears the app-shell's own sticky top strip (h-14 / z-20);
@@ -177,47 +176,41 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                 {chat.busy ? chat.status || 'Working…' : 'Your AI chief of staff'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onNewChat}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] font-semibold text-penny-light transition hover:border-penny/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-            >
-              <Plus size={14} aria-hidden /> New chat
-            </button>
+            <Button size="sm" onClick={onNewChat} className="btn-on-dark ml-auto" icon={<Plus size={14} />}>
+              New chat
+            </Button>
           </div>
         ) : (
           <div className="px-6 pt-6 sm:px-10 sm:pt-8">
             <Link to="/app" className={`mb-5 flex w-max ${BACK_PILL_DARK}`}>
               <BackPillBody label="Back to dashboard" tone="dark" />
             </Link>
-            <p className="mb-3.5 inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.2em] text-penny-light">
-              <span aria-hidden className="relative flex h-[7px] w-[7px]">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-penny-light opacity-70 motion-safe:animate-ping motion-reduce:hidden" />
-                <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-penny-light" />
-              </span>
+            <p className="mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-penny-light">
+              <i aria-hidden className="h-3 w-0.5 bg-penny-light" />
               KYRO Studio · your AI chief of staff
             </p>
             <div className="flex items-center justify-between gap-5 sm:gap-10">
               <div className="min-w-0">
-                <h1 className="max-w-[16ch] font-serif text-[30px] font-semibold leading-[1.05] text-white sm:text-[44px]">
+                <h1 className="max-w-[18ch] font-serif text-[30px] font-medium leading-[1.08] text-white sm:text-[44px] sm:leading-[48px]">
                   {greeting()}, {name}.
                   <br />
                   <em className="italic text-penny-light">What should we knock out today?</em>
                 </h1>
-                <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-white/75 sm:text-[17px]">
+                <p className="mt-3 max-w-[56ch] text-[15px] leading-[24px] text-white/75">
                   Upload anything, ask anything. KYRO reads your files, drafts your reports, updates
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
-              {/* Large KYRO owl on the right — soft drop shadow + gentle float (no
-                  disc/halo behind the bird, by rule). Sized via --kyro-size (the
-                  owl root is a span, not an svg). */}
+              {/* Large KYRO owl on the right (no disc/halo behind the bird, by
+                  rule). It settles in ONCE; its own idle lives in the mascot
+                  (the one sanctioned loop). Sized via --kyro-size. */}
               <motion.div
                 className="relative shrink-0"
-                animate={reduce ? undefined : { y: [0, -9, 0] }}
-                transition={reduce ? undefined : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+                initial={reduce ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
               >
-                <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] [--kyro-size:92px] sm:[--kyro-size:172px]">
+                <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.45)] [--kyro-size:92px] sm:[--kyro-size:172px]">
                   <PennyAvatar size={172} active speaking={chat.tts.speaking} />
                 </span>
               </motion.div>
@@ -231,10 +224,10 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
 
         {/* ── index 2: controls row (STABLE; hands-free never remounts) ── */}
         <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${compact ? 'px-4 pb-3 sm:px-6' : 'px-6 pb-10 sm:px-10'}`}>
-          <div className={compact ? 'hidden' : 'flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-white/55'}>
-            <span className="inline-flex items-center gap-1.5">🎤 Speak or type</span>
-            <span className="inline-flex items-center gap-1.5">📎 Drop a trial balance, budget, invoice, policy, or minutes</span>
-            <span className="inline-flex items-center gap-1.5">⚡ KYRO files it to the right place automatically</span>
+          <div className={compact ? 'hidden' : 'flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-white/60'}>
+            <span className="inline-flex items-center gap-1.5"><Mic size={13} aria-hidden className="text-penny-light" /> Speak or type</span>
+            <span className="inline-flex items-center gap-1.5"><Paperclip size={13} aria-hidden className="text-penny-light" /> Drop a trial balance, budget, invoice, policy, or minutes</span>
+            <span className="inline-flex items-center gap-1.5"><Zap size={13} aria-hidden className="text-penny-light" /> KYRO files it to the right place automatically</span>
           </div>
           <HandsFree chat={chat} />
         </div>

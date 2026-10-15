@@ -42,6 +42,7 @@ import {
 } from '../auth/glassFields.jsx'
 import MfaWizard from '../settings/MfaWizard.jsx'
 import { onboardingSession } from './onboardingSession.js'
+import '../../styles/pending/c1-flows.css'
 
 const STEPS = [
   { key: 'you', label: 'You', icon: UserRound },
@@ -50,50 +51,44 @@ const STEPS = [
   { key: 'connect', label: 'QuickBooks', icon: Link2 },
 ]
 
-/** Step rail: icon nodes joined by a progress line that fills as you advance. */
+/** Step rail: the wizard's step rule on the glass — four small-caps labels on a
+ *  hairline, a 2px rule growing to the active step (one-shot). The rule takes
+ *  the pane's ONE accent (--c-gold-light — the same token as the eyebrow, so the
+ *  two never compete in either flag). Below sm the columns go icon-only and a
+ *  single caption names the active step, so no label is ever split mid-word or
+ *  spills out of a quarter-width column. */
 function StepRail({ index }) {
+  const fill = `${((index + 1) / STEPS.length) * 100}%`
   return (
-    <div className="mx-auto mb-7 flex w-full max-w-[440px] items-start">
-      {STEPS.map((s, i) => {
-        const stateCls =
-          i < index
-            ? 'border-gold/70 bg-gold text-navy shadow-glow'
-            : i === index
-              ? 'border-gold/80 bg-gold/15 text-gold-light shadow-[0_0_22px_rgb(var(--c-glow)_/_0.35)]'
-              : 'border-white/15 bg-white/[0.05] text-white/35'
-        const Icon = s.icon
-        return (
-          <div key={s.key} className={`flex items-center ${i > 0 ? 'flex-1' : ''}`}>
-            {i > 0 && (
-              <div className="relative mx-1 h-[2px] flex-1 overflow-hidden rounded-full bg-white/10 sm:mx-2">
-                <motion.span
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-gold to-gold-light"
-                  initial={false}
-                  animate={{ width: i <= index ? '100%' : '0%' }}
-                  transition={{ duration: 0.45, ease: 'easeOut' }}
-                />
-              </div>
-            )}
-            <div className="flex flex-col items-center">
-              <motion.span
-                initial={false}
-                animate={{ scale: i === index ? 1.08 : 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                className={`flex h-11 w-11 items-center justify-center rounded-full border-2 transition-colors duration-300 ${stateCls}`}
-              >
-                {i < index ? <Check size={19} strokeWidth={3} /> : <Icon size={19} />}
-              </motion.span>
-              <span
-                className={`mt-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.12em] ${
-                  i <= index ? 'text-gold-light/90' : 'text-white/35'
-                }`}
-              >
-                {s.label}
+    <div
+      className="steprule steprule-dark mx-auto mb-7 mt-0 w-full max-w-[520px]"
+      style={{ '--steps': STEPS.length, '--c-module': 'var(--c-gold-light)' }}
+    >
+      <ol aria-label="Setup steps" className="steprule-list">
+        {STEPS.map((s, i) => {
+          const state = i < index ? 'done' : i === index ? 'active' : 'todo'
+          const Icon = s.icon
+          return (
+            <li key={s.key} aria-current={state === 'active' ? 'step' : undefined} className="min-w-0">
+              <span className="steprule-btn" data-state={state}>
+                <span className="steprule-num">
+                  {state === 'done' ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : <Icon size={12} aria-hidden="true" />}
+                </span>
+                <span className="sr-only sm:not-sr-only sm:min-w-0">{s.label}</span>
               </span>
-            </div>
-          </div>
-        )
-      })}
+            </li>
+          )
+        })}
+      </ol>
+      <div className="steprule-track" aria-hidden="true">
+        <span className="steprule-fill" style={{ width: fill }} />
+      </div>
+      {/* Below sm the columns are icon-only (a quarter of a phone is too narrow
+          for SECURITY / QUICKBOOKS); the active step is named once, here. The
+          <ol> above still names every step for screen readers. */}
+      <p aria-hidden="true" className="mt-2 text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-white/80 sm:hidden">
+        Step {index + 1} of {STEPS.length} · {STEPS[index]?.label}
+      </p>
     </div>
   )
 }
@@ -104,25 +99,14 @@ const panelVariants = {
   exit: (dir) => ({ opacity: 0, x: dir >= 0 ? -56 : 56, scale: 0.985 }),
 }
 
-/** Optional-step hero chip: glowing icon in a ringed disc. */
+/** Optional-step hero glyph: the step's icon as a stroke beside its heading
+ *  (no ringed disc, no pulsing loop — Premium UI §2.5). */
 function StepHero({ icon: Icon, tint = 'gold', children }) {
-  const reduce = useReducedMotion()
-  const tintCls =
-    tint === 'qb' ? 'bg-[#2CA01C]/15 text-[#53c43f]' : 'bg-gold/15 text-gold-light'
-  const ringCls = tint === 'qb' ? 'border-[#2CA01C]/50' : 'border-gold/50'
+  const tintCls = tint === 'qb' ? 'text-[#53c43f]' : 'text-gold-light'
   return (
     <div className="mb-5 flex items-center gap-4">
-      <span className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${tintCls}`}>
-        {!reduce && (
-          <motion.span
-            aria-hidden
-            className={`absolute inset-0 rounded-2xl border-2 ${ringCls}`}
-            initial={{ scale: 1, opacity: 0.8 }}
-            animate={{ scale: 1.45, opacity: 0 }}
-            transition={{ duration: 2.2, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.6 }}
-          />
-        )}
-        <Icon size={26} />
+      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-white/12 bg-white/[0.04] ${tintCls}`}>
+        <Icon size={24} strokeWidth={1.6} aria-hidden="true" />
       </span>
       <div>{children}</div>
     </div>
@@ -251,15 +235,14 @@ export default function Onboarding() {
       </div>
 
       <div className="relative w-full max-w-[640px]">
-        <motion.div
+        {/* Ambient halo hugging the pane — static (no breathing loop). */}
+        <div
           aria-hidden
-          className="absolute -inset-4 rounded-[34px] opacity-30 blur-2xl"
+          className="absolute -inset-4 rounded-2xl opacity-30 blur-2xl"
           style={{
             background:
               'linear-gradient(120deg, rgba(47,107,255,0.35), rgba(214,178,92,0.30) 55%, rgba(255,138,92,0.25))',
           }}
-          animate={{ opacity: [0.22, 0.38, 0.22] }}
-          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
         />
         <motion.div
           initial={{ opacity: 0, y: 26, scale: 0.97 }}
@@ -311,7 +294,7 @@ export default function Onboarding() {
                     whileTap={{ scale: canContinueYou ? 0.98 : 1 }}
                     onClick={() => canContinueYou && go(1)}
                     disabled={!canContinueYou}
-                    className="btn-gold mt-2 w-full py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn btn-primary btn-lg btn-block mt-2"
                   >
                     Continue
                   </motion.button>
@@ -416,7 +399,7 @@ export default function Onboarding() {
                     <button
                       type="button"
                       onClick={() => go(0)}
-                      className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-white/15 px-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-white/30 hover:text-white"
+                      className="btn btn-lg btn-on-dark"
                     >
                       <ChevronLeft size={16} />
                       Back
@@ -425,7 +408,7 @@ export default function Onboarding() {
                       whileTap={{ scale: schoolName.trim() ? 0.98 : 1 }}
                       onClick={createNow}
                       disabled={!schoolName.trim() || busy}
-                      className="btn-gold flex-1 py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="btn btn-primary btn-lg flex-1"
                     >
                       {busy ? 'Creating your workspace…' : 'Create my school'}
                     </motion.button>
@@ -482,7 +465,7 @@ export default function Onboarding() {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={() => go(3)}
-                      className="btn-gold mt-2 w-full py-3.5 text-[14px]"
+                      className="btn btn-primary btn-lg btn-block mt-2"
                     >
                       Continue
                     </motion.button>
@@ -491,7 +474,7 @@ export default function Onboarding() {
                       <motion.button
                         whileTap={{ scale: 0.98 }}
                         onClick={() => setMfaOpen(true)}
-                        className="btn-gold mt-2 w-full py-3.5 text-[14px]"
+                        className="btn btn-primary btn-lg btn-block mt-2"
                       >
                         Set up two-factor
                       </motion.button>
@@ -549,7 +532,7 @@ export default function Onboarding() {
                     <button
                       type="button"
                       onClick={() => go(2)}
-                      className="inline-flex min-h-[44px] items-center gap-1 rounded-xl border border-white/15 px-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-white/30 hover:text-white"
+                      className="btn btn-lg btn-on-dark"
                     >
                       <ChevronLeft size={16} />
                       Back
@@ -558,7 +541,7 @@ export default function Onboarding() {
                       whileTap={{ scale: 0.98 }}
                       onClick={connectQuickBooks}
                       disabled={busy}
-                      className="btn-gold flex-1 py-3.5 text-[14px] disabled:opacity-60"
+                      className="btn btn-primary btn-lg flex-1"
                     >
                       {busy ? 'Opening Intuit…' : 'Connect QuickBooks'}
                     </motion.button>
@@ -591,13 +574,13 @@ export default function Onboarding() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-navy-deep/80 backdrop-blur-xl"
+            className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-navy-deep/95"
           >
             <motion.span
               initial={reduce ? false : { scale: 0.4, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-              className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gold text-navy shadow-glow"
+              className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gold text-navy"
             >
               {!reduce && (
                 <motion.span

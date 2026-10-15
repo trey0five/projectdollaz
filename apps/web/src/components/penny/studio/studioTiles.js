@@ -5,6 +5,10 @@
 // anyway — this just avoids the dead-end affordance).
 import { LayoutGrid, Clock3, FileText, ListTree, LineChart, ShieldPlus } from 'lucide-react'
 
+// KYRO's colour (--c-penny, #b89650) as a Tile hue triple: gold belongs to KYRO
+// and is used only on KYRO's own surfaces (Premium UI §2.3).
+export const KYRO_HUE = '184 150 80'
+
 export const STUDIO_TILES = [
   {
     id: 'statements',

@@ -15,6 +15,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { UserPlus, X } from 'lucide-react'
 import { adminApi, apiErrorMessage, apiErrorCode } from '../../lib/api.js'
 import PasswordRequirements, { allRequirementsMet } from '../auth/PasswordRequirements.jsx'
+import Button from '../ui/surface/Button.jsx'
+import '../../styles/pending/c1-flows.css'
 
 export default function NewAdminModal({ open, onClose, onCreated }) {
   const reduce = useReducedMotion()
@@ -112,20 +114,16 @@ export default function NewAdminModal({ open, onClose, onCreated }) {
     }
   }
 
-  const inputCls =
-    'w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-navy'
-
   const segBtn = (m, label) => (
     <button
       type="button"
+      aria-pressed={mode === m}
       onClick={() => {
         setMode(m)
         setError('')
         setNotice('')
       }}
-      className={`flex-1 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-        mode === m ? 'bg-navy text-white' : 'text-muted hover:text-ink'
-      }`}
+      className="seg-btn flex-1 justify-center"
     >
       {label}
     </button>
@@ -138,129 +136,112 @@ export default function NewAdminModal({ open, onClose, onCreated }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-navy/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           onClick={onClose}
         >
+          <div className="dlg-scrim" aria-hidden="true" />
           <motion.div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="New admin"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="dlg w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-coral/15 text-coral">
-                  <UserPlus size={16} />
-                </span>
-                <h2 className="font-serif text-[18px] text-ink">New admin</h2>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:bg-section hover:text-ink"
-              >
+            <span className="dlg-rule" aria-hidden="true" />
+            <div className="dlg-head items-center">
+              <UserPlus size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-ink2" />
+              <h2 className="dlg-title min-w-0 flex-1">New admin</h2>
+              <button type="button" onClick={onClose} aria-label="Close" className="dlg-x">
                 <X size={16} />
               </button>
             </div>
 
-            <div className="px-5 py-4">
-              <div className="mb-4 flex gap-1 rounded-xl border border-border bg-section p-1">
+            <div className="dlg-body">
+              <div className="seg mb-4 flex w-full" role="group" aria-label="New admin mode">
                 {segBtn('promote', 'Promote existing')}
                 {segBtn('create', 'Create new')}
               </div>
 
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <label htmlFor="new-admin-email" className="fld-label block">
                 Email
               </label>
               <input
+                id="new-admin-email"
                 ref={firstRef}
                 type="email"
                 value={email}
                 maxLength={320}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@school.org"
-                className={inputCls}
+                className="field-plain"
               />
 
               {mode === 'create' && (
                 <>
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      <label htmlFor="new-admin-first" className="fld-label block">
                         First name
                       </label>
                       <input
+                        id="new-admin-first"
                         value={firstName}
                         maxLength={100}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="Optional"
-                        className={inputCls}
+                        className="field-plain"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      <label htmlFor="new-admin-last" className="fld-label block">
                         Last name
                       </label>
                       <input
+                        id="new-admin-last"
                         value={lastName}
                         maxLength={100}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="Optional"
-                        className={inputCls}
+                        className="field-plain"
                       />
                     </div>
                   </div>
-                  <label className="mb-1 mt-4 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <label htmlFor="new-admin-password" className="fld-label mt-4 block">
                     Password
                   </label>
                   <input
+                    id="new-admin-password"
                     type="password"
                     value={password}
                     maxLength={128}
                     autoComplete="new-password"
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Set a strong password"
-                    className={inputCls}
+                    className="field-plain"
                   />
                   <PasswordRequirements password={password} />
                 </>
               )}
 
-              {notice && (
-                <p className="mt-3 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-[13px] text-amber-700">
-                  {notice}
-                </p>
-              )}
+              {notice && <p className="mt-3 border-l-2 border-watch bg-watch/[0.04] px-3 py-2 text-[13px] text-ink">{notice}</p>}
               {error && (
-                <p className="mt-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+                <p className="dlg-error mt-3" role="alert">
                   {error}
                 </p>
               )}
-
-              <div className="mt-5 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-section hover:text-ink"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  className="rounded-lg bg-coral px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {busy ? 'Saving…' : mode === 'promote' ? 'Grant admin' : 'Create admin'}
-                </button>
-              </div>
+            </div>
+            <div className="dlg-foot">
+              <Button variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={submit} disabled={!canSubmit}>
+                {busy ? 'Saving…' : mode === 'promote' ? 'Grant admin' : 'Create admin'}
+              </Button>
             </div>
           </motion.div>
         </motion.div>

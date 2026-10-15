@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // FlowField — renders ONE FlowField from a flow config, reusing the shared
-// field-lux styles (EntityFormModal's Field/Select/fieldInput…) so wizard
-// inputs look identical to the edit modals, and the shared DatePicker for
+// plain-field styles (EntityFormModal's Field/Select/fieldInput… → .field-plain)
+// so wizard inputs look identical to the edit modals, and the shared DatePicker for
 // every date (never a native date input). Wires the a11y error contract
 // (aria-invalid + aria-describedby → the inline <p id=…>) and the live money
 // echo ('$ 12,500') under valid non-empty money fields.
@@ -30,7 +30,6 @@ export default function FlowField({
   data,
   loadErrors,
   error,
-  hue,
   reduce,
   index,
   onChange,
@@ -108,12 +107,11 @@ export default function FlowField({
           type="checkbox"
           checked={!!value}
           onChange={(e) => onChange(field.key, e.target.checked)}
-          className="h-5 w-5 cursor-pointer rounded border-rule"
-          style={{ accentColor: hue }}
+          className="h-[18px] w-[18px] cursor-pointer rounded-sm accent-[#2563eb]"
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
         />
-        <span className="text-[14px] text-ink/80">{field.placeholder || 'Yes'}</span>
+        <span className="text-[14px] text-ink">{field.placeholder || 'Yes'}</span>
       </span>
     )
   } else {
@@ -148,14 +146,13 @@ export default function FlowField({
         <motion.span
           initial={reduce ? false : { opacity: 0, y: 2 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-1 block text-[12.5px] font-semibold"
-          style={{ color: hue }}
+          className="mt-1 block text-[12px] font-semibold tabular-nums text-ink2"
         >
           {moneyEcho}
         </motion.span>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-[12.5px] font-medium text-danger">
+        <p id={errorId} className="fld-error">
           {error}
         </p>
       )}

@@ -83,12 +83,6 @@ export default function UsChoropleth({ states = [], cities = [], activeWindowMin
             role="img"
             aria-label="US map of user sign-ins by state"
           >
-            <style>{`
-              .kyro-ping{transform-box:fill-box;transform-origin:center;pointer-events:none;
-                animation:kyroPing 1.8s cubic-bezier(0,0,.2,1) infinite}
-              @keyframes kyroPing{0%{transform:scale(1);opacity:.55}70%{opacity:0}100%{transform:scale(3.4);opacity:0}}
-              @media (prefers-reduced-motion:reduce){.kyro-ping{animation:none;opacity:0}}
-            `}</style>
             {/* State fills */}
             <g>
               {Object.entries(US_STATE_PATHS).map(([region, d]) => {
@@ -126,8 +120,9 @@ export default function UsChoropleth({ states = [], cities = [], activeWindowMin
                 const onTip = (e) => moveTip(e, `${d.city}, ${d.region}`, tipLines)
                 return (
                   <g key={`${d.region}-${d.city}-${i}`}>
+                    {/* "Active now" = a static outer ring (no ping loop — §2.5). */}
                     {active && (
-                      <circle className="kyro-ping" cx={d.x} cy={d.y} r={d.r} fill="#22C55E" fillOpacity={0.5} />
+                      <circle cx={d.x} cy={d.y} r={d.r + 2.5} fill="none" stroke="#22C55E" strokeOpacity={0.55} strokeWidth={1.25} />
                     )}
                     <circle
                       cx={d.x}
@@ -157,7 +152,7 @@ export default function UsChoropleth({ states = [], cities = [], activeWindowMin
             Session IPs / state
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <div className="flex flex-col overflow-hidden rounded-md border border-border">
+            <div className="flex flex-col overflow-hidden rounded-sm border border-hair/15">
               {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <div key={t} className="h-4 w-8" style={{ background: rampColor(t) }} />
               ))}
@@ -179,8 +174,7 @@ export default function UsChoropleth({ states = [], cities = [], activeWindowMin
             <span className="text-[11px] text-muted">Location (size ∝ session IPs)</span>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <span className="relative inline-flex h-3 w-3 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-70 motion-reduce:hidden" />
+            <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full ring-1 ring-green-500/55">
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-white bg-green-500" />
             </span>
             <span className="text-[11px] text-muted">Active now (≤{activeWindowMinutes}m)</span>
@@ -191,7 +185,7 @@ export default function UsChoropleth({ states = [], cities = [], activeWindowMin
       {/* Cursor-following tooltip (fixed so it clears the svg's overflow box). */}
       {tip && (
         <div
-          className="pointer-events-none fixed z-50 max-w-[220px] rounded-lg bg-navy-deep px-3 py-2 text-xs text-white shadow-lift"
+          className="pointer-events-none fixed z-50 max-w-[220px] rounded-md bg-[#0a1628] px-3 py-2 text-xs text-white shadow-float"
           style={{
             left: Math.min(tip.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 232),
             top: Math.max(tip.y - 12, 8),

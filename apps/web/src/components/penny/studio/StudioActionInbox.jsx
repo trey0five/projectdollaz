@@ -1,14 +1,15 @@
-// StudioActionInbox — the "Your action inbox" panel. Reuses the server-ranked
+// StudioActionInbox — the "Your action inbox" section. Reuses the server-ranked
 // briefing (useBriefing) and turns each item into a decision Penny can EXECUTE:
 // "Handle it" sends a domain-shaped prompt straight into the conversation; "Open"
 // links to the item for do-it-myself. Server order is preserved (never re-sorted).
 //
-// States: loading → skeletons; empty → all-caught-up card; notEntitled (402) →
-// hide the panel; error with no items → render nothing (fail-soft).
+// States: loading → skeleton rows; empty → an all-caught-up row; notEntitled
+// (402) → hide the section; error with no items → render nothing (fail-soft).
 import { useState } from 'react'
-import { ArrowRight, Clock, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { ArrowRight, Clock } from 'lucide-react'
 import { useBriefing } from '../../../hooks/useBriefing.js'
+import { Button, Pill, Section } from '../../ui/surface/index.js'
+import '../../../styles/pending/c1-flows.css'
 
 // How many items to show before the "Show all" affordance kicks in — keeps the
 // landing calm (the mockup showed a short inbox) without hiding anything.
@@ -23,13 +24,28 @@ const SOURCE_LABEL = {
   accreditation: 'Accreditation',
   facilities: 'Facilities',
   advancement: 'Advancement',
+  strategy: 'Strategy',
+  enrollment: 'Enrollment',
+  cash: 'Cash',
+  hr: 'People',
+  planning: 'Planning',
+  earlywarning: 'Early warning',
+  academics: 'Academics',
 }
 
-// Severity → the left accent bar colour (mirrors HomeBriefing SEVERITY).
-const SEV_BAR = {
-  critical: 'bg-danger',
-  warn: 'bg-penny',
-  info: 'bg-navy-soft',
+// Severity → the word a reader sees (never the raw enum).
+const SEV_LABEL = {
+  critical: 'Critical',
+  warn: 'Watch',
+  warning: 'Watch',
+  info: 'FYI',
+}
+
+// Severity → the 2px status mark tone (statusStyle grammar: mark + ink text).
+const SEV_TONE = {
+  critical: 'risk',
+  warn: 'watch',
+  info: 'neutral',
 }
 
 function fmtDue(iso) {
@@ -57,15 +73,14 @@ function handlePrompt(item) {
 
 function RowSkeleton() {
   return (
-    <div className="flex gap-3 border-b border-rule/60 px-[18px] py-[15px] last:border-b-0">
-      <div className="w-1 shrink-0 rounded bg-section" />
+    <li className="ruled-row">
+      <span className="ruled-mark text-hair" aria-hidden />
       <div className="flex-1">
         <div className="shimmer-bar h-2.5 w-28 rounded" />
         <div className="shimmer-bar mt-2.5 h-3.5 w-2/3 rounded" />
         <div className="shimmer-bar mt-2 h-3 w-full rounded" />
-        <div className="shimmer-bar mt-3 h-7 w-40 rounded-lg" />
       </div>
-    </div>
+    </li>
   )
 }
 
@@ -73,7 +88,7 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
   const { items, loading, error, notEntitled } = useBriefing(schoolId, periodId)
   const [expanded, setExpanded] = useState(false)
 
-  // Gated → hide the panel entirely (like the rest of the gated dashboard).
+  // Gated → hide the section entirely (like the rest of the gated dashboard).
   if (notEntitled) return null
   // Fail-soft: an error with nothing to show renders nothing.
   if (error && items.length === 0 && !loading) return null
@@ -83,89 +98,74 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
   const hasOverflow = openCount > COLLAPSED_COUNT
   const visibleItems = expanded ? items : items.slice(0, COLLAPSED_COUNT)
 
+  // Premium UI P4: ruled rows on the ground under a Section label — no card
+  // shell; each decision leads with its 2px severity mark.
   return (
-    <section className="overflow-hidden rounded-2xl border border-rule/60 bg-white shadow-card">
-      <header className="flex items-center gap-2.5 border-b border-rule/60 px-[18px] py-4">
-        <h2 className="font-serif text-[18px] font-semibold text-navy">Your action inbox</h2>
-        {loading ? (
-          <span className="ml-auto h-5 w-14 rounded-full bg-section" />
-        ) : openCount > 0 ? (
-          <span
-            className={`ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-bold text-white ${
-              anyCritical ? 'bg-danger' : 'bg-navy'
-            }`}
-          >
+    <Section
+      label="Your action inbox"
+      aside={
+        !loading && openCount > 0 ? (
+          <Pill variant="status" tone={anyCritical ? 'risk' : 'neutral'}>
             {openCount} open
-          </span>
-        ) : null}
-      </header>
-
-      {loading ? (
-        <>
-          <RowSkeleton />
-          <RowSkeleton />
-          <RowSkeleton />
-        </>
-      ) : openCount === 0 ? (
-        <div className="flex items-center gap-4 px-[18px] py-8">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-penny-gradient text-navy shadow-penny-glow">
-            <Sparkles size={22} aria-hidden />
-          </span>
-          <div>
-            <p className="font-serif text-[17px] font-semibold text-navy">You’re all caught up.</p>
-            <p className="mt-0.5 text-[13.5px] text-muted">Nothing needs a decision for this period.</p>
-          </div>
-        </div>
-      ) : (
-        visibleItems.map((item) => (
-          <article key={item.id} className="flex gap-3 border-b border-rule/60 px-[18px] py-[15px] last:border-b-0">
-            <span className={`w-1 shrink-0 rounded ${SEV_BAR[item.severity] ?? SEV_BAR.info}`} aria-hidden />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
-                  {SOURCE_LABEL[item.source] ?? item.source} · {item.severity}
-                </span>
-                {item.dueDate && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-muted">
-                    <Clock size={12} className="opacity-70" aria-hidden />
-                    Due {fmtDue(item.dueDate)}
-                  </span>
-                )}
-              </div>
-              <h3 className="mt-0.5 text-[14.5px] font-semibold text-ink">{item.title}</h3>
-              <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{item.why}</p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onHandle(handlePrompt(item))}
-                  className="rounded-lg bg-penny-gradient px-3 py-1.5 text-[12.5px] font-bold text-navy shadow-sm transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
-                >
-                  Handle it
-                </button>
-                {item.link && (
-                  <Link
-                    to={item.link}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-                  >
-                    Open
-                    <ArrowRight size={13} aria-hidden />
-                  </Link>
-                )}
-              </div>
+          </Pill>
+        ) : null
+      }
+    >
+      <ul className="ruled border-b border-hair">
+        {loading ? (
+          <>
+            <RowSkeleton />
+            <RowSkeleton />
+            <RowSkeleton />
+          </>
+        ) : openCount === 0 ? (
+          <li className="ruled-row items-center">
+            <span className="ruled-mark text-[rgb(var(--c-good))]" aria-hidden />
+            <div>
+              <p className="text-[15px] font-semibold text-ink">You’re all caught up.</p>
+              <p className="mt-0.5 text-[13px] text-ink2">Nothing needs a decision for this period.</p>
             </div>
-          </article>
-        ))
-      )}
+          </li>
+        ) : (
+          visibleItems.map((item) => (
+            <li key={item.id} className="ruled-row">
+              <span className={`ruled-mark tone-${SEV_TONE[item.severity] ?? 'neutral'}`} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
+                    {SOURCE_LABEL[item.source] ?? item.source} · {SEV_LABEL[item.severity] ?? item.severity}
+                  </span>
+                  {item.dueDate && (
+                    <span className="ml-auto inline-flex items-center gap-1 text-[12px] tabular-nums text-ink2">
+                      <Clock size={12} className="opacity-70" aria-hidden />
+                      Due {fmtDue(item.dueDate)}
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-0.5 text-[14.5px] font-semibold leading-[20px] text-ink">{item.title}</h3>
+                <p className="mt-0.5 text-[13px] leading-[19px] text-ink2">{item.why}</p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Button size="sm" variant="primary" className="btn-kyro" onClick={() => onHandle(handlePrompt(item))}>
+                    Handle it
+                  </Button>
+                  {item.link && (
+                    <Button size="sm" variant="secondary" to={item.link}>
+                      Open
+                      <ArrowRight size={13} aria-hidden />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
 
       {!loading && hasOverflow && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full border-t border-rule/60 px-[18px] py-3 text-[13px] font-semibold text-navy transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-        >
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="sec-more mt-2">
           {expanded ? 'Show less' : `Show all ${openCount}`}
         </button>
       )}
-    </section>
+    </Section>
   )
 }

@@ -5,7 +5,8 @@
 // it. Refetches on mount, after an undo, and whenever a Penny action broadcasts
 // 'penny:data-changed' (so a just-applied change shows up without a reload).
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { History, RotateCcw, Undo2, CheckCircle2 } from 'lucide-react'
+import { History, RotateCcw, Undo2 } from 'lucide-react'
+import { Button, Section } from '../../ui/surface/index.js'
 import { assistantApi, apiErrorMessage } from '../../../lib/api.js'
 import { usePenny } from '../../../context/PennyContext.jsx'
 
@@ -129,70 +130,58 @@ export default function StudioActivity({ schoolId, canEdit }) {
 
   if (!canEdit) return null
 
+  // Premium UI P4: a Section on the ground with ruled rows — no card shell.
   return (
-    <aside className="rounded-2xl border border-rule/60 bg-white p-4 shadow-card">
-      <h2 className="mb-3 flex items-center gap-2 px-0.5 font-serif text-[16px] font-semibold text-navy">
-        <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-penny-gradient text-navy">
-          <History size={14} aria-hidden />
-        </span>
-        What KYRO did lately
-      </h2>
-
+    <Section
+      label="What KYRO did lately"
+      aside={<History size={14} aria-hidden className="text-penny" />}
+    >
       {loading ? (
-        <p className="px-0.5 text-[13px] text-muted">Loading…</p>
+        <p className="text-[13px] text-ink2">Loading…</p>
       ) : error ? (
-        <p className="px-0.5 text-[13px] text-danger">{error}</p>
+        <p className="border-l-2 border-risk pl-2.5 text-[13px] text-ink">{error}</p>
       ) : items.length === 0 ? (
-        <p className="px-0.5 text-[13px] text-muted">KYRO hasn’t made any changes yet.</p>
+        <p className="text-[13px] text-ink2">KYRO hasn’t made any changes yet.</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="ruled border-b border-hair">
           {items.map((it) => {
             const label = TOOL_LABELS[it.tool] || 'Change'
             const st = undoState[it.id]
             const showUndo = it.reversible && !it.undone
             return (
-              <li
-                key={it.id}
-                className="flex items-start gap-2.5 rounded-xl px-2.5 py-2 transition-colors hover:bg-section"
-              >
+              <li key={it.id} className="flex items-start gap-2.5 py-2.5">
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="rounded-md bg-navy/[0.06] px-1.5 py-px text-[11px] font-bold uppercase tracking-[0.06em] text-navy/70">
-                      {label}
-                    </span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="pill">{label}</span>
                     {it.undone && (
-                      <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700">
-                        <CheckCircle2 size={11} aria-hidden /> Undone
+                      <span className="pill pill-status tone-good">
+                        <i className="pill-mark" aria-hidden="true" />
+                        Undone
                       </span>
                     )}
                   </span>
-                  <span className="mt-0.5 block truncate text-[13.5px] leading-tight text-ink">
+                  <span className="mt-1 block truncate text-[13.5px] leading-tight text-ink">
                     {it.summary || label}
                   </span>
-                  <span className="mt-0.5 block text-[12px] text-muted">{relTime(it.createdAt)}</span>
+                  <span className="mt-0.5 block text-[12px] tabular-nums text-ink2">{relTime(it.createdAt)}</span>
                 </span>
 
                 {showUndo &&
                   (st === 'undoing' ? (
-                    <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-[12.5px] text-muted">
+                    <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-[12.5px] text-ink2">
                       <RotateCcw size={12} aria-hidden className="motion-safe:animate-spin" />
                       Undoing…
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => onUndo(it)}
-                      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border border-navy/15 bg-white px-2 py-1 text-[12.5px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-                    >
-                      <Undo2 size={12} aria-hidden />
+                    <Button size="sm" variant="secondary" onClick={() => onUndo(it)} icon={<Undo2 size={12} />}>
                       {st === 'error' ? 'Retry' : 'Undo'}
-                    </button>
+                    </Button>
                   ))}
               </li>
             )
           })}
         </ul>
       )}
-    </aside>
+    </Section>
   )
 }

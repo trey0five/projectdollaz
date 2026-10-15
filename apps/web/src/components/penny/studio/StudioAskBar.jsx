@@ -1,6 +1,7 @@
-// StudioAskBar — the bespoke Penny Studio composer (the mockup `.ask` pill). A
-// cream pill with an auto-growing textarea, a rotating placeholder, an attach
-// button, a dictation mic, and a gold send button. It composes the SHARED engine:
+// StudioAskBar — the Penny Studio composer. Premium UI P4: FLAT — a white field
+// on a hairline (radius --r-panel, the 1px contact shadow, a gold focus ring as
+// KYRO's colour) with an auto-growing textarea, a rotating placeholder, an
+// attach button, a dictation mic, and a flat gold send button. It composes the SHARED engine:
 // submit() calls chat.send() directly (never dispatches penny:ai-ask).
 //
 // CONTROLLED: the typed `value` lives in PennyStudio (like `staging`), so the
@@ -105,7 +106,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             <div key={a.local_id} className="relative">
               <PennyAttachmentChip attachment={a} onRemove={() => staging.removeAttachment(a.local_id)} />
               {a.status !== 'ready' && (
-                <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/60">
+                <span className="absolute inset-0 flex items-center justify-center rounded-md bg-white/60">
                   <Loader2 size={14} className="animate-spin text-penny" aria-hidden />
                 </span>
               )}
@@ -118,7 +119,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
       {staging.toast && (
         <div
           role="status"
-          className="mb-2 rounded-md border border-penny/40 bg-penny/[0.08] px-2.5 py-1 text-[12px] text-[#7a5e00]"
+          className="mb-2 border-l-2 border-penny bg-white/90 px-2.5 py-1 text-[12px] text-ink"
         >
           {staging.toast}
         </div>
@@ -148,8 +149,8 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             void staging.stageFiles(files)
           }
         }}
-        className={`flex items-end gap-2.5 rounded-[18px] border bg-white px-3 py-2.5 pl-4 shadow-login transition focus-within:ring-2 focus-within:ring-penny/50 ${
-          dragOver ? 'border-penny bg-[#fffef8] ring-2 ring-inset ring-penny/60' : 'border-penny/35'
+        className={`flex items-end gap-2 rounded-lg border bg-white px-2.5 py-2 pl-3.5 shadow-panel transition-[border-color,box-shadow] focus-within:border-penny focus-within:ring-2 focus-within:ring-penny/25 ${
+          dragOver ? 'border-dashed border-penny ring-2 ring-penny/25' : 'border-hair/20'
         }`}
       >
         <label htmlFor={`studio-ask-${variant}`} className="sr-only">
@@ -185,8 +186,8 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
           }}
           placeholder={chat.busy ? 'KYRO is thinking…' : speech.listening ? 'Listening…' : PLACEHOLDERS[placeIdx]}
           aria-busy={chat.busy}
-          className={`max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[#16233d] outline-none placeholder:text-[#8a93a6] ${
-            isHero ? 'text-[16.5px]' : 'text-[15px]'
+          className={`max-h-[120px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent py-2 text-ink outline-none placeholder:text-ink2/60 ${
+            isHero ? 'text-[16px]' : 'text-[15px]'
           }`}
         />
 
@@ -197,7 +198,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             disabled={staging.attachments.length >= MAX_FILES}
             aria-label="Attach a document"
             title={staging.attachments.length >= MAX_FILES ? `Up to ${MAX_FILES} files per message` : 'Attach a document'}
-            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-white text-muted transition hover:border-penny hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-hair/20 bg-white text-ink2 transition-colors hover:border-hair/40 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Paperclip size={18} aria-hidden />
           </button>
@@ -208,16 +209,13 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
               onClick={toggleMic}
               aria-label={speech.listening ? 'Stop dictation' : 'Dictate a message'}
               aria-pressed={speech.listening}
-              className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 ${
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 ${
                 speech.listening
-                  ? 'border-danger bg-danger text-white'
-                  : 'border-border bg-white text-muted hover:border-penny hover:text-navy'
+                  ? 'border-risk bg-risk text-white'
+                  : 'border-hair/20 bg-white text-ink2 hover:border-hair/40 hover:text-ink'
               }`}
             >
-              {speech.listening && (
-                <span aria-hidden className="absolute inset-0 rounded-xl bg-danger/40 motion-safe:animate-ping motion-reduce:hidden" />
-              )}
-              <Mic size={18} className="relative" aria-hidden />
+              <Mic size={18} aria-hidden />
             </button>
           )}
 
@@ -226,7 +224,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             disabled={!canSend}
             aria-label={chat.busy ? 'Sending — please wait' : 'Send'}
             aria-busy={chat.busy}
-            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:hover:translate-y-0"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-penny text-ink shadow-[inset_0_0_0_1px_rgb(150_118_56)] transition-colors hover:bg-penny-light focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {chat.busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>

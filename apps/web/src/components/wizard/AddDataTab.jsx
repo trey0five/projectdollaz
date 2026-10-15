@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { PackageOpen } from 'lucide-react'
+import PageHeader from '../ui/surface/PageHeader.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import AddDataWizard from './AddDataWizard.jsx'
@@ -172,12 +173,12 @@ function TeachState({ module, kind }) {
           'This module doesn’t have a guided add-data flow yet — you can still manage its records from the Records tab.',
         ]
   return (
-    <div className="mx-auto max-w-xl rounded-2xl border-2 border-rule/60 bg-white px-6 py-12 text-center shadow-card">
-      <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-section text-muted">
-        <PackageOpen size={24} />
-      </span>
-      <h2 className="font-serif text-xl font-semibold text-navy">{title}</h2>
-      <p className="mx-auto mt-1.5 max-w-md text-[15px] leading-relaxed text-muted">{body}</p>
+    <div className="mx-auto max-w-page px-4 pb-12 sm:px-10">
+      <PageHeader eyebrow={`${label} · Add data`} title={title} meta={body} />
+      <p className="mt-6 flex items-center gap-2 text-[13px] text-ink2">
+        <PackageOpen size={16} aria-hidden="true" className="shrink-0" />
+        {kind === 'no-school' ? 'The school switcher is at the top of the sidebar.' : 'Records are one click away in the sidebar.'}
+      </p>
     </div>
   )
 }

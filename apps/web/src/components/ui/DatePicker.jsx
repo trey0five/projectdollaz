@@ -5,8 +5,9 @@
 // modals). Drop-in contract: `value` is an ISO 'yyyy-mm-dd' string (or ''),
 // `onChange(next)` receives the same. The TRIGGER inherits the caller's field
 // class (fieldInput on dark modals, a light input class elsewhere); the POPOVER
-// is one consistent cream calendar card portalled to <body> (so a modal's
-// overflow-y-auto can't clip it) with a navy/gold month grid.
+// is one consistent white calendar panel portalled to <body> (so a modal's
+// overflow-y-auto can't clip it): hairline, the float elevation, ink grid,
+// primary-blue selection (Premium UI P4 — gold is KYRO's colour only).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -170,7 +171,7 @@ export default function DatePicker({
                 left: Math.min(rect.left, window.innerWidth - 312),
                 width: 296,
               }}
-              className="z-[80] rounded-2xl border border-gold/30 bg-cream p-3 shadow-[0_24px_60px_-18px_rgba(16,40,79,0.55)]"
+              className="z-[80] rounded-lg border border-hair/15 bg-white p-3 shadow-float"
               role="dialog"
               aria-label="Choose a date"
             >
@@ -181,7 +182,7 @@ export default function DatePicker({
                   type="button"
                   onClick={() => step(-1)}
                   aria-label={prevAria}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-navy/70 transition-colors hover:bg-gold/15 hover:text-navy"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-ink2 transition-colors hover:bg-ink/[0.05] hover:text-ink"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -196,8 +197,8 @@ export default function DatePicker({
                         ? 'Choose year'
                         : undefined
                   }
-                  className={`rounded-lg px-2.5 py-1 font-serif text-[15px] font-semibold text-navy transition-colors ${
-                    mode === 'years' ? '' : 'hover:bg-gold/15'
+                  className={`rounded-lg px-2.5 py-1 font-serif text-[16px] font-medium text-ink transition-colors ${
+                    mode === 'years' ? '' : 'hover:bg-ink/[0.05]'
                   }`}
                 >
                   {headerLabel}
@@ -206,7 +207,7 @@ export default function DatePicker({
                   type="button"
                   onClick={() => step(1)}
                   aria-label={nextAria}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-navy/70 transition-colors hover:bg-gold/15 hover:text-navy"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-ink2 transition-colors hover:bg-ink/[0.05] hover:text-ink"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -219,7 +220,7 @@ export default function DatePicker({
                     {WEEKDAYS.map((w) => (
                       <span
                         key={w}
-                        className="py-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted/70"
+                        className="py-1 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2/70"
                       >
                         {w}
                       </span>
@@ -240,14 +241,14 @@ export default function DatePicker({
                           type="button"
                           disabled={disabledDay}
                           onClick={() => pick(d)}
-                          className={`flex h-9 items-center justify-center rounded-lg text-[13.5px] font-semibold transition-all ${
+                          className={`flex h-9 items-center justify-center rounded-md text-[13.5px] font-medium tabular-nums transition-colors ${
                             isSel
-                              ? 'bg-gold-gradient text-white shadow-glow'
+                              ? 'bg-[#2563eb] text-white'
                               : disabledDay
-                                ? 'cursor-not-allowed text-muted/30'
+                                ? 'cursor-not-allowed text-ink2/30'
                                 : isToday
-                                  ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
-                                  : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                                  ? 'text-ink ring-1 ring-inset ring-[#2563eb]/50 hover:bg-ink/[0.05]'
+                                  : 'text-ink/80 hover:bg-ink/[0.05] hover:text-ink'
                           }`}
                         >
                           {d}
@@ -272,14 +273,14 @@ export default function DatePicker({
                           setView((v) => ({ ...v, m0 }))
                           setMode('days')
                         }}
-                        className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold transition-all ${
+                        className={`flex h-10 items-center justify-center rounded-md text-[13px] font-medium transition-colors ${
                           isSelMonth
-                            ? 'bg-gold-gradient text-white shadow-glow'
+                            ? 'bg-[#2563eb] text-white'
                             : off
-                              ? 'cursor-not-allowed text-muted/30'
+                              ? 'cursor-not-allowed text-ink2/30'
                               : isCur
-                                ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
-                                : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                                ? 'text-ink ring-1 ring-inset ring-[#2563eb]/50 hover:bg-ink/[0.05]'
+                                : 'text-ink/80 hover:bg-ink/[0.05] hover:text-ink'
                         }`}
                       >
                         {name.slice(0, 3)}
@@ -303,14 +304,14 @@ export default function DatePicker({
                           setView((v) => ({ ...v, y }))
                           setMode('months')
                         }}
-                        className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-all ${
+                        className={`flex h-10 items-center justify-center rounded-md text-[13px] font-medium tabular-nums transition-colors ${
                           isSelYear
-                            ? 'bg-gold-gradient text-white shadow-glow'
+                            ? 'bg-[#2563eb] text-white'
                             : off
-                              ? 'cursor-not-allowed text-muted/30'
+                              ? 'cursor-not-allowed text-ink2/30'
                               : isCur
-                                ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
-                                : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                                ? 'text-ink ring-1 ring-inset ring-[#2563eb]/50 hover:bg-ink/[0.05]'
+                                : 'text-ink/80 hover:bg-ink/[0.05] hover:text-ink'
                         }`}
                       >
                         {y}
@@ -321,14 +322,14 @@ export default function DatePicker({
               )}
 
               {/* Footer actions */}
-              <div className="mt-2 flex items-center justify-between border-t border-rule/50 px-1 pt-2">
+              <div className="mt-2 flex items-center justify-between border-t border-hair px-1 pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     onChange?.(today)
                     setOpen(false)
                   }}
-                  className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-navy transition-colors hover:bg-gold/15"
+                  className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-[#2563eb] transition-colors hover:bg-ink/[0.05]"
                 >
                   Today
                 </button>
@@ -339,7 +340,7 @@ export default function DatePicker({
                       onChange?.('')
                       setOpen(false)
                     }}
-                    className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-muted transition-colors hover:text-navy"
+                    className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-ink2 transition-colors hover:text-ink"
                   >
                     Clear
                   </button>

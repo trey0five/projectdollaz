@@ -1,43 +1,54 @@
-// Shared shell for the public auth pages, redesigned as FROSTED GLASS over a
-// living aurora: the navy ground carries three slow-drifting color fields that
-// echo the KYRO lotus (electric blue → gold → coral), and the card itself is a
+// Shared shell for the public auth pages — a DELIBERATE frosted-glass design over
+// an aurora: the navy ground carries three colour fields that drift into place
+// once (Premium UI §2.5) and echo the KYRO lotus (electric blue → gold → coral), and the card itself is a
 // translucent blurred pane with a spectrum hairline across its top edge. The
 // backdrop is exported so the onboarding wizard shares the exact same world.
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import '../../styles/pending/c1-flows.css'
 
-/** The navy aurora ground: three drifting logo-colored fields + a slow ribbon. */
+/** The navy aurora ground: three logo-coloured light fields + a ribbon. They
+ *  drift INTO place once on arrival and rest (Premium UI §2.5: one-shot motion,
+ *  never a loop); reduced motion renders them already at rest. */
 export function AuroraBackdrop() {
   const reduce = useReducedMotion()
+  const settle = (delay = 0) => ({ duration: 2.6, ease: [0.22, 1, 0.36, 1], delay })
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {/* Electric-blue field — top left, the lotus's cool wing. */}
       <motion.div
         className="absolute -left-40 -top-44 h-[36rem] w-[36rem] rounded-full bg-[#2f6bff]/[0.17] blur-3xl"
-        animate={reduce ? undefined : { x: [0, 46, 0], y: [0, 28, 0], scale: [1, 1.12, 1] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+        initial={reduce ? false : { x: -46, y: -28, opacity: 0 }}
+        animate={{ x: 0, y: 0, opacity: 1 }}
+        transition={settle(0)}
       />
       {/* Gold field — the brand's warm heart, low right. */}
       <motion.div
         className="absolute -bottom-48 -right-32 h-[34rem] w-[34rem] rounded-full bg-gold/[0.13] blur-3xl"
-        animate={reduce ? undefined : { x: [0, -38, 0], y: [0, -24, 0], scale: [1, 1.16, 1] }}
-        transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+        initial={reduce ? false : { x: 38, y: 24, opacity: 0 }}
+        animate={{ x: 0, y: 0, opacity: 1 }}
+        transition={settle(0.2)}
       />
-      {/* Coral ember — small, drifting through the middle distance. */}
+      {/* Coral ember — small, in the middle distance. */}
       <motion.div
         className="absolute right-[8%] top-[16%] h-72 w-72 rounded-full bg-[#ff8a5c]/[0.10] blur-3xl"
-        animate={reduce ? undefined : { x: [0, -30, 0], y: [0, 36, 0] }}
-        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
+        initial={reduce ? false : { y: 36, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={settle(0.4)}
       />
-      {/* A near-horizontal aurora ribbon sweeping behind the card. */}
+      {/* A near-horizontal aurora ribbon behind the card — one slow pass into place. */}
       <motion.div
-        className="absolute left-1/2 top-1/2 h-[30rem] w-[160vw] -translate-x-1/2 -translate-y-1/2 -rotate-[9deg] blur-2xl"
+        className="absolute left-1/2 top-1/2 h-[30rem] w-[160vw] blur-2xl"
         style={{
+          // Framer owns the transform: y/rotate ride along with the animated x.
+          y: '-50%',
+          rotate: -9,
           background:
             'linear-gradient(90deg, transparent 4%, rgba(47,107,255,0.10) 28%, rgba(214,178,92,0.10) 52%, rgba(255,138,92,0.07) 74%, transparent 96%)',
         }}
-        animate={reduce ? undefined : { x: ['-56%', '-44%', '-56%'], opacity: [0.7, 1, 0.7] }}
-        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+        initial={reduce ? { x: '-50%' } : { x: '-56%', opacity: 0 }}
+        animate={{ x: '-50%', opacity: 0.9 }}
+        transition={{ duration: 3.2, ease: [0.22, 1, 0.36, 1] }}
       />
     </div>
   )
@@ -75,12 +86,12 @@ export function BrandLockup({ compact = false }) {
 export function GlassCard({ children, className = '' }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-[26px] border border-white/[0.14] bg-white/[0.07] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl ${className}`}
+      className={`relative overflow-hidden rounded-lg border border-white/[0.14] bg-white/[0.07] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl ${className}`}
     >
-      {/* Logo-spectrum hairline across the top edge. */}
+      {/* Logo-spectrum rule across the top edge (2px, the system's rule weight). */}
       <span
         aria-hidden
-        className="absolute inset-x-0 top-0 h-[3px]"
+        className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
             'linear-gradient(90deg, #2f6bff 0%, #7aa8ff 30%, #d6b25c 62%, #ff8a5c 100%)',
@@ -110,16 +121,14 @@ export default function AuthLayout({ title, subtitle, children, footer, width = 
       </div>
 
       <div className="relative w-full" style={{ maxWidth: width }}>
-        {/* Ambient halo hugging the pane — blue into gold, breathing slowly. */}
-        <motion.div
+        {/* Ambient halo hugging the pane — blue into gold, static (no breathing loop). */}
+        <div
           aria-hidden
-          className="absolute -inset-4 rounded-[34px] opacity-30 blur-2xl"
+          className="absolute -inset-4 rounded-2xl opacity-30 blur-2xl"
           style={{
             background:
               'linear-gradient(120deg, rgba(47,107,255,0.35), rgba(214,178,92,0.30) 55%, rgba(255,138,92,0.25))',
           }}
-          animate={{ opacity: [0.22, 0.38, 0.22] }}
-          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
         />
         <motion.div
           initial={{ opacity: 0, y: 26, scale: 0.97 }}

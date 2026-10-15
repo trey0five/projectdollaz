@@ -13,7 +13,8 @@
 // role=combobox/listbox/option + aria-activedescendant wire a11y. All motion is
 // gated on useReducedMotion(), matching the AppShell drawer.
 //
-// THEME: navy panel, gold accents/focus ring — the flashy-but-on-theme memory.
+// THEME: sits in the v1 navy header — ink dropdown on a hairline, the float
+// elevation, a primary-blue focus ring (Premium UI P4: no gold, no glow).
 // This component lives ONLY in the header; it never touches the sidebar navIds or
 // the Penny anchors.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,10 +81,10 @@ function ResultsBody({ q, results, loading, error, activeIndex, onHover, onPick 
         const Icon = DOMAIN_ICON[group.domain] ?? Search
         return (
           <div key={group.domain} className="mb-1">
-            <div className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/80">
+            <div className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
               <Icon size={13} />
               {group.label}
-              <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/60">
+              <span className="ml-auto rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] tabular-nums text-white/60">
                 {group.count}
               </span>
             </div>
@@ -100,13 +101,13 @@ function ResultsBody({ q, results, loading, error, activeIndex, onHover, onPick 
                   onMouseEnter={() => onHover(idx)}
                   onClick={() => onPick(item)}
                   className={`flex w-full flex-col items-start gap-0.5 px-4 py-2 text-left transition-colors ${
-                    active ? 'bg-gold/15' : 'hover:bg-white/5'
+                    active ? 'bg-white/10' : 'hover:bg-white/5'
                   }`}
                 >
                   <span className="flex w-full items-center gap-2">
                     <span className="truncate text-sm font-medium text-white">{item.title}</span>
                     {item.matchedField ? (
-                      <span className="ml-auto shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
+                      <span className="ml-auto shrink-0 rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white/50">
                         {item.matchedField}
                       </span>
                     ) : null}
@@ -232,7 +233,7 @@ export default function SearchBox() {
             }}
             onFocus={() => setOpen(true)}
             onKeyDown={onKeyDown}
-            className="w-full min-w-0 rounded-lg border-2 border-white/15 bg-navy-deep/40 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-white/40 transition-all focus-visible:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+            className="w-full min-w-0 rounded-md border border-white/15 bg-white/[0.05] py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-white/40 transition-colors focus-visible:border-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50"
           />
           {q ? (
             <button
@@ -256,7 +257,7 @@ export default function SearchBox() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
                 transition={reduce ? { duration: 0 } : { duration: 0.16 }}
-                className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-xl border-2 border-gold/30 bg-navy-gradient shadow-navy-glow"
+                className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-white/10 bg-[#0a1628] shadow-float"
               >
                 <ResultsBody {...bodyProps} />
               </motion.div>
@@ -270,7 +271,7 @@ export default function SearchBox() {
         type="button"
         onClick={() => setMobileOpen(true)}
         aria-label="Search"
-        className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-white/20 text-white/80 transition-all hover:border-gold/60 hover:text-white sm:hidden"
+        className="flex h-10 w-10 items-center justify-center rounded-md border border-white/20 text-white/80 transition-colors hover:border-white/40 hover:text-white sm:hidden"
       >
         <Search size={18} />
       </button>
@@ -279,7 +280,7 @@ export default function SearchBox() {
         {mobileOpen ? (
           <>
             <motion.div
-              className="no-print fixed inset-0 z-40 bg-navy-deep/60 backdrop-blur-sm sm:hidden"
+              className="no-print fixed inset-0 z-40 bg-navy-deep/60 sm:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -294,7 +295,7 @@ export default function SearchBox() {
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12 }}
               transition={reduce ? { duration: 0 } : { duration: 0.2 }}
-              className="no-print fixed inset-x-0 top-0 z-50 border-b-2 border-gold/30 bg-navy-gradient p-3 shadow-navy-glow sm:hidden"
+              className="no-print fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#0a1628] p-3 shadow-float sm:hidden"
             >
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -314,19 +315,19 @@ export default function SearchBox() {
                     placeholder="Search…"
                     onChange={(e) => updateQuery(e.target.value)}
                     onKeyDown={onKeyDown}
-                    className="w-full rounded-lg border-2 border-white/15 bg-navy-deep/40 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus-visible:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                    className="w-full rounded-md border border-white/15 bg-white/[0.05] py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus-visible:border-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={close}
                   aria-label="Close search"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-white/20 text-white/80 hover:border-gold/60 hover:text-white"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-white/80 hover:border-white/40 hover:text-white"
                 >
                   <X size={18} />
                 </button>
               </div>
-              <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-navy-deep/30">
+              <div className="mt-2 overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
                 <ResultsBody {...bodyProps} />
               </div>
             </motion.div>

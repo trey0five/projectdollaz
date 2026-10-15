@@ -85,7 +85,7 @@ export default function InfoPopover({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.16, ease: 'easeOut' }}
           style={{ width: `min(${panelWidth}px, 88vw)` }}
-          className={`absolute top-full z-30 mt-1.5 max-h-[60vh] overflow-y-auto rounded-xl border border-rule/70 bg-white p-3.5 text-left shadow-xl ${
+          className={`absolute top-full z-30 mt-1.5 max-h-[60vh] overflow-y-auto rounded-lg border border-hair/15 bg-white p-3.5 text-left shadow-float ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

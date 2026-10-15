@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
         whileTap={{ scale: 0.98 }}
         onClick={submit}
         disabled={busy}
-        className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:opacity-60"
+        className="btn btn-primary btn-lg btn-block mt-3"
       >
         {busy ? 'Sending…' : 'Send reset code'}
       </motion.button>

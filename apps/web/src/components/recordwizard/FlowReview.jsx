@@ -1,42 +1,38 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// FlowReview — the framework-appended last step: every queued item as a stacked
-// card (headline + the flow's reviewPairs grid + a status cell) so the user can
-// look the whole batch over before "Save all". During/after submit the cards
-// double as the progress board: saved rows lock with a ✓ (never re-posted —
-// the engine skips 'done'), failed rows surface the server's apiErrorMessage
-// with row-level Retry / Edit / Remove. Batch-level Retry/Finish live in the
-// RecordFlow footer, outside the animated panel.
+// FlowReview — the framework-appended last step: every queued item as a RULED
+// ROW (headline + the flow's reviewPairs as a two-column definition list + a
+// status cell) so the user can look the whole batch over before "Save all".
+// During/after submit the rows double as the progress board: saved rows lock
+// with a ✓ (never re-posted — the engine skips 'done'), failed rows surface the
+// server's apiErrorMessage with row-level Retry / Edit / Remove. Batch-level
+// Retry/Finish live in the RecordFlow footer, outside the animated body.
+//
+// Premium UI P4: no stacked cards — rows on the panel divided by hairlines,
+// status as a 2px mark + ink text (statusStyle grammar), values tabular.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Check, Loader2, AlertCircle, Pencil, X, RefreshCw } from 'lucide-react'
+import { Loader2, Pencil, X, RefreshCw } from 'lucide-react'
 import { apiErrorMessage } from '../../lib/api.js'
-import { hueRgba } from '../wizard/wizardConfigs.jsx'
+import Button from '../ui/surface/Button.jsx'
 import { flowCount } from './flowRuntime.js'
+import '../../styles/pending/c1-flows.css'
 
-function StatusPill({ status, hue }) {
-  if (status === 'saving') {
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide" style={{ color: hue }}>
-        <Loader2 size={13} className="animate-spin" /> Saving…
-      </span>
-    )
-  }
-  if (status === 'done') {
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-emerald-600">
-        <Check size={13} strokeWidth={3} /> Saved
-      </span>
-    )
-  }
-  if (status === 'error') {
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-danger">
-        <AlertCircle size={13} /> Didn’t save
-      </span>
-    )
-  }
+const STATUS = {
+  saving: { tone: 'neutral', label: 'Saving…' },
+  done: { tone: 'good', label: 'Saved' },
+  error: { tone: 'risk', label: 'Didn’t save' },
+  ready: { tone: 'neutral', label: 'Ready' },
+}
+
+function StatusMark({ status }) {
+  const s = STATUS[status] ?? STATUS.ready
   return (
-    <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-muted">
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: hue }} aria-hidden /> Ready
+    <span className={`pill pill-status tone-${s.tone}`}>
+      {status === 'saving' ? (
+        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+      ) : (
+        <i className="pill-mark" aria-hidden="true" />
+      )}
+      {s.label}
     </span>
   )
 }
@@ -45,7 +41,6 @@ export default function FlowReview({
   basket,
   flow,
   data,
-  hue,
   headingRef,
   submitting,
   onEditItem,
@@ -60,84 +55,60 @@ export default function FlowReview({
         ref={headingRef}
         data-rf-heading
         tabIndex={-1}
-        className="font-serif text-[17px] font-semibold text-navy outline-none"
+        className="font-serif text-heading font-medium text-ink outline-none"
       >
         Look these over, then save them all
       </h4>
-      <p className="mt-0.5 text-[13.5px] leading-snug text-muted">
+      <p className="mt-0.5 text-[13px] leading-[18px] text-ink2">
         {flowCount(basket.length, flow.noun, flow.nounPlural)} ready — edit anything that looks off,
         then one click saves the lot.
       </p>
 
-      <ul className="mt-4 space-y-3">
+      <ul className="ruled mt-4 border-y border-hair">
         {basket.map((item) => {
           const locked = item.status === 'done' || item.status === 'saving' || submitting
           return (
-            <li
-              key={item.id}
-              className="rounded-xl border bg-white p-4"
-              style={{
-                borderColor:
-                  item.status === 'error' ? 'rgb(var(--c-danger) / 0.45)' : hueRgba(hue, 0.25),
-              }}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <li key={item.id} className="py-3.5">
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
                 <div className="min-w-0">
-                  <p className="truncate text-[15px] font-semibold text-navy">{labelOf(item)}</p>
+                  <p className="break-words text-[15px] font-semibold leading-[22px] text-ink">{labelOf(item)}</p>
                   {flow.itemSub && (
-                    <p className="truncate text-[12.5px] text-muted">
+                    <p className="break-words text-[12.5px] leading-[18px] text-ink2">
                       {flow.itemSub(item.values, data)}
                     </p>
                   )}
                 </div>
-                <StatusPill status={item.status} hue={hue} />
+                <StatusMark status={item.status} />
               </div>
 
-              <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 border-t border-rule/50 pt-3 sm:grid-cols-2">
+              <dl className="mt-2.5 grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2">
                 {flow.reviewPairs(item.values, data).map(([label, display]) => (
-                  <div key={label} className="flex items-baseline justify-between gap-3">
-                    <dt className="shrink-0 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-b border-hair/[0.06] py-0.5">
+                    <dt className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
                       {label}
                     </dt>
-                    <dd className="truncate text-right text-[13.5px] text-ink/85">{display}</dd>
+                    <dd className="min-w-0 break-words text-right text-[13.5px] tabular-nums text-ink">{display}</dd>
                   </div>
                 ))}
               </dl>
 
               {item.status === 'error' && (
-                <p className="mt-2.5 rounded-lg bg-danger/[0.06] px-3 py-2 text-[13px] font-medium text-danger">
-                  {apiErrorMessage(item.error)}
-                </p>
+                <p className="dlg-error mt-2.5">{apiErrorMessage(item.error)}</p>
               )}
 
               {!locked && (
-                <div className="mt-2.5 flex items-center justify-end gap-1">
+                <div className="mt-2 flex items-center justify-end gap-1">
                   {item.status === 'error' && (
-                    <button
-                      type="button"
-                      onClick={() => onRetryItem(item.id)}
-                      className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-bold outline-none transition-colors focus-visible:ring-2"
-                      style={{ color: hue, '--tw-ring-color': hueRgba(hue, 0.5) }}
-                    >
-                      <RefreshCw size={13} /> Retry
-                    </button>
+                    <Button variant="quiet" size="sm" onClick={() => onRetryItem(item.id)} icon={<RefreshCw size={13} />}>
+                      Retry
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => onEditItem(item.id)}
-                    className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2"
-                    style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-                  >
-                    <Pencil size={13} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveItem(item.id)}
-                    className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-muted outline-none transition-colors hover:text-danger focus-visible:ring-2"
-                    style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-                  >
-                    <X size={14} /> Remove
-                  </button>
+                  <Button variant="quiet" size="sm" onClick={() => onEditItem(item.id)} icon={<Pencil size={13} />}>
+                    Edit
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => onRemoveItem(item.id)} icon={<X size={14} />}>
+                    Remove
+                  </Button>
                 </div>
               )}
             </li>

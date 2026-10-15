@@ -1,0 +1,414 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENDING (slice c1-flows) — classes the flows / Studio / ancillary chrome need
+   that the committed surface primitives do not carry yet. Imported ONLY from the
+   c1 components that use them; listed in the slice report for consolidation
+   into styles/surface.css. Screen-only; nothing here targets .ui-v1 or print.
+
+   Specificity note: load order against index.css is NOT guaranteed (the import
+   may run before main.jsx's), so a variant that must beat a surface.css rule
+   out-ranks it by selector weight (e.g. .btn.btn-primary.btn-kyro), and no rule
+   here sets `display` or a padding shorthand a caller might refine.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Plain field — replaces .field-lux (no bevel, no sheen, no gold) ───────── */
+.field-plain {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 40px;
+  padding-block: 8px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: 6px;
+  background: #ffffff;
+  color: rgb(var(--c-ink));
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 22px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.field-plain::placeholder {
+  color: rgb(var(--c-ink-2) / 0.55);
+}
+.field-plain:hover:not(:disabled) {
+  border-color: rgb(var(--hair) / 0.3);
+}
+.field-plain:focus,
+.field-plain:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
+}
+.field-plain[aria-invalid='true'] {
+  border-color: rgb(var(--c-risk));
+}
+.field-plain:disabled {
+  background: rgb(var(--c-ground));
+  color: rgb(var(--c-ink-2));
+  cursor: not-allowed;
+}
+.field-plain.field-select {
+  padding-right: 36px;
+  cursor: pointer;
+  appearance: none;
+}
+.field-plain.field-area {
+  resize: vertical;
+  line-height: 22px;
+}
+/* Field label (11px caps) + hint — the Section-label grammar at field scale. */
+.fld-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.fld-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+/* Status grammar: a 2px risk mark + ink text (never red text). The red field
+   border stays on the control itself ([aria-invalid]). */
+.fld-error {
+  margin-top: 6px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  box-shadow: inset 2px 0 0 rgb(var(--c-risk));
+}
+
+/* ── Dialog — a Panel lifted to the one float elevation ───────────────────── */
+.dlg-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(10 22 40 / 0.45);
+}
+.dlg {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.12);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-float);
+  color: rgb(var(--c-ink));
+  overflow: hidden;
+}
+/* The 2px module-hue rule along the dialog's top edge (hue as a rule, never a fill). */
+.dlg-rule {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: rgb(var(--c-module, var(--c-navy-soft)));
+  transform-origin: left center;
+}
+.dlg-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.125rem var(--sp-panel) 0.875rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.dlg-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: rgb(var(--c-module, var(--c-navy-soft)));
+}
+.dlg-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  text-wrap: balance;
+}
+.dlg-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.dlg-body {
+  padding: var(--sp-panel);
+}
+.dlg-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem var(--sp-panel);
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+.dlg-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border-radius: 6px;
+  color: rgb(var(--c-ink-2));
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.dlg-x:hover {
+  background: rgb(var(--c-ink) / 0.05);
+  color: rgb(var(--c-ink));
+}
+.dlg-x:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.dlg-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid rgb(var(--c-risk));
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink));
+  background: rgb(var(--c-risk) / 0.04);
+}
+
+/* ── Step rule — the wizard stepper: labels ON a hairline, a 2px progress rule
+      in the module hue that grows (one-shot width transition) to the active
+      step. Used by WizardStepper (tablist) and FlowStepRail (ordered list). ── */
+.steprule {
+  position: relative;
+  margin-top: 0.875rem;
+}
+.steprule-list {
+  display: grid;
+  grid-template-columns: repeat(var(--steps, 3), minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  list-style: none;
+}
+.steprule-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 2px 0;
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: rgb(var(--c-ink-2) / 0.7);
+  cursor: default;
+}
+.steprule-btn[data-state='active'] {
+  color: rgb(var(--c-ink));
+}
+.steprule-btn[data-state='done'] {
+  color: rgb(var(--c-ink-2));
+  cursor: pointer;
+}
+.steprule-btn[data-state='done']:hover {
+  color: rgb(var(--c-ink));
+}
+.steprule-btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.steprule-num {
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-module, var(--c-navy-soft)));
+}
+.steprule-btn[data-state='todo'] .steprule-num {
+  color: inherit;
+}
+.steprule-track {
+  position: relative;
+  height: 1px;
+  background: rgb(var(--hair) / 0.12);
+}
+.steprule-fill {
+  position: absolute;
+  left: 0;
+  top: -0.5px;
+  height: 2px;
+  background: rgb(var(--c-module, var(--c-navy-soft)));
+  transition: width 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Inside a PageHeader (or any positioned header given .steprule-on-rule) the
+   track sits ON that header's own bottom hairline instead of drawing a second. */
+.steprule-on-rule .steprule-track,
+.pg-head .steprule-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  background: transparent;
+}
+
+/* ── Ruled rows — a list on the ground, divided by hairlines; a 2px status
+      mark leads each row (Studio inbox, activity, recent conversations). ─── */
+.ruled {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ruled > li + li,
+.ruled > article + article {
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+.ruled-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.875rem 0;
+}
+.ruled-mark {
+  flex-shrink: 0;
+  width: 2px;
+  align-self: stretch;
+  background: currentColor;
+}
+
+/* ── Button size + KYRO variant ───────────────────────────────────────────── */
+/* A 44px full-bleed submit for the auth panes (proposed Button prop size="lg"). */
+.btn.btn-lg,
+.btn.btn-primary.btn-lg,
+.btn.btn-kyro.btn-lg {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  font-size: 14px;
+}
+.btn.btn-block {
+  width: 100%;
+}
+/* KYRO's own action colour (gold = KYRO only): flat, no gradient, no glow
+   (proposed Button variant="kyro"). */
+.btn.btn-kyro,
+.btn.btn-primary.btn-kyro {
+  background: rgb(var(--c-penny));
+  color: #101c3d;
+  box-shadow: inset 0 0 0 1px rgb(150 118 56);
+}
+.btn.btn-kyro:hover:not(:disabled),
+.btn.btn-primary.btn-kyro:hover:not(:disabled) {
+  background: rgb(var(--c-penny-light));
+}
+/* A quiet button on the dark stage / glass (light ink). */
+.btn.btn-on-dark,
+.btn.btn-secondary.btn-on-dark {
+  color: rgb(255 255 255 / 0.75);
+  border-color: rgb(255 255 255 / 0.18);
+  background: transparent;
+}
+.btn.btn-on-dark:hover:not(:disabled),
+.btn.btn-secondary.btn-on-dark:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* ── KYRO stage — the Studio hero: ink ground, KYRO gold light (top-right) and
+      one blue counter-light. The only full-colour surface on /penny. ───────── */
+.stage-kyro {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background:
+    radial-gradient(60% 110% at 92% -12%, rgb(var(--c-penny) / 0.28) 0%, rgb(var(--c-penny) / 0.08) 38%, transparent 70%),
+    radial-gradient(52% 92% at 0% 110%, rgb(37 99 235 / 0.22) 0%, transparent 70%),
+    #0a1628;
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steprule-fill,
+  .field-plain {
+    transition: none;
+  }
+}
+
+/* …so the stepper must not be the track's containing block. */
+.steprule-on-rule .steprule,
+.pg-head .steprule {
+  position: static;
+}
+/* A header carrying the step rule closes tighter: the labels sit just above
+   the hairline the progress rule rides on. */
+.pg-head:has(.steprule) {
+  padding-bottom: 0.625rem;
+}
+.pg-head .steprule-list {
+  padding-bottom: 0;
+}
+
+/* The step rule on the dark glass (onboarding): white ink, a white hairline. */
+.steprule-dark .steprule-btn {
+  color: rgb(255 255 255 / 0.45);
+}
+.steprule-dark .steprule-btn[data-state='active'] {
+  color: #ffffff;
+}
+.steprule-dark .steprule-btn[data-state='done'] {
+  color: rgb(255 255 255 / 0.7);
+  cursor: default;
+}
+.steprule-dark .steprule-track {
+  background: rgb(255 255 255 / 0.14);
+}
+
+/* ── Legacy guard: the dialog under ?ui=v1 ─────────────────────────────────
+   The dialog is white in BOTH flags now (every other consumer renders ink
+   classes, so a navy v1 ground would blind them instead). EntityFormModal adds
+   .dlg-v1 only when the ui.v2 flag is OFF, and these rules remap the v1
+   white-on-navy utilities that settings/MfaWizard.jsx still emits (its QR /
+   secret-key instructions, secret, backup codes, error) to their ink twins.
+   Delete with those ternaries (carry-over, issue #37). Screen-only. */
+/* `.text-white` is remapped only where the element carries no fill of its own:
+   a white glyph ON an ink fill (FacilitiesBudgetCard's checked box,
+   `bg-ink text-white`) is correct in both flags and must stay white. MfaWizard's
+   v1 white text never sits on its own fill. (Scoping to MfaWizard's subtree
+   needs a marker class from settings/MfaWizard.jsx — carry-over, issue #37.) */
+.dlg.dlg-v1 .text-white:not([class*='bg-']),
+.dlg.dlg-v1 .text-white\/85:not([class*='bg-']) {
+  color: rgb(var(--c-ink));
+}
+/* Translucent white label text with no fill of its own can never be legible on
+   the white dialog, in EITHER flag (enrollment/StudentRegister's ISP / 504 /
+   ELL checkbox labels, `text-white/80`). Carry-over: the consumer should emit
+   `text-ink`, then this rule goes (issue #37). */
+.dlg .text-white\/80:not([class*='bg-']) {
+  color: rgb(var(--c-ink));
+}
+.dlg.dlg-v1 .text-white\/60:not([class*='bg-']) {
+  color: rgb(var(--c-ink-2));
+}
+.dlg.dlg-v1 .text-gold-light {
+  color: rgb(var(--c-ink));
+}
+.dlg.dlg-v1 .text-red-300 {
+  color: rgb(var(--c-ink));
+  padding-left: 8px;
+  box-shadow: inset 2px 0 0 rgb(var(--c-risk));
+}
+.dlg.dlg-v1 .border-white\/15,
+.dlg.dlg-v1 .border-white\/20 {
+  border-color: rgb(var(--hair) / 0.18);
+}
+.dlg.dlg-v1 .bg-navy-deep\/50 {
+  background-color: rgb(var(--c-ground));
+}

@@ -15,7 +15,7 @@ export default function StudioConversation({ chat }) {
 
   return (
     <div className="mx-auto flex h-full max-w-[820px] flex-col">
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-rule/60 bg-white shadow-card">
+      <div className="panel flex h-full min-h-0 flex-col overflow-hidden">
         <PennyMessageList
           messages={chat.messages}
           busy={chat.busy}
@@ -45,14 +45,14 @@ export default function StudioConversation({ chat }) {
             onKeyDown={(e) => {
               if (e.key === 'Escape') setLightbox(null)
             }}
-            className="fixed inset-0 z-[70] flex cursor-zoom-out items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[70] flex cursor-zoom-out items-center justify-center bg-black/80 p-4"
           >
-            <img src={lightbox} alt="Attached" className="max-h-full max-w-full rounded-lg shadow-login" />
+            <img src={lightbox} alt="Attached" className="max-h-full max-w-full rounded-lg shadow-float" />
             <button
               type="button"
               onClick={() => setLightbox(null)}
               aria-label="Close image preview"
-              className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+              className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-md bg-white/15 text-white hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
               <X size={18} aria-hidden />
             </button>

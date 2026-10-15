@@ -1,43 +1,29 @@
 // Feature-gateway tiles for the home command center — the navigation showcase.
-// Four large, animated, keyboard-accessible Link cards to the app's areas, each
-// with an icon, title, short description, and a cheap live stat. Strictly
-// navy/gold (card-soft + gold accents), framer-motion staggered entrance + hover
-// lift, all reduced-motion gated.
+// Premium UI P4: four `Tile`s (the one card family that stays): hairline, a 2px
+// hue rule, the flood rising once on hover while the arrow slides. Each carries
+// a cheap live stat in its foot. Keyboard: each tile is a real <Link>.
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { FileStack, BarChart3, ShieldCheck, Settings, ArrowRight } from 'lucide-react'
+import { FileStack, BarChart3, ShieldCheck, Settings } from 'lucide-react'
+import Tile from '../ui/surface/Tile.jsx'
 
 function GatewayTile({ to, title, description, stat, index, icon }) {
   const reduce = useReducedMotion()
   const Icon = icon
   return (
     <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, type: 'spring', stiffness: 240, damping: 22 }}
-      whileHover={reduce ? undefined : { y: -4 }}
+      transition={{ delay: reduce ? 0 : index * 0.04, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      className="flex"
     >
-      <Link
+      <Tile
         to={to}
-        className="card-flashy group flex h-full flex-col p-4 outline-none focus-visible:ring-2 focus-visible:ring-gold/60 sm:p-5"
-      >
-        <div className="flex items-center justify-between">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold transition-colors group-hover:bg-gold-gradient group-hover:text-white sm:h-11 sm:w-11">
-            <Icon size={20} />
-          </span>
-          <ArrowRight
-            size={18}
-            className="text-muted/50 transition-all group-hover:translate-x-0.5 group-hover:text-gold"
-          />
-        </div>
-        <h3 className="mt-2.5 font-serif text-[16px] font-semibold leading-tight text-navy sm:mt-4 sm:text-lg">{title}</h3>
-        <p className="mt-1 hidden flex-1 text-[15px] leading-relaxed text-muted sm:block">{description}</p>
-        {stat && (
-          <p className="mt-2 border-t border-rule/50 pt-2 text-[12px] font-semibold uppercase tracking-[0.05em] text-gold sm:mt-3 sm:pt-3 sm:text-[14px] sm:tracking-[0.06em]">
-            {stat}
-          </p>
-        )}
-      </Link>
+        className="w-full"
+        icon={<Icon aria-hidden="true" strokeWidth={1.6} />}
+        title={title}
+        body={<span className="hidden sm:inline">{description}</span>}
+        foot={stat ? <span className="text-[12.5px] font-semibold tabular-nums text-ink2">{stat}</span> : null}
+      />
     </motion.div>
   )
 }

@@ -2,11 +2,12 @@
 // AddDataWizard — the ONE reusable Choose → Enter/Upload → Confirm frame, driven
 // entirely by a module config (wizardConfigs). It is CHROME: it mounts existing
 // importers (embed) or launches existing *FormModals (modal); it never rebuilds
-// one. Per-module hue strips the frame; framer motion is gated by reduced-motion;
-// the steps are an ARIA tablist with focus + a polite live region.
+// one. The module hue appears only as 2px rules + icon strokes; framer motion is
+// gated by reduced-motion; the steps are an ARIA tablist with focus + a polite
+// live region.
 //
 // Step model:
-//   choose  — WizardChoose card grid (auto-advanced when one option / a deep link)
+//   choose  — WizardChoose Tile grid (auto-advanced when one option / a deep link)
 //   work    — embed: the importer + a Done footer;  modal: launch the *FormModal
 //   confirm — WizardConfirm success (Add another / Done), or the Penny-handoff note
 //
@@ -22,10 +23,12 @@ import WizardChoose from './WizardChoose.jsx'
 import WizardConfirm from './WizardConfirm.jsx'
 import RecordFlow from '../recordwizard/RecordFlow.jsx'
 import FlowConfirm from '../recordwizard/FlowConfirm.jsx'
-import { hueRgba, wizardModuleLabel } from './wizardConfigs.jsx'
-import ModuleOverviewLink from '../module/ModuleOverviewLink.jsx'
+import { wizardModuleLabel } from './wizardConfigs.jsx'
 import { moduleTabs } from '../module/moduleAnatomy.js'
-import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
+import PageHeader from '../ui/surface/PageHeader.jsx'
+import Panel from '../ui/surface/Panel.jsx'
+import Button from '../ui/surface/Button.jsx'
+import { hueTriple } from '../ui/surface/Tile.jsx'
 
 const PANEL_ID = 'wiz-panel'
 const STEP_INDEX = { choose: 0, work: 1, confirm: 2 }
@@ -229,40 +232,44 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   const needsPeriodBlocked =
     step === 'work' && option?.kind === 'embed' && option.needsPeriod && !ctx.periodId
 
+  // Step-aware meta line under the title (the visible twin of the live region).
+  const meta =
+    step === 'choose'
+      ? `Step 1 of 3 · Choose what to add`
+      : step === 'work'
+        ? `Step ${soleOption ? 1 : 2} of ${soleOption ? 2 : 3} · ${option?.label ?? 'Add'}`
+        : `Step ${soleOption ? 2 : 3} of ${soleOption ? 2 : 3} · Done`
+
+  const swap = {
+    initial: reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    exit: reduce ? { opacity: 0 } : { opacity: 0, y: -4 },
+    transition: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+  }
+
   return (
-    <section aria-label={`Add ${moduleLabel} data`} className="mx-auto max-w-page">
-      {/* Hue strip + header */}
-      <div
-        className="mb-5 rounded-2xl border-2 bg-white px-5 py-4 shadow-card"
-        style={{ borderColor: hueRgba(hue, 0.22) }}
+    // Premium UI P4 (plan sketch 5): PageHeader "MODULE · ADD DATA" with the
+    // stepper as a 2px progress rule ON its bottom hairline; Choose = Tiles on
+    // the ground; Add + Done = ONE Panel with the actions on a hairline footer.
+    // `--c-module` is pinned to the config hue so every rule/stroke below agrees.
+    <section
+      aria-label={`Add ${moduleLabel} data`}
+      className="mx-auto max-w-page px-4 pb-12 sm:px-10"
+      style={{ '--c-module': hueTriple(hue) }}
+    >
+      <PageHeader
+        eyebrow={`${moduleLabel} · Add data`}
+        title={wizardTitle(config, moduleLabel)}
+        meta={meta}
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p
-              className="text-[12px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: hue }}
-            >
-              {moduleLabel} · Add data
-            </p>
-            {/* ON THE WORK STEP THE PANEL BELOW ALREADY NAMES THE JOB ("Trial
-                balance", under its own back pill), so this said the same thing
-                a second time forty pixels above it. Kept for Choose and Done,
-                where nothing else does. */}
-            {step !== 'work' && (
-              <h2 className="mt-0.5 font-serif text-lg font-semibold text-navy">
-                Get your {moduleLabel.toLowerCase()} numbers in
-              </h2>
-            )}
-          </div>
-        </div>
         <WizardStepper
           current={step}
-          hue={hue}
           panelId={PANEL_ID}
           skipChoose={soleOption}
+          bare={step === 'work' && option?.kind === 'flow'}
           onGoTo={(s) => guardedLeave(() => setStep(s))}
         />
-      </div>
+      </PageHeader>
 
       {/* Polite live region — announces the active step for screen readers. */}
       <p className="sr-only" aria-live="polite">
@@ -274,25 +281,18 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
         role="tabpanel"
         aria-labelledby={`wiz-tab-${step}`}
         tabIndex={-1}
-        className="outline-none"
+        className="mt-6 outline-none"
       >
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={`${step}:${optionKey ?? ''}`}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, x: -16 }}
-            transition={{ duration: 0.22 }}
-          >
+          <motion.div key={`${step}:${optionKey ?? ''}`} {...swap}>
             {step === 'choose' && (
               <>
                 <h3 ref={headingRef} tabIndex={-1} className="sr-only">
                   Choose what to add for {moduleLabel}
                 </h3>
-                {/* Escape hatch: Choose is the back stop for multi-option modules,
-                    so it needs its own way home (single-option modules skip this
-                    screen entirely and go straight to Overview). */}
-                <ModuleOverviewLink module={config.module} className="mb-3" />
+                {/* No second "Back to overview" link here: the breadcrumb above
+                    (Dashboard › Module › Add data) already is the way home, and
+                    the audit named the duplicate as an amateur tell. */}
                 <WizardChoose options={options} hue={hue} onChoose={chooseOption} />
               </>
             )}
@@ -300,16 +300,14 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
             {step === 'work' &&
               option &&
               (option.kind === 'flow' ? (
-                // A record flow is its OWN self-contained premium card (glowing
-                // icon header, contextual back, progress rail) — no duplicate
-                // chrome header wrapped around it.
+                // A record flow is its OWN Panel (contextual back, step rule,
+                // batch strip, hairline footer) — no second chrome around it.
                 <RecordFlow
                   key={option.key}
                   flow={option.flow}
                   title={option.label}
                   subtitle={option.blurb}
                   ctx={fullCtx}
-                  hue={hue}
                   exitLabel={soleOption ? `${moduleLabel} overview` : 'options'}
                   onDone={(result) => {
                     setFlowResult(result)
@@ -322,77 +320,71 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   }}
                 />
               ) : (
-              <div
-                className="overflow-hidden rounded-2xl border-2 bg-section"
-                style={{ borderColor: hueRgba(hue, 0.22) }}
-              >
-                {/* Work header (also the focus + label target behind any overlay). */}
-                <div className="flex items-center justify-between gap-3 border-b border-rule/60 bg-white px-5 py-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => guardedLeave(leaveWork)}
-                      className={BACK_PILL}
-                    >
-                      <BackPillBody
-                        label={soleOption ? `Back to ${moduleLabel} overview` : 'Back to options'}
-                      />
-                    </button>
-                    <h3
-                      ref={headingRef}
-                      tabIndex={-1}
-                      className="font-serif text-[17px] font-semibold text-navy outline-none"
-                    >
-                      {option.label}
-                    </h3>
-                  </div>
-                </div>
-
-                {needsPeriodBlocked ? (
-                  <NoPeriodNote hue={hue} />
-                ) : option.kind === 'modal' ? (
-                  <>
-                    {/* Context behind the *FormModal overlay it portals on top. */}
-                    <div className="px-5 py-8 text-center">
-                      <p className="text-[15px] text-muted">Fill in the form to continue.</p>
+                <Panel
+                  padded={false}
+                  footer={
+                    option.kind === 'embed' && !needsPeriodBlocked ? (
+                      <>
+                        <Button variant="quiet" onClick={leaveWork} className="mr-auto">
+                          {soleOption ? 'Back to overview' : 'Back'}
+                        </Button>
+                        <Button variant="primary" icon={<CheckCircle2 size={15} />} onClick={embedDone}>
+                          I’m done
+                        </Button>
+                      </>
+                    ) : null
+                  }
+                >
+                  {/* Work header (also the focus + label target behind any overlay). */}
+                  <div className="panel-head">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => guardedLeave(leaveWork)}
+                        className="back-link shrink-0"
+                      >
+                        <ChevronLeft size={15} aria-hidden="true" />
+                        {soleOption ? `${moduleLabel} overview` : 'Options'}
+                      </button>
+                      <span className="h-4 w-px shrink-0 bg-hair" aria-hidden="true" />
+                      <h3
+                        ref={headingRef}
+                        tabIndex={-1}
+                        className="panel-title min-w-0 outline-none"
+                      >
+                        {option.label}
+                      </h3>
                     </div>
-                    <WizardSlot
-                      render={option.renderModal}
-                      ctx={fullCtx}
-                      extra={{ onClose: modalOnClose, markSaved }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div>
+                  </div>
+
+                  {needsPeriodBlocked ? (
+                    <NoPeriodNote />
+                  ) : option.kind === 'modal' ? (
+                    <>
+                      {/* Context behind the *FormModal overlay it portals on top. */}
+                      <div className="panel-body">
+                        <p className="text-[14px] text-ink2">Fill in the form to continue.</p>
+                      </div>
+                      <WizardSlot
+                        render={option.renderModal}
+                        ctx={fullCtx}
+                        extra={{ onClose: modalOnClose, markSaved }}
+                      />
+                    </>
+                  ) : option.flush ? (
+                    // A flush importer (config `flush: true`) brings its own
+                    // horizontal padding + hairlines — no second inset around it.
+                    <WizardSlot render={option.renderEmbed} ctx={fullCtx} extra={{ goToOption }} />
+                  ) : (
+                    <div className="panel-body">
                       <WizardSlot
                         render={option.renderEmbed}
                         ctx={fullCtx}
                         extra={{ goToOption }}
                       />
                     </div>
-                    {/* Embedded importers own their own save UI; this footer lets
-                        the user declare they're finished → refresh + Confirm. */}
-                    <div className="flex items-center justify-between gap-3 border-t border-rule/60 bg-white px-5 py-3.5">
-                      <button
-                        type="button"
-                        onClick={leaveWork}
-                        className="text-[14px] font-semibold text-muted transition-colors hover:text-navy"
-                      >
-                        {soleOption ? 'Back to overview' : 'Back'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={embedDone}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5"
-                        style={{ backgroundColor: hue }}
-                      >
-                        <CheckCircle2 size={15} /> I’m done
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                  )}
+                </Panel>
               ))}
 
             {step === 'confirm' && (
@@ -403,7 +395,6 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 {flowResult ? (
                   <FlowConfirm
                     result={flowResult}
-                    hue={hue}
                     moduleLabel={moduleLabel}
                     onAddAnother={addAnother}
                     onDone={finish}
@@ -411,7 +402,6 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 ) : (
                   <WizardConfirm
                     option={option}
-                    hue={hue}
                     moduleLabel={moduleLabel}
                     onAddAnother={addAnother}
                     onDone={finish}
@@ -428,6 +418,16 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   )
 }
 
+// The PageHeader title. A config may name its own; otherwise "numbers" wording
+// is kept for the modules that genuinely take numbers in (finance, enrollment)
+// and every record module reads as what it is — adding records.
+const NUMBER_MODULES = new Set(['finance', 'enrollment'])
+function wizardTitle(config, moduleLabel) {
+  if (config.title) return config.title
+  const m = moduleLabel.toLowerCase()
+  return NUMBER_MODULES.has(config.module) ? `Get your ${m} numbers in` : `Add ${m} records`
+}
+
 // Renders a config render-prop as a child element. The indirection matters: the
 // ref-closured callbacks (onClose/markSaved/goToOption) reach the render fn as
 // ELEMENT PROPS here rather than as arguments to a function the parent calls
@@ -436,20 +436,19 @@ function WizardSlot({ render, ctx, extra }) {
   return render(ctx, extra)
 }
 
-function NoPeriodNote({ hue }) {
+function NoPeriodNote() {
   return (
-    <div className="px-6 py-10 text-center">
-      <span
-        className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl"
-        style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
-      >
-        <CalendarClock size={22} />
+    <div className="panel-body flex items-start gap-3.5">
+      <span className="tone-hue mt-1 shrink-0" aria-hidden="true">
+        <CalendarClock size={22} strokeWidth={1.6} />
       </span>
-      <h4 className="font-serif text-lg font-semibold text-navy">Add a reporting period first</h4>
-      <p className="mx-auto mt-1.5 max-w-md text-[15px] leading-relaxed text-muted">
-        This step needs a reporting period to attach to. Add a trial balance first — we’ll create the
-        period and you can come back here.
-      </p>
+      <div className="min-w-0">
+        <h4 className="font-serif text-title font-medium text-ink">Add a reporting period first</h4>
+        <p className="mt-1 max-w-[60ch] text-[14px] leading-[22px] text-ink2">
+          This step needs a reporting period to attach to. Add a trial balance first — we’ll create the
+          period and you can come back here.
+        </p>
+      </div>
     </div>
   )
 }

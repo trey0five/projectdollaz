@@ -14,6 +14,11 @@
 //                 api.js create call (+ markSaved) and onClose. renderModal(ctx, h).
 //   • 'handoff' — hand off to Penny (no wizard confirm of our own); onHandoff(ctx).
 //
+// Optional config `title` names the wizard's PageHeader (default: "Get your X
+// numbers in" for finance/enrollment, "Add X records" elsewhere). An embed
+// option with `flush: true` mounts without the panel-body inset (the importer
+// brings its own padding).
+//
 // NO in-render component defs live here — the render* fields are render-prop
 // functions that return elements of module-scope components (the DataHubPage
 // idiom). Hues come from tileRegistry (the ONE source of per-module color); the
@@ -71,17 +76,6 @@ import AcademicsSisCard from '../academics/AcademicsSisCard.jsx'
 // Per-module hue lookup — read straight from tileRegistry (the single source).
 const HUE = Object.fromEntries(HOME_TILES.map((t) => [t.key, t.hue]))
 
-/** hex (#RRGGBB) → rgba() string with alpha `a`. The wizard's ONLY color literal
- *  path — the module accent is inherently per-module and can't be a static token. */
-export function hueRgba(hex, a = 1) {
-  const h = String(hex || '#2563EB').replace('#', '')
-  const n = parseInt(h.length === 3 ? h.replace(/(.)/g, '$1$1') : h, 16)
-  const r = (n >> 16) & 255
-  const g = (n >> 8) & 255
-  const b = n & 255
-  return `rgba(${r}, ${g}, ${b}, ${a})`
-}
-
 /** Hand off to Penny to draft a full strategic plan (server emits the
  *  draft_strategy_plan proposal → ProposalCard/DraftPlanProposalCard own it). */
 export function handoffDraftPlan() {
@@ -103,6 +97,9 @@ export const wizardConfigs = {
       {
         key: 'tb',
         kind: 'embed',
+        // TrialBalanceModalBody carries its own px-5 + hairline sections, so the
+        // wizard mounts it flush (no second panel-body inset around it).
+        flush: true,
         Icon: FileSpreadsheet,
         label: 'Trial balance',
         blurb:
@@ -358,6 +355,7 @@ export const wizardConfigs = {
     // label and its back button from it, and without it the sole-option path
     // rendered a literal "Back to undefined overview".
     module: 'academics',
+    title: 'Add results, marks and plans',
     hue: HUE.academics,
     options: [
       {
@@ -413,6 +411,7 @@ export const wizardConfigs = {
 
   strategy: {
     module: 'strategy',
+    title: 'Build your strategic plan',
     hue: HUE.strategy,
     options: [
       {
@@ -453,6 +452,7 @@ export const wizardConfigs = {
   // untouched. AIC Phase F added the second option, the staff-evaluation register.
   hr: {
     module: 'hr',
+    title: 'Add staffing and people records',
     hue: HUE.hr,
     options: [
       {
@@ -515,6 +515,7 @@ export const wizardConfigs = {
   // itself lives on the module page's Overview.
   planning: {
     module: 'planning',
+    title: 'Set your enrollment plan',
     hue: HUE.planning,
     options: [
       {

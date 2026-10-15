@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
         <div className="flex flex-col items-center text-center">
           <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300" />
           <p className="text-[16px] text-white/85">You can now sign in with your new password.</p>
-          <button onClick={() => navigate('/login')} className="btn-gold mt-6">
+          <button type="button" onClick={() => navigate('/login')} className="btn btn-primary btn-lg mt-6">
             Continue to sign in
           </button>
         </div>
@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
         whileTap={{ scale: canSubmit ? 0.98 : 1 }}
         onClick={submit}
         disabled={!canSubmit}
-        className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn btn-primary btn-lg btn-block mt-3"
       >
         {busy ? 'Updating…' : 'Reset password'}
       </motion.button>

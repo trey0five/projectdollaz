@@ -1,7 +1,8 @@
-// StudioRail — the right rail: recent conversations (from the engine's session
+// StudioRail — the right column: recent conversations (from the engine's session
 // store) and a set of suggested prompts. Clicking a conversation switches to it
 // (entering the conversation state); clicking a chip prefills the ask bar.
 import { MessageSquare } from 'lucide-react'
+import { Section } from '../../ui/surface/index.js'
 
 const SUGGESTIONS = [
   'Forecast year-end cash',
@@ -30,52 +31,52 @@ function relTime(ts) {
 export default function StudioRail({ chat, onPick }) {
   const sessions = (chat.sessions || []).slice(0, 4)
 
+  // Premium UI P4: two Sections on the ground — recent conversations as ruled
+  // rows, suggestions as one-shape Pills — no card shell.
   return (
-    <aside className="rounded-2xl border border-rule/60 bg-white p-4 shadow-card">
-      <h2 className="mb-3 px-0.5 font-serif text-[16px] font-semibold text-navy">Recent conversations</h2>
+    <div className="space-y-2">
+      <Section label="Recent conversations">
+        {sessions.length === 0 ? (
+          <p className="text-[13px] text-ink2">No conversations yet — ask KYRO anything to start one.</p>
+        ) : (
+          <ul className="ruled border-b border-hair">
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => chat.switchSession(s.id)}
+                  className="group flex w-full items-start gap-2.5 py-2.5 text-left outline-none transition-colors hover:bg-ink/[0.03] focus-visible:ring-2 focus-visible:ring-penny/60"
+                >
+                  <MessageSquare size={14} aria-hidden className="mt-[3px] shrink-0 text-penny" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] font-semibold leading-tight text-ink">
+                      {s.title || 'Untitled chat'}
+                    </span>
+                  </span>
+                  {relTime(s.updatedAt) && (
+                    <span className="shrink-0 text-[12px] tabular-nums text-ink2">{relTime(s.updatedAt)}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
-      {sessions.length === 0 ? (
-        <p className="px-0.5 text-[13px] text-muted">No conversations yet — ask KYRO anything to start one.</p>
-      ) : (
-        <div className="space-y-0.5">
-          {sessions.map((s) => (
+      <Section label="Suggested for you">
+        <div className="flex flex-wrap gap-2">
+          {SUGGESTIONS.map((s) => (
             <button
-              key={s.id}
+              key={s}
               type="button"
-              onClick={() => chat.switchSession(s.id)}
-              className="flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+              onClick={() => onPick(s)}
+              className="pill h-7 cursor-pointer px-2.5 text-[12.5px] transition-colors hover:border-hair/40 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
-              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-penny-gradient text-navy">
-                <MessageSquare size={14} aria-hidden />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[13.5px] font-semibold leading-tight text-ink">
-                  {s.title || 'Untitled chat'}
-                </span>
-                {relTime(s.updatedAt) && (
-                  <span className="mt-0.5 block text-[12px] text-muted">{relTime(s.updatedAt)}</span>
-                )}
-              </span>
+              {s}
             </button>
           ))}
         </div>
-      )}
-
-      <div className="my-3.5 h-px bg-rule/60" />
-
-      <p className="mb-2.5 px-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Suggested for you</p>
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onPick(s)}
-            className="rounded-full border border-rule/70 bg-section px-3 py-1.5 text-[12.5px] text-muted transition-colors hover:border-penny hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    </aside>
+      </Section>
+    </div>
   )
 }

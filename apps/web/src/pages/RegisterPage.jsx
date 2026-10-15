@@ -158,7 +158,7 @@ export default function RegisterPage() {
         whileTap={{ scale: canSubmit ? 0.98 : 1 }}
         onClick={submit}
         disabled={!canSubmit}
-        className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn btn-primary btn-lg btn-block mt-3"
       >
         {busy ? 'Creating account…' : 'Create Account'}
       </motion.button>

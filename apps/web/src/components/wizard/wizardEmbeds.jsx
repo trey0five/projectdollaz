@@ -12,7 +12,7 @@ import { enrollmentApi } from '../../lib/api.js'
 import QuickBooksCard from '../datahub/QuickBooksCard.jsx'
 import EnrollmentConnectCard from '../enrollment/EnrollmentConnectCard.jsx'
 
-const skeleton = 'h-28 animate-pulse rounded-2xl border-2 border-rule/50 bg-white/60'
+const skeleton = 'shimmer-bar h-28 rounded-lg'
 
 /** QuickBooks connect fast-path — reuses the DataHub QuickBooksCard verbatim,
  *  feeding it the `quickbooks` block from the shared data-status payload. */
