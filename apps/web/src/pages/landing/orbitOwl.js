@@ -13,7 +13,7 @@
 //   v  ORBIT, 0→1 over the pinned track (the same progress the planets use):
 //        0.00–0.04  arrive      — idle on the core (its own landing plays)
 //        0.04–0.10  hello       — a wave while the planets erupt
-//        0.10–0.90  eight docks — per dock: LISTENING as the planet arrives
+//        0.10–0.90  nine docks — per dock: LISTENING as the planet arrives
 //                   (it hands its numbers over the beam), TALKING while it is
 //                   docked (its briefing line is read out), THINKING in transit.
 //                   The first and last docks get the same listen + talk
@@ -95,7 +95,9 @@ export function travelDir(track, a) {
   return a - anchor > TURN_HYSTERESIS ? { dir: 1, anchor: a } : track
 }
 
-const DOCKS = 8
+/** The domains that dock in turn — one per planet in OrbitScrolly's DOMAINS
+ *  (it asserts the two agree), so the owl's beats line up with the planets. */
+export const DOCKS = 9
 /** Each dock's beats span x ∈ [k − 0.3, k + 0.3]; the range is padded by that
  *  much at both ends so the first and last docks get full windows too. */
 const DOCK_PAD = 0.3

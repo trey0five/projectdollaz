@@ -68,7 +68,7 @@ export default function BentoWall() {
           className="mt-12"
           name="home"
           title="Home"
-          caption="The daily briefing and every module, prioritized across all eight domains and shaped to your role."
+          caption="The daily briefing and every module, prioritized across all nine domains and shaped to your role."
           alt="The KYRO Home screen: the daily briefing with operating margin, tuition discount and student-teacher ratio above a grid of module tiles"
           sizes="(min-width: 1152px) 1088px, calc(100vw - 40px)"
         />

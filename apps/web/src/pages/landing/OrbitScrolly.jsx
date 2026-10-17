@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // OrbitScrolly — THE landing set-piece: a pinned, scroll-scrubbed 3-D orbital
-// system with KYRO (the owl) at the center and the eight domains as planets.
+// system with KYRO (the owl) at the center and the nine domains as planets.
 //
 // Choreography over the 560vh track (progress 0→1):
 //   0.00–0.10  FORMATION — planets erupt from the core (overshoot) onto a
 //              tilted ellipse; the watermark type fades in.
-//   0.10–0.90  EIGHT STOPS — the system rotates 315°; each domain docks at the
+//   0.10–0.90  NINE STOPS — the planets sit 40° apart (360° ÷ 9) and the system
+//              rotates 320° (8 × 40°); each domain docks at the
 //              FRONT (bottom, scaled up, hue ring), fires a one-shot shock-
 //              wave, draws a beam into KYRO, and deals in its payload figure
 //              (photo plate + counting stat + self-drawing chart).
@@ -47,6 +48,7 @@ import {
   GraduationCap,
   Landmark,
   BadgeCheck,
+  BookOpenCheck,
   Wrench,
   HeartHandshake,
   Target,
@@ -58,6 +60,7 @@ import {
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import useMediaQuery from './useMediaQuery.js'
 import {
+  DOCKS,
   FLIGHT_IDLE_MS,
   beatOwl,
   flightPhase,
@@ -70,13 +73,15 @@ import {
 } from './orbitOwl.js'
 import '../../styles/landing-orbit.css'
 
-// The eight domains — hue, proof line, the payload stat, and a PHOTOGRAPH.
+// The nine domains — hue, proof line, the payload stat, and a PHOTOGRAPH.
 // Real platform truths (statements from a TB; SIS name-matching…).
 //
 // The photos live in /public/landing/orbit-*.jpg (Unsplash — free commercial
-// license, no attribution required) and each was chosen for the domain it rides
+// license, no attribution required — except Academics, generated to match them:
+// 1000×520 progressive JPEG) and each was chosen for the domain it rides
 // with, not for generic office ambience: a classroom full of students for
-// Enrollment, an empty board table for Governance, thrown graduation caps for
+// Enrollment, a teacher going over a results sheet with two students for
+// Academics, an empty board table for Governance, thrown graduation caps for
 // Accreditation, the campus building itself for Facilities, cupped hands giving
 // for Advancement, a sticky-note planning wall for Strategy, a staff training
 // session for HR, and two people working the numbers for Finance. Each rides
@@ -88,7 +93,8 @@ import '../../styles/landing-orbit.css'
 // attention rail) for the flanking columns beside the orbit.
 const DOMAINS = [
   { key: 'finance', label: 'Finance', hue: '#2563EB', Icon: CircleDollarSign, line: 'Trial balance in — four board-ready statements out.', stat: 4, unit: 'statements', img: '/landing/orbit-finance.jpg', imgAlt: 'Two people working through financial statements together' , points: ['Upload a trial balance or connect QuickBooks \u2014 four board-ready statements build themselves.', 'Analytics, budget vs actual and the board packet read from the same numbers.', 'A cash forecast dates the summer trough before it arrives.'], brief: { sev: 'critical', text: 'Days cash on hand fell below 60 \u2014 first shortfall projected July 18.' } },
-  { key: 'enrollment', label: 'Enrollment', hue: '#0891b2', Icon: GraduationCap, line: 'SIS rosters reconcile by name; projections flow into tuition and cash.', stat: 412, unit: 'students synced', img: '/landing/orbit-enrollment.jpg', imgAlt: 'A classroom full of students' , points: ['SIS rosters sync and reconcile by name \u2014 FACTS, Blackbaud, OneRoster.', 'Enrollment flows into tuition, aid and cash projections automatically.', 'Demographics and retention read from the same roster.'], brief: { sev: 'watch', text: 'Enrollment is 12 under plan \u2014 projected tuition impact \u2212$146K.' } },
+  { key: 'enrollment', label: 'Enrollment', hue: '#0891b2', Icon: GraduationCap, line: 'SIS rosters reconcile by name; projections flow into tuition and cash.', stat: 412, unit: 'students synced', img: '/landing/orbit-enrollment.jpg', imgAlt: 'A classroom full of students' , points: ['SIS rosters sync and reconcile by name \u2014 Blackbaud, OneRoster, or a roster file.', 'Enrollment flows into tuition, aid and cash projections automatically.', 'Demographics and retention read from the same roster.'], brief: { sev: 'watch', text: 'Enrollment is 12 under plan \u2014 projected tuition impact \u2212$146K.' } },
+  { key: 'academics', label: 'Academics', hue: '#0D9488', Icon: BookOpenCheck, line: 'ACT, SAT and TerraNova in one place \u2014 measured against peer schools.', stat: 24, unit: 'average ACT', img: '/landing/orbit-academics.jpg', imgAlt: 'A teacher going over a results sheet with two high-school students', points: ['ACT, SAT and TerraNova results in one place \u2014 upload the score report as it arrives.', 'See where you stand against peer schools, grade by grade.', 'Follow progress over time and the same class year to year; groups too small to show stay hidden.'], brief: { sev: 'watch', text: 'Grade 5 math fell 14 national percentile points on TerraNova \u2014 reading held steady.' } },
   { key: 'governance', label: 'Governance', hue: '#7c3aed', Icon: Landmark, line: 'Policies, meetings, minutes — reviewed on schedule, never lost.', stat: 36, unit: 'policies tracked', img: '/landing/orbit-governance.jpg', imgAlt: 'An empty boardroom table before a meeting' , points: ['Policies with owners and review dates that actually come due.', 'Meetings, minutes and committees in one register.', 'Review lapses surface in the briefing before an auditor finds them.'], brief: { sev: 'watch', text: '4 policies are past their scheduled review \u2014 the oldest by 210 days.' } },
   { key: 'accreditation', label: 'Accreditation', hue: '#d97706', Icon: BadgeCheck, line: 'Standards and evidence tracked; gaps surface in the briefing.', stat: 87, unit: '% evidence ready', img: '/landing/orbit-accreditation.jpg', imgAlt: 'Graduates throwing their caps' , points: ['Adopt your accreditor\u2019s framework \u2014 Cognia, FCIS, ACSI, WASC, SAIS.', 'Score standards on the rubric; attach evidence where it lives.', 'A mock visit shows what a visiting team would find today.'], brief: { sev: 'critical', text: 'An assurance gate is unmet \u2014 one attached artifact settles it.' } },
   { key: 'facilities', label: 'Facilities', hue: '#ea580c', Icon: Wrench, line: 'Maintenance with real costs — variance you can defend.', stat: 23, unit: 'work orders', img: '/landing/orbit-facilities.jpg', imgAlt: 'A school campus building and grounds' , points: ['Work orders with real costs, not estimates that never close.', 'Recurring maintenance on a calendar, with inspection records.', 'Variance against the facilities budget you can defend to a board.'], brief: { sev: 'watch', text: 'Maintenance backlog reached 23 work orders \u2014 $41K over budget.' } },
@@ -97,14 +103,25 @@ const DOMAINS = [
   { key: 'hr', label: 'HR', hue: '#059669', Icon: Users, line: 'Staffing feeds student-teacher ratio straight into analytics.', stat: 14, unit: 'students per teacher', img: '/landing/orbit-hr.jpg', imgAlt: 'Staff in a professional development session' , points: ['A staff roster with credentials, clearances and evaluations.', 'Student-teacher ratio feeds analytics straight from staffing.', 'Professional development tracked with dates that come due.'], brief: { sev: 'watch', text: 'Student-teacher ratio hit 27.9:1 \u2014 above the board\u2019s threshold.' } },
 ]
 
+// Orbit geometry from the domain count: planets sit STEP° apart and the system
+// turns one STEP per dock — STOPS hand-offs, SPIN° in all (9 → 40°, 8, 320°).
+const STEP = 360 / DOMAINS.length
+const STOPS = DOMAINS.length - 1
+const SPIN = STOPS * STEP
+// The Scholar's beats (orbitOwl.js) are scheduled for DOCKS docks; a domain
+// added here without bumping DOCKS would put its listen/talk out of step.
+if (import.meta.env?.DEV && DOMAINS.length !== DOCKS) {
+  console.error(`OrbitScrolly: ${DOMAINS.length} domains but orbitOwl DOCKS = ${DOCKS}`)
+}
+
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
 const smooth = (t) => t * t * (3 - 2 * t)
 
 // ── Per-domain payload visualizations — each dock deals in its OWN chart type
-// (area, bars, gauge, stacked status, thermometer, milestones, pictogram),
-// replayed on every dock (the card re-mounts per domain key). Marks are ink
+// (area, bars, gauge, stacked status, thermometer, milestones, pictogram, peer
+// strip), replayed on every dock (the card re-mounts per domain key). Marks are ink
 // tones; the module hue is only ever a STROKE (line, arc, ring). ─────────────
 const INK = 'rgb(16 28 61)'
 const ink = (a) => `rgb(16 28 61 / ${a})`
@@ -284,6 +301,44 @@ function VizRatio({ hue }) {
   )
 }
 
+// Standing among peers: the peer schools as ink dots on one score scale
+// (anonymous, as the app shows them), your school a hue ring that drops in last.
+function VizStanding({ hue }) {
+  const PEERS = [12, 21, 30, 38, 47, 55, 81, 90]
+  const YOU = 68
+  return (
+    <div aria-hidden="true" className="w-full">
+      <div className="relative h-6">
+        <span className="absolute inset-x-0 top-1/2 h-px" style={{ background: ink(0.14) }} />
+        {PEERS.map((x, i) => (
+          <motion.span
+            key={x}
+            className="absolute top-1/2 -ml-1 -mt-1 h-2 w-2 rounded-full"
+            style={{ left: `${x}%`, background: ink(0.45) }}
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.12 + i * 0.06, type: 'spring', stiffness: 320, damping: 20 }}
+          />
+        ))}
+        <motion.span
+          className="absolute top-1/2 -ml-2 -mt-2 h-4 w-4 rounded-full border-2 bg-white"
+          style={{ left: `${YOU}%`, borderColor: hue }}
+          initial={{ scale: 0, y: -10 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ delay: 0.7, type: 'spring', stiffness: 280, damping: 18 }}
+        />
+      </div>
+      {/* "Your school" sits under its ring, not at the scale's end. */}
+      <div className="relative mt-1 h-4">
+        <span className={`absolute left-0 ${CAPS}`}>Peer schools</span>
+        <span className={`absolute -translate-x-1/2 whitespace-nowrap ${CAPS}`} style={{ left: `${YOU}%` }}>
+          Your school
+        </span>
+      </div>
+    </div>
+  )
+}
+
 const VIZ = {
   finance: VizArea,
   enrollment: VizBars,
@@ -293,6 +348,7 @@ const VIZ = {
   advancement: VizThermo,
   strategy: VizMilestones,
   hr: VizRatio,
+  academics: VizStanding,
 }
 
 // Severity → the semantic tone of the briefing item's 2px mark.
@@ -321,7 +377,7 @@ export default function OrbitScrolly() {
   // Below sm the owl perches smaller and only the docked planet keeps its label.
   const phone = useMediaQuery('(max-width: 639px)')
 
-  // Warm the eight photos once the section is near — the payload figure mounts
+  // Warm the nine photos once the section is near — the payload figure mounts
   // each one at dock time, and a plate that pops in a beat after its own figure
   // undoes the deal-in. Fire-and-forget; a failed fetch just means the browser
   // loads it on dock like it would have anyway.
@@ -472,7 +528,7 @@ export default function OrbitScrolly() {
     const form = backOut(seg(v, 0, 0.1))
     const collapse = smooth(seg(v, 0.9, 1))
     const mp = seg(v, 0.1, 0.9)
-    const spin = mp * 315
+    const spin = mp * SPIN
     const W = sys.clientWidth
     // Phones: pull the orbit in so the far-side planets (and the docked
     // label) stay inside the system instead of clipping at the screen edge.
@@ -495,7 +551,7 @@ export default function OrbitScrolly() {
     DOMAINS.forEach((_, i) => {
       const el = planetRefs.current[i]
       if (!el) return
-      const a = ((i * 45 - spin + 90) * Math.PI) / 180
+      const a = ((i * STEP - spin + 90) * Math.PI) / 180
       const x = Math.cos(a) * RX * rf
       const y = Math.sin(a) * RY * rf
       const depth = (Math.sin(a) + 1) / 2 // 1 = front (bottom of ellipse)
@@ -513,7 +569,7 @@ export default function OrbitScrolly() {
     })
 
     // Beam: core → docked planet, visible only mid-stop (retracts in transit).
-    const stopP = (mp * 7) % 1
+    const stopP = (mp * STOPS) % 1
     const midStop = (stopP > 0.18 && stopP < 0.82) || mp === 0 || mp === 1
     const show = mp > 0 && collapse === 0 && form >= 1 && midStop
     const cx = W / 2
@@ -528,7 +584,7 @@ export default function OrbitScrolly() {
     }
 
     // Dock: active index change → React state (payload/type/shockwave).
-    const idx = clamp(Math.round(mp * 7), 0, 7)
+    const idx = clamp(Math.round(mp * STOPS), 0, STOPS)
     if (mp > 0 && idx !== activeRef.current) {
       activeRef.current = idx
       setActive(idx)
@@ -571,7 +627,7 @@ export default function OrbitScrolly() {
     return (
       <section id="how-it-works" aria-labelledby="orbit-h2" className="relative scroll-mt-20 bg-ground pb-20 pt-16 lg:pt-48">
         <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
-          <p className={CAPS}>One AI · Eight domains</p>
+          <p className={CAPS}>One AI · Nine domains</p>
           <h2 id="orbit-h2" className="mt-3 font-serif text-[32px] font-medium leading-[38px] text-ink sm:text-[40px] sm:leading-[44px]">
             Everything orbits KYRO.
           </h2>
@@ -605,12 +661,12 @@ export default function OrbitScrolly() {
             ref={introRef}
             className="pointer-events-none absolute inset-x-0 top-[7%] z-[80] px-5 text-center"
           >
-            <p className={CAPS}>One AI · Eight domains</p>
+            <p className={CAPS}>One AI · Nine domains</p>
             <h2 id="orbit-h2" className="mt-2.5 font-serif text-[32px] font-medium leading-[38px] text-ink sm:text-[40px] sm:leading-[44px]">
               Everything orbits KYRO.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-[15px] leading-[22px] text-ink2">
-              Eight domains, one AI at the center. Scroll — every one of them docks, hands its
+              Nine domains, one AI at the center. Scroll — every one of them docks, hands its
               numbers to KYRO, and lands in a single morning briefing.
             </p>
           </div>

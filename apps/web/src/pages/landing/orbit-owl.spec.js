@@ -1,7 +1,11 @@
+/* global process */
 // The orbit's Scholar choreography is a pure function of scroll progress, so it
 // replays (and reverses) exactly: no timers, no stored story state.
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  DOCKS,
   FLIGHT,
   TURN_HYSTERESIS,
   beatOwl,
@@ -15,7 +19,7 @@ import {
 } from './orbitOwl.js'
 
 // Orbit progress v for dock coordinate x (dock k is docked around x = k).
-const vAt = (x) => 0.1 + 0.8 * ((x + 0.3) / 7.6)
+const vAt = (x) => 0.1 + 0.8 * ((x + 0.3) / (DOCKS - 1 + 0.6))
 
 describe('the fly-in (approach progress)', () => {
   it('is hidden before the flight starts and perched once the stage pins', () => {
@@ -87,6 +91,17 @@ describe('which way it faces in the air', () => {
 })
 
 describe('the beats (orbit progress)', () => {
+  it('docks one beat per planet: nine domains, Academics among them', () => {
+    expect(DOCKS).toBe(9)
+    // OrbitScrolly's DOMAINS (a component file, so read as source): the owl's
+    // dock schedule must match the planets that actually dock.
+    const src = readFileSync(resolve(process.cwd(), 'src/pages/landing/OrbitScrolly.jsx'), 'utf8')
+    const block = src.slice(src.indexOf('const DOMAINS = ['), src.indexOf('\n]\n', src.indexOf('const DOMAINS = [')))
+    const keys = [...block.matchAll(/^\s*\{ key: '([a-z]+)'/gm)].map((m) => m[1])
+    expect(keys).toHaveLength(DOCKS)
+    expect(keys).toContain('academics')
+  })
+
   it('arrives, waves, then listens / talks / thinks per dock, and celebrates at the end', () => {
     expect(orbitBeat(0)).toBe('arrive')
     expect(orbitBeat(0.06)).toBe('hello')
@@ -94,9 +109,9 @@ describe('the beats (orbit progress)', () => {
     expect(orbitBeat(vAt(0.2))).toBe('talk-0')
     expect(orbitBeat(vAt(0.5))).toBe('think-0')
     expect(orbitBeat(vAt(0.9))).toBe('listen-1')
-    expect(orbitBeat(vAt(6.9))).toBe('listen-7')
-    expect(orbitBeat(vAt(7.2))).toBe('talk-7') // the last dock talks too
-    expect(orbitBeat(0.8999)).toBe('talk-7')
+    expect(orbitBeat(vAt(7.9))).toBe('listen-8')
+    expect(orbitBeat(vAt(8.2))).toBe('talk-8') // the last dock talks too
+    expect(orbitBeat(0.8999)).toBe('talk-8')
     expect(orbitBeat(0.9)).toBe('celebrate')
     expect(orbitBeat(1)).toBe('celebrate')
   })
@@ -113,16 +128,19 @@ describe('the beats (orbit progress)', () => {
     const up = [...vs].reverse().map(orbitBeat).reverse()
     expect(up).toEqual(down)
     // and every dock gets all three beats on the way through — listen and
-    // talk on every one of the eight, the first and last included
-    for (let k = 0; k < 8; k++) {
+    // talk on every one of the nine, the first and last included — and no
+    // tenth dock
+    for (let k = 0; k < DOCKS; k++) {
       expect(down).toContain(`listen-${k}`)
       expect(down).toContain(`talk-${k}`)
-      if (k < 7) expect(down).toContain(`think-${k}`)
+      if (k < DOCKS - 1) expect(down).toContain(`think-${k}`)
     }
+    expect(down).not.toContain(`listen-${DOCKS}`)
+    expect(down).not.toContain(`think-${DOCKS - 1}`)
     // symmetric: the first dock listens as long as the last one talks
     const span = (key) => down.filter((b) => b === key).length
     expect(Math.abs(span('listen-0') - span('listen-3'))).toBeLessThanOrEqual(1)
-    expect(Math.abs(span('talk-7') - span('talk-3'))).toBeLessThanOrEqual(1)
+    expect(Math.abs(span('talk-8') - span('talk-3'))).toBeLessThanOrEqual(1)
   })
 
   it('maps beats to owl props (HELD moods only on hello / celebrate)', () => {

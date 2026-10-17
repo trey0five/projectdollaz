@@ -5,7 +5,7 @@
 // divided by hairline section rules — no frosted cards, no glass except the
 // nav once scrolled, no infinite loops (the owl's idle is the one exception).
 //
-// Composition: video + hero/KYRO demo → the ORBIT set-piece (pinned; eight
+// Composition: video + hero/KYRO demo → the ORBIT set-piece (pinned; nine
 // domains dock into KYRO and collapse into the briefing) → the platform as
 // REAL product screenshots + a ruled index → TB → four statements → the cash
 // forecast workbook → the network roll-up → the one-click board packet → the
@@ -39,7 +39,7 @@ export default function LandingPage() {
             lower edge. VideoHero also reveals the fixed nav. */}
         <VideoHero onShown={revealNav} />
         <LandingHero onIntroOpen={revealNav} />
-        {/* The set-piece: eight domains dock into KYRO, then collapse into the
+        {/* The set-piece: nine domains dock into KYRO, then collapse into the
             morning briefing. */}
         <OrbitScrolly />
         {/* The breadth: real product screens + a ruled index of the rest. */}
