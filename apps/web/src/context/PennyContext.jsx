@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Penny = internal codename for the KYRO assistant (the owl). User-visible name
-// is KYRO; identifiers stay "penny" (files, hooks, penny:* events, finrep:penny:*
-// storage keys, data-testids, tokens, the /penny route).
+// Penny = internal codename for the KYRO assistant (the owl, drawn as "the
+// Scholar"). User-visible name is KYRO; identifiers stay "penny" (files, hooks,
+// penny:* events, finrep:penny:* storage keys, data-testids, tokens, the /penny
+// route).
 //
 // Penny — the unified guide + AI character. ONE owl lives globally (mounted once
 // in AuthedLayout) and plays two roles:
@@ -13,7 +14,7 @@
 //     separate Ask button anymore; the owl IS the assistant.
 //
 // This context holds only the INTENT (which element + message, and whether the chat
-// is open). The <Penny/> component owns the motion (measuring the target, gliding
+// is open). The <Penny/> component owns the motion (measuring the target, flying
 // to it) so the script stays with the page that knows its own DOM.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
@@ -145,8 +146,8 @@ export function PennyProvider({ children }) {
   }, [])
 
   // Translate an LLM walkthrough (registry keys) into the existing guide shape,
-  // attaching per-step navigation so the coin can cross pages/modals. Reuses the
-  // SAME guide state + Penny.jsx glide — this only maps keys → domIds.
+  // attaching per-step navigation so the owl can cross pages/modals. Reuses the
+  // SAME guide state + Penny.jsx flight — this only maps keys → domIds.
   const runAgentGuide = useCallback((agentSteps) => {
     const steps = (agentSteps || [])
       .map((s) => {
@@ -163,7 +164,7 @@ export function PennyProvider({ children }) {
           // 'enrollment-grades' — sub-views where the anchor actually mounts),
           // while the model only knows the backend's coarse page enum
           // ('cash-flow', 'enrollment-analytics'); letting the model's hint win
-          // landed the coin on a tab where the target dom id never mounts.
+          // landed the owl on a tab where the target dom id never mounts.
           // Every registry row carries a page, so s.page is only a fallback for
           // a hypothetical page-less row; openModal stays step-first (the model
           // legitimately decides whether a step opens the modal).

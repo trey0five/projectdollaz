@@ -3,7 +3,8 @@
 // (no license gate, no briefing chip); it reuses the module-tile chrome with
 // Penny's PROTECTED gold hue ("Gold = Penny only" under v2), so the one gold tile
 // reads instantly as the AI among the hued module tiles. The art is the live
-// PennyAvatar coin itself.
+// Scholar itself (PennyAvatar); its root is a span, so the tile CSS that sizes
+// module-art SVGs never squashes it (the owl's own SVG sizes itself inline).
 //
 // CLASSIC LOOK (origin/main 74caaba): `hc-` classes, styled only under
 // `.home-classic` (styles/home-classic.css). The `tile-penny` id is the KYRO

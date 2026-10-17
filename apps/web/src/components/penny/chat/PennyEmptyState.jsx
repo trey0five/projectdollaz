@@ -61,10 +61,10 @@ export default function PennyEmptyState({ onPick }) {
 
   return (
     <div className="flex flex-col items-center px-2 py-4 text-center motion-safe:animate-[penny-pop_360ms_ease-out]">
-      {/* Hero — KYRO on a soft drop shadow (the coin-era pulsing halo discs are
-          gone: nothing circular behind the owl). */}
+      {/* Hero — the Scholar on a soft drop shadow (nothing circular behind the
+          owl). It says hello once as the chat opens (the mood plays on mount). */}
       <div className="relative mb-3 drop-shadow-[0_8px_16px_rgba(184,150,80,0.35)]">
-        <PennyAvatar size={56} active />
+        <PennyAvatar size={56} active mood="hello" />
       </div>
       <h2 className="penny-text text-[18px] font-bold tracking-tight">Hi! I’m KYRO</h2>
       <p className="mt-1 max-w-[16rem] text-[13px] leading-snug text-muted">

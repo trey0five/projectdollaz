@@ -1,0 +1,687 @@
+<!-- DEV-ONLY reference: a verbatim copy of the owner-approved mock "B · The Scholar"
+     (~/.cache/kyro-owl-mocks/b/index.html, 2026-10-17). /dev/scholar shows it side by side
+     with the in-app ScholarOwl. Nothing in the production build references this file. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KYRO Scholar Owl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F8FC; --card:#FFFFFF; --ink:#141B4D; --muted:#5A6487; --line:#E3E8F5;
+  --indigo:#1E2A78; --blue:#3B4BDB; --sky:#A5DCFF; --gold:#F5B83D; --coral:#FF7A6B;
+  --ease-back:cubic-bezier(.34,1.56,.64,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.55 Montserrat,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:1120px;margin:0 auto;padding:44px 24px 72px}
+.eyebrow{font:600 12px/1 Montserrat,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--blue)}
+h1{font:600 56px/1.02 'EB Garamond',Georgia,serif;margin:12px 0 12px;letter-spacing:-.01em}
+h1 .dot{color:var(--gold)}
+h2{font:600 32px/1.1 'EB Garamond',Georgia,serif;margin:0 0 6px}
+.lede{color:var(--muted);max-width:660px;font-size:16px;margin:0}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.sw{display:inline-flex;align-items:center;gap:8px;padding:5px 11px 5px 6px;border-radius:999px;background:#fff;border:1px solid var(--line);font:500 12px/1 Montserrat,sans-serif;color:var(--muted)}
+.sw i{width:18px;height:18px;border-radius:50%;display:block}
+
+/* ---------- Stage ---------- */
+.stage-card{margin-top:30px;background:var(--card);border:1px solid var(--line);border-radius:28px;box-shadow:0 1px 2px rgba(20,27,77,.04),0 24px 60px -30px rgba(30,42,120,.28);overflow:hidden}
+.stage{position:relative;height:540px;overflow:hidden;
+  background:
+    radial-gradient(ellipse 46% 40% at 50% 70%,rgba(165,220,255,.38) 0,rgba(165,220,255,0) 70%),
+    radial-gradient(ellipse 70% 60% at 50% 40%,#F2F5FF 0,#FAFBFF 60%,#fff 100%)}
+.stage::before{content:"";position:absolute;left:0;right:0;bottom:0;height:46px;background:linear-gradient(#F3F6FD,#EDF1FB);border-top:1px solid #E6EBF7}
+.stage .mover{position:absolute;left:50%;bottom:30px;width:340px;height:340px;margin-left:-170px;will-change:transform}
+.mover svg{width:100%;height:100%;overflow:visible;display:block}
+.confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.confetti i{position:absolute;left:0;top:0;display:block;border-radius:2px}
+.stage-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 22px;border-top:1px solid var(--line);background:#FBFCFF}
+.now b{font:600 22px/1.1 'EB Garamond',Georgia,serif;display:block}
+.now span{color:var(--muted);font-size:13px}
+.auto{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:9px 14px;font:600 12px/1 Montserrat,sans-serif;display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap}
+.auto .led{width:8px;height:8px;border-radius:50%;background:#C5CCE0}
+.auto[aria-pressed="true"] .led{background:#3BC98A;box-shadow:0 0 0 4px rgba(59,201,138,.18)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 22px 20px;background:#FBFCFF}
+.chip{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:11px 16px;font:600 13px/1 Montserrat,sans-serif;cursor:pointer;transition:transform .25s var(--ease-back),background .2s,color .2s,border-color .2s}
+.chip:hover{transform:translateY(-2px);border-color:#C9D2EE}
+.chip:active{transform:scale(.96)}
+.chip[aria-pressed="true"]{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.chip:focus-visible,.auto:focus-visible{outline:3px solid rgba(59,75,219,.35);outline-offset:2px}
+
+/* ---------- In the app ---------- */
+section.block{margin-top:56px}
+.sub{color:var(--muted);margin:0 0 18px}
+.app-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.panel{position:relative;height:380px;border-radius:24px;overflow:hidden;border:1px solid var(--line)}
+.panel.light{background:var(--bg)}
+.panel.dark{border-color:#1A2466;background:
+  radial-gradient(60% 70% at 15% 10%,rgba(59,75,219,.85) 0,rgba(59,75,219,0) 60%),
+  radial-gradient(50% 60% at 90% 20%,rgba(124,203,255,.45) 0,rgba(124,203,255,0) 60%),
+  radial-gradient(55% 55% at 70% 100%,rgba(255,122,107,.35) 0,rgba(255,122,107,0) 60%),
+  linear-gradient(160deg,#121A55 0%,#1E2A78 55%,#18206A 100%)}
+.mock-nav{display:flex;align-items:center;gap:8px;padding:16px 18px}
+.mock-nav .logo{font:700 13px/1 Montserrat,sans-serif;letter-spacing:.16em;color:var(--indigo)}
+.mock-nav .pill{height:8px;border-radius:8px;background:#E1E6F3}
+.mock-card{margin:4px 18px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 18px 8px;max-width:330px;box-shadow:0 10px 30px -18px rgba(30,42,120,.3)}
+.mock-card h3{font:600 21px/1.1 'EB Garamond',Georgia,serif;margin:0}
+.mock-card .meta{font-size:12px;color:var(--muted);margin:3px 0 12px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #EEF1F8;font-size:13px}
+.row .d{width:9px;height:9px;border-radius:50%}
+.row .l{flex:1;color:#2A3366}
+.row .v{font-weight:700}
+.hero-txt{position:absolute;left:24px;top:24px;right:24px;color:#fff}
+.hero-txt .eyebrow{color:#A5DCFF}
+.hero-txt h3{font:600 38px/1.05 'EB Garamond',Georgia,serif;margin:10px 0 6px}
+.hero-txt p{margin:0;color:rgba(255,255,255,.78);font-size:14px}
+.hero-pills{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.hero-pills span{font:600 12px/1 Montserrat,sans-serif;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff}
+.dock{position:absolute;right:14px;bottom:12px;display:flex;align-items:flex-end;gap:2px}
+.bubble{position:relative;max-width:220px;margin-bottom:46px;background:#fff;color:var(--ink);border-radius:18px 18px 4px 18px;padding:12px 14px;font:500 13px/1.4 Montserrat,sans-serif;box-shadow:0 12px 28px -12px rgba(20,27,77,.35),0 1px 2px rgba(20,27,77,.08);transform-origin:100% 100%}
+.panel.light .bubble{border:1px solid var(--line)}
+.bubble b{color:var(--blue)}
+.mini{position:relative;width:88px;height:88px;flex:none}
+.mini .mover{width:88px;height:88px}
+.panel.dark .mini::before{content:"";position:absolute;left:-8px;right:-8px;top:2px;bottom:-6px;border-radius:50%;background:radial-gradient(closest-side,rgba(165,220,255,.38),rgba(165,220,255,0));}
+.panel.dark .mini svg{filter:drop-shadow(0 6px 10px rgba(5,10,40,.45))}
+.pop{animation:pop .7s var(--ease-back) both, floaty 4s ease-in-out .7s infinite}
+@keyframes pop{from{opacity:0;transform:scale(.6) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes floaty{50%{transform:translateY(-3px)}}
+
+/* ---------- Stickers ---------- */
+.stickers{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.sticker{position:relative;background:#fff;border:1px solid var(--line);border-radius:22px;padding:14px 8px 14px;text-align:center;overflow:hidden}
+.sticker::before{content:"";position:absolute;left:50%;top:44%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:var(--tint,#EEF2FF)}
+.sticker .s-owl{position:relative;width:132px;height:132px;margin:0 auto}
+.sticker .s-owl .mover{width:132px;height:132px}
+.sticker .s-owl svg{filter:drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 8px 10px rgba(30,42,120,.18))}
+.sticker .lbl{position:relative;font:600 18px/1.1 'EB Garamond',Georgia,serif;margin-top:6px}
+.sticker .use{position:relative;font-size:11px;color:var(--muted);margin-top:2px}
+.sticker .cf{position:absolute;width:7px;height:10px;border-radius:2px}
+footer{margin-top:48px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:18px}
+
+@media (max-width:900px){
+  .app-grid{grid-template-columns:1fr}
+  .stickers{grid-template-columns:repeat(3,1fr)}
+}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 56px}
+  h1{font-size:42px}
+  .stage{height:450px}
+  .stage .mover{width:280px;height:280px;margin-left:-140px;bottom:26px}
+  .stage-bar{padding:14px 16px;align-items:flex-start}
+  .chips{padding:0 16px 16px;gap:6px}
+  .chip{padding:10px 12px;font-size:12px}
+  .stickers{grid-template-columns:repeat(2,1fr);gap:10px}
+  .panel{height:360px}
+  .panel.light{height:auto;padding-bottom:150px}
+  .hero-txt h3{font-size:32px}
+  .bubble{max-width:190px;font-size:12.5px}
+  .mock-card{max-width:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .pop{animation:none}
+  .chip{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">KYRO mascot concepts · Mock B</div>
+    <h1>B <span class="dot">·</span> The Scholar</h1>
+    <p class="lede">A clever, warm owl in round gold spectacles and a tilted mortarboard. Flat and bouncy like a great app mascot, but grown-up enough for a head of school. Watch the tassel: it carries the follow-through on every move.</p>
+    <div class="swatches" aria-label="Palette">
+      <span class="sw"><i style="background:#1E2A78"></i>Indigo #1E2A78</span>
+      <span class="sw"><i style="background:#3B4BDB"></i>Blue #3B4BDB</span>
+      <span class="sw"><i style="background:#A5DCFF"></i>Sky belly</span>
+      <span class="sw"><i style="background:#F5B83D"></i>Gold #F5B83D</span>
+      <span class="sw"><i style="background:#FF7A6B"></i>Coral #FF7A6B</span>
+    </div>
+  </header>
+
+  <div class="stage-card">
+    <div class="stage" id="stage"><div class="confetti" id="confetti"></div></div>
+    <div class="stage-bar">
+      <div class="now" aria-live="polite"><b id="nowName">Idle</b><span id="nowDesc">Breathing, blinking, tassel swaying</span></div>
+      <button class="auto" id="autoBtn" aria-pressed="true"><span class="led"></span>Auto-play</button>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Owl states"></div>
+  </div>
+
+  <section class="block">
+    <h2>In the app</h2>
+    <p class="sub">72px tall, bottom-right, narrating. On a light page and on the dark aurora hero.</p>
+    <div class="app-grid">
+      <div class="panel light">
+        <div class="mock-nav"><span class="logo">KYRO</span><span class="pill" style="width:54px;margin-left:12px"></span><span class="pill" style="width:40px"></span><span class="pill" style="width:62px"></span></div>
+        <div class="mock-card">
+          <h3>Morning briefing</h3>
+          <div class="meta">Sample Academy · Friday</div>
+          <div class="row"><span class="d" style="background:#FF7A6B"></span><span class="l">Cash runway</span><span class="v">4.1 mo</span></div>
+          <div class="row"><span class="d" style="background:#F5B83D"></span><span class="l">Re-enrollment</span><span class="v">86%</span></div>
+          <div class="row"><span class="d" style="background:#3B4BDB"></span><span class="l">Tuition collected</span><span class="v">91%</span></div>
+        </div>
+        <div class="dock"><div class="bubble pop">Your numbers are in! Want the <b>3 things</b> that need you?</div><div class="mini" id="owlLight"></div></div>
+      </div>
+      <div class="panel dark">
+        <div class="hero-txt">
+          <div class="eyebrow">Friday briefing</div>
+          <h3>Good morning.</h3>
+          <p>Three items need you before the board meets.</p>
+          <div class="hero-pills"><span>Finance</span><span>Enrollment</span><span>Accreditation</span></div>
+        </div>
+        <div class="dock"><div class="bubble pop">Your numbers are in! Want the <b>3 things</b> that need you?</div><div class="mini" id="owlDark"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Sticker sheet</h2>
+    <p class="sub">Six static expressions for empty states, toasts and emails.</p>
+    <div class="stickers" id="stickers"></div>
+  </section>
+
+  <footer>Inline SVG built from independent parts, animated with the Web Animations API. The tassel is a small pendulum simulation that reacts to the owl's real motion. Reduced-motion users get static poses.</footer>
+</div>
+
+<script>
+(() => {
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const EB  = 'cubic-bezier(.34,1.56,.64,1)';
+const EB2 = 'cubic-bezier(.3,1.8,.5,1)';
+const EIO = 'cubic-bezier(.45,0,.55,1)';
+const EOUT= 'cubic-bezier(.22,1,.36,1)';
+const EIN = 'cubic-bezier(.55,0,1,.45)';
+const tr = (x=0,y=0,r=0,sx=1,sy=sx) => `translate(${x}px,${y}px) rotate(${r}deg) scale(${sx},${sy})`;
+const O = (x,y) => `style="transform-box:view-box;transform-origin:${x}px ${y}px"`;
+
+const C = { body:'#3343C4', shade:'#2935A8', disc:'#4E60E6', wing:'#25329C', wingHi:'#2E3DB3',
+  belly:'#A5DCFF', chev:'#6CBDF0', ink:'#121A4A', brow:'#151C55', gold:'#F5B83D', goldD:'#DE9A2A',
+  coral:'#FF7A6B', cap:'#232C7E', capL:'#2B3592', capEdge:'#0F1540', capBase:'#161D55' };
+const BODY = 'M130 64C188 64 212 92 212 140L213 214C213 254 180 277 130 277C80 277 47 254 47 214L48 140C48 92 72 64 130 64Z';
+
+let uid = 0;
+function owlMarkup(n){ return `
+<svg viewBox="-30 -20 320 320" aria-hidden="true" focusable="false">
+ <defs><clipPath id="bc${n}"><path d="${BODY}"/></clipPath></defs>
+ <g data-p="pulseA" ${O(130,170)} opacity="0"><circle cx="130" cy="170" r="128" fill="none" stroke="#7CCBFF" stroke-width="3"/></g>
+ <g data-p="pulseB" ${O(130,170)} opacity="0"><circle cx="130" cy="170" r="128" fill="none" stroke="#7CCBFF" stroke-width="3"/></g>
+ <ellipse data-p="shadow" ${O(130,289)} cx="130" cy="289" rx="64" ry="7.5" fill="#1E2A78" opacity=".13"/>
+ <g data-p="root" ${O(130,280)}>
+ <g data-p="squash" ${O(130,284)}>
+ <g data-p="breath" ${O(130,284)}>
+  <g data-p="feet" ${O(130,282)} fill="${C.gold}">
+   <ellipse cx="99" cy="281" rx="6.5" ry="6"/><ellipse cx="109" cy="283" rx="6.5" ry="6"/><ellipse cx="119" cy="281" rx="6.5" ry="6"/>
+   <ellipse cx="141" cy="281" rx="6.5" ry="6"/><ellipse cx="151" cy="283" rx="6.5" ry="6"/><ellipse cx="161" cy="281" rx="6.5" ry="6"/>
+  </g>
+  <g data-p="tuftL" ${O(82,80)}><path d="M68 88Q54 66 42 44Q72 48 100 70Z" fill="${C.body}"/></g>
+  <g data-p="tuftR" ${O(178,80)}><path d="M192 88Q206 66 218 44Q188 48 160 70Z" fill="${C.shade}"/></g>
+  <path d="${BODY}" fill="${C.body}"/>
+  <g clip-path="url(#bc${n})">
+   <ellipse cx="268" cy="196" rx="86" ry="178" fill="${C.shade}"/>
+   <ellipse cx="130" cy="228" rx="56" ry="54" fill="${C.belly}"/>
+  </g>
+  <g fill="none" stroke="${C.chev}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+   <path d="M108 204l8 7 8-7"/><path d="M136 204l8 7 8-7"/><path d="M122 226l8 7 8-7"/>
+  </g>
+  <g data-p="head" ${O(130,160)}>
+   <circle cx="96" cy="128" r="40" fill="${C.disc}"/><circle cx="164" cy="128" r="40" fill="${C.disc}"/>
+   <g data-p="cheekL" ${O(70,164)}><ellipse cx="70" cy="164" rx="12" ry="7.5" fill="${C.coral}" opacity=".92"/></g>
+   <g data-p="cheekR" ${O(190,164)}><ellipse cx="190" cy="164" rx="12" ry="7.5" fill="${C.coral}" opacity=".92"/></g>
+   <g data-p="eyeOpenL" ${O(96,128)}>
+    <circle cx="96" cy="128" r="24" fill="#fff"/>
+    <g data-p="pupilL" ${O(99,130)}><circle cx="99" cy="130" r="12.5" fill="${C.ink}"/><circle cx="94.5" cy="125" r="4.3" fill="#fff"/><circle cx="103.5" cy="134.5" r="1.9" fill="#fff" opacity=".85"/></g>
+   </g>
+   <g data-p="eyeOpenR" ${O(164,128)}>
+    <circle cx="164" cy="128" r="24" fill="#fff"/>
+    <g data-p="pupilR" ${O(161,130)}><circle cx="161" cy="130" r="12.5" fill="${C.ink}"/><circle cx="156.5" cy="125" r="4.3" fill="#fff"/><circle cx="165.5" cy="134.5" r="1.9" fill="#fff" opacity=".85"/></g>
+   </g>
+   <path data-p="happyL" d="M82 134Q96 117 110 134" fill="none" stroke="${C.ink}" stroke-width="6.5" stroke-linecap="round" opacity="0"/>
+   <path data-p="happyR" d="M150 134Q164 117 178 134" fill="none" stroke="${C.ink}" stroke-width="6.5" stroke-linecap="round" opacity="0"/>
+   <path data-p="browL" ${O(94,88)} d="M77 93Q93 82 111 88" fill="none" stroke="${C.brow}" stroke-width="7" stroke-linecap="round"/>
+   <path data-p="browR" ${O(166,88)} d="M149 88Q167 82 183 93" fill="none" stroke="${C.brow}" stroke-width="7" stroke-linecap="round"/>
+   <ellipse cx="130" cy="159" rx="5.5" ry="5" fill="#6E1835"/>
+   <g data-p="lowerBeak" ${O(130,156)}><path d="M122 155Q130 159 138 155Q135 166 130 170Q125 166 122 155Z" fill="${C.goldD}"/></g>
+   <g data-p="upperBeak" ${O(130,140)}><path d="M117 141Q130 134 143 141Q139 154 130 165Q121 154 117 141Z" fill="${C.gold}"/><path d="M130 136.6Q138 137.6 143 141Q139 154 130 165Z" fill="#E9A833"/></g>
+   <g data-p="glasses" ${O(130,128)}>
+    <g fill="none" stroke="${C.gold}" stroke-linecap="round">
+     <path d="M67.5 122L51 116" stroke-width="4"/><path d="M192.5 122L209 116" stroke-width="4"/>
+     <path d="M124.5 124Q130 118.5 135.5 124" stroke-width="4"/>
+     <circle cx="96" cy="128" r="29" stroke-width="4.5" fill="#fff" fill-opacity=".1"/>
+     <circle cx="164" cy="128" r="29" stroke-width="4.5" fill="#fff" fill-opacity=".1"/>
+    </g>
+    <path d="M107 107Q115.5 110 119 118" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M175 107Q183.5 110 187 118" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="3" stroke-linecap="round"/>
+   </g>
+   <path data-p="sweat" ${O(207,98)} opacity="0" d="M208 80Q218 95 213 102Q208 106.5 203 102Q198 95 208 80Z" fill="#8ED3FF" stroke="#fff" stroke-width="1.5"/>
+   <g transform="rotate(-10 130 60)">
+    <g data-p="cap" ${O(130,50)}>
+     <path d="M101 52L101 68Q130 80 159 68L159 52Z" fill="${C.capBase}"/>
+     <path d="M74 44L130 60L186 44L186 48.5L130 64.5L74 48.5Z" fill="${C.capEdge}"/>
+     <path d="M130 28L186 44L130 60L74 44Z" fill="${C.cap}"/>
+     <path d="M130 28L74 44L130 60Z" fill="${C.capL}"/>
+     <path d="M130 42Q160 40 183 45" fill="none" stroke="${C.gold}" stroke-width="3" stroke-linecap="round"/>
+     <g data-p="tassel">
+      <path d="M183 45L183 73" stroke="${C.gold}" stroke-width="3" stroke-linecap="round"/>
+      <rect x="178.5" y="70" width="9" height="6.5" rx="2.2" fill="${C.goldD}"/>
+      <path d="M178 75.5L188 75.5L190.5 97Q183 101 175.5 97Z" fill="${C.gold}"/>
+      <path d="M181 80L180 96M185 80L186 96" stroke="#D88F22" stroke-width="1.4" stroke-linecap="round"/>
+     </g>
+     <circle cx="130" cy="42" r="4.6" fill="${C.gold}"/>
+     <circle data-p="ancA" cx="183" cy="45" r=".5" fill="none"/>
+     <circle data-p="ancB" cx="130" cy="42" r=".5" fill="none"/>
+    </g>
+   </g>
+  </g>
+  <g data-p="wingL" ${O(62,150)}>
+   <path d="M62 146C40 154 30 192 38 228C41 242 50 248 57 238C70 216 74 178 68 150Z" fill="${C.wing}"/>
+   <path d="M61 156C50 168 45 188 47 208C55 194 62 176 64 158Z" fill="${C.wingHi}"/>
+  </g>
+  <g data-p="wingR" ${O(198,150)}>
+   <path d="M198 146C220 154 230 192 222 228C219 242 210 248 203 238C190 216 186 178 192 150Z" fill="${C.wing}"/>
+   <path d="M199 156C210 168 215 188 213 208C205 194 198 176 196 158Z" fill="${C.wingHi}"/>
+  </g>
+ </g></g></g>
+ <g data-p="dots" ${O(222,50)} opacity="0">
+  <circle cx="214" cy="58" r="4" fill="#fff" stroke="#DCE2F3" stroke-width="1.5"/>
+  <circle cx="226" cy="40" r="6.5" fill="#fff" stroke="#DCE2F3" stroke-width="1.5"/>
+  <rect x="226" y="-14" width="72" height="36" rx="18" fill="#fff" stroke="#DCE2F3" stroke-width="1.5"/>
+  <circle data-p="dot1" ${O(246,4)} cx="246" cy="4" r="4.8" fill="#3B4BDB"/>
+  <circle data-p="dot2" ${O(262,4)} cx="262" cy="4" r="4.8" fill="#3B4BDB"/>
+  <circle data-p="dot3" ${O(278,4)} cx="278" cy="4" r="4.8" fill="#3B4BDB"/>
+ </g>
+</svg>`; }
+
+const PARTS = ['root','squash','breath','feet','tuftL','tuftR','head','cheekL','cheekR','eyeOpenL','eyeOpenR','pupilL','pupilR',
+  'happyL','happyR','browL','browR','lowerBeak','upperBeak','glasses','sweat','cap','wingL','wingR','dots','dot1','dot2','dot3',
+  'pulseA','pulseB','shadow'];
+
+const live = [];
+function createOwl(host, {animated=true}={}){
+  const n = ++uid;
+  host.insertAdjacentHTML('beforeend', `<div class="mover">${owlMarkup(n)}</div>`);
+  const mover = host.querySelector('.mover:last-of-type');
+  const svg = mover.querySelector('svg');
+  const o = { host, mover, svg, p:{}, anims:[], blends:[], timers:[], state:null, ph:{init:false,phi:0,w:0,ax:0,ay:0}, breeze:1, flying:false };
+  PARTS.concat(['tassel','ancA','ancB']).forEach(k => o.p[k] = svg.querySelector(`[data-p="${k}"]`));
+  o.p.mover = mover;
+  if (animated && !RM){ live.push(o); scheduleBlink(o); }
+  return o;
+}
+
+/* ---------- animation helpers ---------- */
+function K(o, el, frames, opt){ const a = el.animate(frames, opt); o.anims.push(a); return a; }
+// Looping (or one-shot) transform track. frames: [offset, transform, easingToNext?]
+function T(o, part, dur, frames, {once=false, delay=0}={}){
+  const el = o.p[part]; if (!el) return;
+  const kf = frames.map(([off, t, e]) => { const k = {offset:off, transform:t}; if (e) k.easing = e; return k; });
+  return K(o, el, kf, {duration:dur, iterations: once?1:Infinity, fill: once?'forwards':'none', delay});
+}
+function To(o, part, t, dur=420, easing=EB, delay=0){ // one-shot to a pose
+  const el = o.p[part]; if (!el) return;
+  return K(o, el, [{transform:getComputedStyle(el).transform==='none'?tr():getComputedStyle(el).transform},{transform:t}], {duration:dur, easing, fill:'forwards', delay});
+}
+function Op(o, part, dur, frames, {once=false, delay=0}={}){
+  const el = o.p[part]; if (!el) return;
+  return K(o, el, frames.map(([off,v,e]) => { const k={offset:off, opacity:v}; if(e) k.easing=e; return k; }), {duration:dur, iterations: once?1:Infinity, fill: once?'forwards':'none', delay});
+}
+function happy(o, dur, frames, opts){ // frames [offset, 0|1]
+  const inv = frames.map(([a,v]) => [a, 1-v]);
+  Op(o,'eyeOpenL',dur,inv,opts); Op(o,'eyeOpenR',dur,inv,opts);
+  Op(o,'happyL',dur,frames,opts); Op(o,'happyR',dur,frames,opts);
+}
+function both(o, a, b, dur, frames, opts){ T(o,a,dur,frames,opts); T(o,b,dur,frames,opts); }
+function mirror(frames){ return frames.map(([off,t,e]) => [off, t.replace(/rotate\((-?[\d.]+)deg\)/, (m,v)=>`rotate(${-v}deg)`).replace(/translate\((-?[\d.]+)px/, (m,v)=>`translate(${-v}px`), e]); }
+function breathe(o){ K(o, o.p.breath, [{transform:tr()},{transform:tr(0,0,0,.988,1.018)}], {duration:1700, iterations:Infinity, direction:'alternate', easing:EIO}); }
+function later(o, ms, fn){ const id = setTimeout(fn, ms); o.timers.push(id); return id; }
+function every(o, ms, fn){ const id = setInterval(fn, ms); o.timers.push(-id); return id; }
+
+function stop(o){
+  o.timers.forEach(id => id < 0 ? clearInterval(-id) : clearTimeout(id)); o.timers = [];
+  const els = PARTS.map(k => o.p[k]).concat([o.p.mover]).filter(Boolean);
+  const snap = els.map(el => { const cs = getComputedStyle(el); return [el, cs.transform, cs.opacity]; });
+  o.anims.forEach(a => a.cancel()); o.anims = [];
+  o.blends.forEach(a => a.cancel()); o.blends = [];
+  snap.forEach(([el, t, op]) => {
+    const cs = getComputedStyle(el);
+    if (t && t !== 'none' && t !== cs.transform) o.blends.push(el.animate([{transform:t},{transform:cs.transform==='none'?'none':cs.transform}], {duration:260, easing:EOUT}));
+    if (op !== cs.opacity) o.blends.push(el.animate([{opacity:op},{opacity:cs.opacity}], {duration:200, easing:'ease-out'}));
+  });
+  o.flying = false; o.breeze = 1;
+}
+
+/* ---------- blinking ---------- */
+function scheduleBlink(o){
+  const go = () => {
+    if (!o.noBlink){
+      const kf = [{transform:'scale(1,1)'},{transform:'scale(1,.08)', offset:.45},{transform:'scale(1,1)'}];
+      [o.p.eyeOpenL, o.p.eyeOpenR].forEach(el => el.animate(kf, {duration:170, easing:EIO, composite:'add'}));
+      if (Math.random() < .22) setTimeout(() => [o.p.eyeOpenL, o.p.eyeOpenR].forEach(el => el.animate(kf, {duration:160, easing:EIO, composite:'add'})), 260);
+    }
+    setTimeout(go, 2200 + Math.random()*2800);
+  };
+  setTimeout(go, 900 + Math.random()*1500);
+}
+
+/* ---------- poses (static) ---------- */
+const CHIN = tr(-24,18,-92), SCRATCH = tr(6,30,160), CAPHOLD = tr(2,0,180), PUSH = tr(22,10,119);
+const POSES = {
+  idle:{},
+  hello:{wingR:tr(0,0,-145), happy:'both', browL:tr(0,-5), browR:tr(0,-5), lowerBeak:tr(0,4), cheekL:tr(0,0,0,1.12), cheekR:tr(0,0,0,1.12)},
+  talking:{lowerBeak:tr(0,5), upperBeak:tr(0,-1), wingL:tr(0,0,45), browL:tr(0,-3), browR:tr(0,-3)},
+  listening:{root:tr(0,4,-3,1.04), head:tr(0,0,-7), browL:tr(0,-7), browR:tr(0,-7), pupilL:tr(0,0,0,1.16), pupilR:tr(0,0,0,1.16), tuftL:tr(0,-3,-12), tuftR:tr(0,-3,12), pulseA:{t:tr(0,0,0,.9), o:.45}},
+  thinking:{wingL:CHIN, pupilL:tr(6,-8), pupilR:tr(6,-8), browR:tr(0,-7,-6), browL:tr(0,3,6), head:tr(0,0,6), dots:{o:1}},
+  celebrate:{wingL:tr(0,0,116), wingR:tr(0,0,-116), happy:'both', lowerBeak:tr(0,6), cap:tr(4,-30,16), root:tr(0,-8), browL:tr(0,-6), browR:tr(0,-6), cheekL:tr(0,0,0,1.15), cheekR:tr(0,0,0,1.15)},
+  oops:{glasses:tr(-2,21,-9), browL:tr(0,-4,-16), browR:tr(0,-4,16), cheekL:tr(0,0,0,1.35), cheekR:tr(0,0,0,1.35), wingL:SCRATCH, sweat:{t:tr(0,4),o:1}, head:tr(0,3,-5), lowerBeak:tr(0,2), pupilL:tr(0,-2), pupilR:tr(0,-2), eyeOpenL:tr(0,0,0,1,.9), eyeOpenR:tr(0,0,0,1,.9)},
+  flying:{wingR:tr(0,0,-120), wingL:CAPHOLD, feet:tr(0,-5,0,1,.7), root:tr(0,-14,8), pupilL:tr(5,0), pupilR:tr(5,0)},
+  wink:{happy:'L', lowerBeak:tr(0,3), browL:tr(0,2,6), browR:tr(0,-5), head:tr(0,0,-5), wingR:tr(0,0,-58), cheekL:tr(0,0,0,1.15), cheekR:tr(0,0,0,1.15)},
+  whoa:{pupilL:tr(0,0,0,.7), pupilR:tr(0,0,0,.7), eyeOpenL:tr(0,0,0,1.07), eyeOpenR:tr(0,0,0,1.07), browL:tr(0,-11,-4), browR:tr(0,-11,4), lowerBeak:tr(0,7), glasses:tr(0,-5), tuftL:tr(0,-4,-14), tuftR:tr(0,-4,14), wingL:tr(0,0,28), wingR:tr(0,0,-28), squash:tr(0,0,0,.97,1.04)}
+};
+function applyPose(o, name){
+  const pose = POSES[name] || {};
+  PARTS.forEach(k => { const el = o.p[k]; if (el){ el.style.transform=''; el.style.opacity=''; } });
+  Object.entries(pose).forEach(([k,v]) => {
+    if (k === 'happy'){
+      const L = v==='both'||v==='L', R = v==='both'||v==='R';
+      if (L){ o.p.eyeOpenL.style.opacity=0; o.p.happyL.style.opacity=1; }
+      if (R){ o.p.eyeOpenR.style.opacity=0; o.p.happyR.style.opacity=1; }
+      return;
+    }
+    const el = o.p[k]; if (!el) return;
+    if (typeof v === 'string') el.style.transform = v;
+    else { if (v.t) el.style.transform = v.t; if (v.o != null) el.style.opacity = v.o; }
+  });
+  requestAnimationFrame(() => hangTassel(o));
+}
+
+/* ---------- states ---------- */
+const S = {};
+S.idle = o => {
+  const D = 6400;
+  breathe(o);
+  const gaze = [[0,tr()],[.26,tr(),EOUT],[.3,tr(-6,1)],[.44,tr(-6,1),EOUT],[.48,tr(5,-1)],[.6,tr(5,-1),EOUT],[.64,tr()],[1,tr()]];
+  both(o,'pupilL','pupilR',D,gaze);
+  T(o,'head',D,[[0,tr()],[.26,tr(),EIO],[.32,tr(0,0,-3)],[.44,tr(0,0,-3),EIO],[.5,tr(0,0,3)],[.6,tr(0,0,3),EIO],[.66,tr()],[.83,tr(),EOUT],[.86,tr(0,-1.5,-1.5)],[.92,tr(0,0,0),EIO],[1,tr()]]);
+  // glasses slowly slip, then get pushed back up with a wing
+  T(o,'glasses',D,[[0,tr()],[.8,tr(0,3.5,0)],[.845,tr(0,3.5,0),EOUT],[.875,tr(0,-2.5,0),EB],[.95,tr()],[1,tr()]]);
+  T(o,'wingR',D,[[0,tr()],[.76,tr(),EOUT],[.83,tr(26,16,119,.86)],[.845,tr(26,16,119,.86),EOUT],[.875,tr(26,9,119,.86)],[.89,tr(26,9,119,.86),EB],[.97,tr()],[1,tr()]]);
+  both(o,'eyeOpenL','eyeOpenR',D,[[0,tr()],[.82,tr(),EOUT],[.85,tr(0,0,0,1,.7)],[.89,tr(0,0,0,1,.7),EOUT],[.94,tr()],[1,tr()]]);
+  both(o,'browL','browR',D,[[0,tr()],[.28,tr(),EB],[.32,tr(0,-3)],[.42,tr(0,-3),EIO],[.48,tr()],[.845,tr(),EB],[.88,tr(0,-4)],[.93,tr(),EIO],[1,tr()]]);
+  T(o,'tuftR',D,[[0,tr()],[.5,tr(),EOUT],[.53,tr(0,-2,10)],[.57,tr(),EB],[1,tr()]]);
+};
+S.hello = o => {
+  const D = 3700;
+  breathe(o);
+  T(o,'squash',D,[[0,tr(),EIO],[.05,tr(0,0,0,1.07,.92),EOUT],[.12,tr(0,0,0,.95,1.07),EIO],[.19,tr(0,0,0,1.06,.95),EOUT],[.25,tr()],[.6,tr(),EIO],[.64,tr(0,0,0,1.02,.98)],[.7,tr()],[1,tr()]]);
+  T(o,'root',D,[[0,tr()],[.05,tr(),EOUT],[.12,tr(0,-16),EIN],[.19,tr(),EB],[1,tr()]]);
+  T(o,'wingR',D,[[0,tr()],[.06,tr(),EOUT],[.14,tr(0,0,-150),EIO],[.21,tr(0,0,-122),EIO],[.28,tr(0,0,-155),EIO],[.35,tr(0,0,-122),EIO],[.42,tr(0,0,-152),EIO],[.5,tr(0,0,-140),EIO],
+    [.58,tr(-4,-4,-172),EOUT],[.64,tr(-6,-20,-174),EIO],[.78,tr(-6,-20,-174),EIO],[.84,tr(-4,-4,-172),EOUT],[.92,tr(),EB],[1,tr()]]);
+  T(o,'wingL',D,[[0,tr()],[.08,tr(),EOUT],[.14,tr(0,0,14),EIO],[.5,tr(0,0,10),EIO],[.58,tr()],[1,tr()]]);
+  T(o,'cap',D,[[0,tr()],[.6,tr(),EOUT],[.66,tr(6,-22,16)],[.78,tr(6,-22,16),EIN],[.84,tr()],[.87,tr(0,2,-3)],[.91,tr(),EIO],[1,tr()]]);
+  T(o,'head',D,[[0,tr()],[.12,tr(),EIO],[.2,tr(0,0,4)],[.5,tr(0,0,4),EIO],[.6,tr()],[.62,tr(),EIO],[.7,tr(0,5,-5)],[.8,tr(0,5,-5),EIO],[.9,tr()],[1,tr()]]);
+  happy(o,D,[[0,0],[.1,0],[.12,1],[.5,1],[.52,0],[.66,0],[.68,1],[.82,1],[.84,0],[1,0]]);
+  both(o,'browL','browR',D,[[0,tr()],[.08,tr(),EB],[.14,tr(0,-6)],[.5,tr(0,-6),EIO],[.56,tr()],[1,tr()]]);
+  T(o,'lowerBeak',D,[[0,tr()],[.1,tr(),EOUT],[.14,tr(0,6)],[.19,tr(0,2)],[.23,tr(0,6)],[.3,tr(0,1)],[.5,tr(0,1)],[.56,tr()],[1,tr()]]);
+  both(o,'cheekL','cheekR',D,[[0,tr()],[.1,tr(),EB],[.15,tr(0,0,0,1.15)],[.5,tr(0,0,0,1.15)],[.56,tr()],[1,tr()]]);
+};
+S.talking = o => {
+  const D = 2800;
+  breathe(o);
+  const lb = [[0,0],[.04,6],[.09,1],[.13,5],[.18,0],[.24,0],[.28,6],[.33,2],[.37,6],[.42,0],[.53,0],[.57,4],[.62,1],[.67,6],[.72,0],[.8,0],[.84,5],[.88,1],[.92,4],[.96,0],[1,0]];
+  T(o,'lowerBeak',D,lb.map(([a,v]) => [a,tr(0,v),EIO]));
+  T(o,'upperBeak',D,lb.map(([a,v]) => [a,tr(0,-v*.18),EIO]));
+  T(o,'root',D,[[0,tr()],[.04,tr(0,-3)],[.1,tr()],[.28,tr(0,-3)],[.36,tr(0,-2)],[.44,tr()],[.57,tr(0,-2)],[.67,tr(0,-3)],[.74,tr()],[.84,tr(0,-2)],[.96,tr()],[1,tr()]].map(f=>[f[0],f[1],EIO]));
+  T(o,'wingL',D,[[0,tr(),EB],[.1,tr(0,0,48),EIO],[.26,tr(0,0,36),EIO],[.4,tr(0,0,54),EIO],[.56,tr(0,0,30),EIO],[.7,tr(0,0,46),EIO],[.86,tr(0,0,14),EIO],[1,tr()]]);
+  T(o,'head',D,[[0,tr(),EIO],[.25,tr(0,0,-2.5)],[.5,tr(0,0,2)],[.75,tr(0,0,-1.5)],[1,tr()]].map(f=>[f[0],f[1],EIO]));
+  both(o,'browL','browR',D,[[0,tr()],[.24,tr(),EB],[.28,tr(0,-4)],[.4,tr(0,-4),EIO],[.46,tr()],[.63,tr(),EB],[.67,tr(0,-5)],[.76,tr(0,-5),EIO],[.82,tr()],[1,tr()]]);
+  both(o,'pupilL','pupilR',D,[[0,tr()],[.46,tr(),EOUT],[.5,tr(-4,3)],[.6,tr(-4,3),EOUT],[.64,tr()],[1,tr()]]);
+  T(o,'wingR',D,[[0,tr()],[.38,tr(),EIO],[.48,tr(0,0,-12)],[.6,tr(),EIO],[1,tr()]]);
+};
+S.listening = o => {
+  breathe(o);
+  To(o,'root',tr(0,5,-3,1.045),520);
+  To(o,'head',tr(0,0,-7),520);
+  To(o,'browL',tr(0,-7),420); To(o,'browR',tr(0,-7),420);
+  To(o,'pupilL',tr(0,0,0,1.16),420); To(o,'pupilR',tr(0,0,0,1.16),420);
+  To(o,'tuftL',tr(0,-3,-12),460,EB2); To(o,'tuftR',tr(0,-3,12),460,EB2);
+  const D = 3000;
+  T(o,'head',D,[[0,tr(0,0,-7)],[.4,tr(0,0,-7),EIO],[.48,tr(0,4,-7),EIO],[.56,tr(0,0,-7),EIO],[.63,tr(0,3,-7),EIO],[.71,tr(0,0,-7)],[1,tr(0,0,-7)]],{delay:520});
+  T(o,'tuftR',D,[[0,tr(0,-3,12)],[.2,tr(0,-3,12),EOUT],[.24,tr(0,-4,20)],[.3,tr(0,-3,12),EB],[1,tr(0,-3,12)]],{delay:520});
+  T(o,'lowerBeak',D,[[0,tr()],[.46,tr(),EIO],[.5,tr(0,2)],[.54,tr()],[1,tr()]],{delay:520});
+  const ring = [{transform:tr(0,0,0,.72),opacity:0},{transform:tr(0,0,0,.82),opacity:.55,offset:.15},{transform:tr(0,0,0,1.18),opacity:0}];
+  K(o,o.p.pulseA,ring,{duration:2200,iterations:Infinity,easing:'ease-out'});
+  K(o,o.p.pulseB,ring,{duration:2200,iterations:Infinity,easing:'ease-out',delay:1100});
+};
+S.thinking = o => {
+  breathe(o);
+  To(o,'wingL',CHIN,520);
+  To(o,'pupilL',tr(6,-8),380,EOUT); To(o,'pupilR',tr(6,-8),380,EOUT);
+  To(o,'browR',tr(0,-7,-6),420); To(o,'browL',tr(0,3,6),420);
+  To(o,'head',tr(0,0,6),520);
+  To(o,'lowerBeak',tr(1.5,1),300);
+  K(o,o.p.dots,[{opacity:0,transform:tr(0,6,0,.6)},{opacity:1,transform:tr()}],{duration:460,easing:EB,fill:'forwards',delay:280});
+  const D = 3000;
+  T(o,'wingL',D,[[0,CHIN,EIO],[.07,tr(-24,18,-85),EIO],[.14,CHIN,EIO],[.21,tr(-24,18,-85),EIO],[.28,CHIN],[1,CHIN]],{delay:600});
+  both(o,'pupilL','pupilR',D,[[0,tr(6,-8),EIO],[.5,tr(2,-9),EIO],[1,tr(6,-8)]],{delay:400});
+  T(o,'head',D,[[0,tr(0,0,6),EIO],[.5,tr(0,0,8),EIO],[1,tr(0,0,6)]],{delay:520});
+  const dot = [{transform:tr(),opacity:.3},{transform:tr(0,-4),opacity:1,offset:.25,easing:EIO},{transform:tr(),opacity:.3,offset:.55},{transform:tr(),opacity:.3}];
+  ['dot1','dot2','dot3'].forEach((d,i) => K(o,o.p[d],dot,{duration:1200,iterations:Infinity,delay:500+i*160}));
+};
+S.celebrate = o => {
+  const D = 2600;
+  T(o,'squash',D,[[0,tr(),EIO],[.1,tr(0,0,0,1.15,.83),EOUT],[.17,tr(0,0,0,.9,1.13),EOUT],[.3,tr(),EIN],[.47,tr(0,0,0,.95,1.07),EIN],[.5,tr(0,0,0,1.16,.84),EOUT],[.58,tr(0,0,0,.96,1.05),EIO],[.65,tr(0,0,0,1.02,.98),EIO],[.72,tr()],[1,tr()]]);
+  T(o,'root',D,[[0,tr()],[.1,tr(),EOUT],[.3,tr(0,-78),EIN],[.5,tr(),EOUT],[.565,tr(0,-9),EIN],[.63,tr()],[1,tr()]]);
+  T(o,'shadow',D,[[0,tr()],[.1,tr(0,0,0,1.06),EOUT],[.3,tr(0,0,0,.55),EIN],[.5,tr(0,0,0,1.08),EOUT],[.565,tr(0,0,0,.92),EIN],[.63,tr()],[1,tr()]]);
+  const wl = [[0,tr()],[.1,tr(0,0,-12),EOUT],[.18,tr(0,0,118),EIO],[.26,tr(0,0,96),EIO],[.34,tr(0,0,122),EIO],[.42,tr(0,0,100),EIN],[.5,tr(0,0,40),EB],[.62,tr()],[1,tr()]];
+  T(o,'wingL',D,wl); T(o,'wingR',D,mirror(wl));
+  T(o,'cap',D,[[0,tr()],[.12,tr(),EOUT],[.36,tr(6,-108,200)],[.44,tr(4,-116,290),EIN],[.64,tr(0,0,360)],[.675,tr(0,5,366),EOUT],[.74,tr(0,0,360)],[1,tr(0,0,360)]]);
+  T(o,'head',D,[[0,tr()],[.1,tr(0,4),EOUT],[.2,tr(0,-4)],[.3,tr(),EIO],[.5,tr(0,6),EOUT],[.6,tr(),EIO],[.64,tr(),EOUT],[.68,tr(0,3)],[.74,tr()],[1,tr()]]);
+  happy(o,400,[[0,0],[1,1]],{once:true});
+  To(o,'lowerBeak',tr(0,6),300,EOUT);
+  To(o,'browL',tr(0,-6),300); To(o,'browR',tr(0,-6),300);
+  To(o,'cheekL',tr(0,0,0,1.18),300); To(o,'cheekR',tr(0,0,0,1.18),300);
+  T(o,'feet',D,[[0,tr()],[.12,tr(),EOUT],[.22,tr(0,-4,0,1,.8)],[.45,tr(0,-4,0,1,.8),EIN],[.5,tr()],[1,tr()]]);
+  later(o, D*.17, () => { confetti(o); every(o, D, () => confetti(o)); });
+  o.breeze = .3;
+};
+S.oops = o => {
+  const D = 3800;
+  breathe(o);
+  T(o,'glasses',D,[[0,tr(),EIN],[.06,tr(0,6,-3),EIN],[.15,tr(-2,22,-9),EB],[.2,tr(-2,21,-9)],[.8,tr(-2,21,-9),EIO],[.86,tr(0,-2,0),EB],[.93,tr()],[1,tr()]]);
+  T(o,'wingR',D,[[0,tr()],[.72,tr(),EOUT],[.79,tr(26,36,119,.86)],[.8,tr(26,36,119,.86),EIO],[.86,tr(26,11,119,.86)],[.88,tr(26,11,119,.86),EB],[.97,tr()],[1,tr()]]);
+  T(o,'browL',D,[[0,tr()],[.1,tr(),EB],[.17,tr(0,-4,-16)],[.8,tr(0,-4,-16),EIO],[.88,tr()],[1,tr()]]);
+  T(o,'browR',D,[[0,tr()],[.1,tr(),EB],[.17,tr(0,-4,16)],[.8,tr(0,-4,16),EIO],[.88,tr()],[1,tr()]]);
+  both(o,'pupilL','pupilR',D,[[0,tr()],[.12,tr(),EOUT],[.18,tr(3,5)],[.4,tr(3,5),EOUT],[.45,tr(-3,4)],[.56,tr(-3,4),EOUT],[.6,tr(0,-2)],[.84,tr(0,-2),EOUT],[.9,tr()],[1,tr()]]);
+  both(o,'eyeOpenL','eyeOpenR',D,[[0,tr()],[.12,tr(),EOUT],[.18,tr(0,0,0,1,.88)],[.82,tr(0,0,0,1,.88),EOUT],[.88,tr()],[1,tr()]]);
+  T(o,'squash',D,[[0,tr(),EOUT],[.04,tr(0,0,0,.96,1.05),EIO],[.12,tr(0,0,0,1.04,.95)],[.84,tr(0,0,0,1.04,.95),EB],[.92,tr()],[1,tr()]]);
+  T(o,'head',D,[[0,tr()],[.12,tr(),EB],[.2,tr(0,3,-5)],[.84,tr(0,3,-5),EIO],[.92,tr()],[1,tr()]]);
+  T(o,'wingL',D,[[0,tr()],[.18,tr(),EOUT],[.26,SCRATCH],[.31,tr(6,30,151)],[.36,tr(6,30,166)],[.41,tr(6,30,151)],[.46,tr(6,30,165)],[.51,tr(6,30,153)],[.56,SCRATCH,EIO],[.66,tr(),EB],[1,tr()]]);
+  both(o,'cheekL','cheekR',D,[[0,tr()],[.12,tr(),EB],[.2,tr(0,0,0,1.38)],[.84,tr(0,0,0,1.38),EIO],[.92,tr()],[1,tr()]]);
+  K(o,o.p.sweat,[{offset:0,opacity:0,transform:tr(0,-6)},{offset:.2,opacity:0,transform:tr(0,-6),easing:EB},{offset:.26,opacity:1,transform:tr()},{offset:.6,opacity:1,transform:tr(0,10),easing:EIN},{offset:.66,opacity:0,transform:tr(0,14)},{offset:1,opacity:0,transform:tr(0,14)}],{duration:D,iterations:Infinity});
+  T(o,'lowerBeak',D,[[0,tr(),EOUT],[.06,tr(0,4)],[.16,tr(0,1.5)],[.84,tr(0,1.5)],[.9,tr()],[1,tr()]]);
+};
+S.flying = o => {
+  o.flying = true;
+  const stage = o.host;
+  const off = () => stage.clientWidth/2 + o.mover.clientWidth/2 + 30;
+  let flap = [];
+  const flapOn = () => {
+    flap.forEach(a => a.cancel());
+    flap = [
+      K(o,o.p.wingR,[{transform:tr(0,0,-22)},{transform:tr(0,0,-138)}],{duration:150,iterations:Infinity,direction:'alternate',easing:EIO}),
+      K(o,o.p.breath,[{transform:tr(0,2)},{transform:tr(0,-9,0,.98,1.03)}],{duration:150,iterations:Infinity,direction:'alternate',easing:EIO}),
+    ];
+    To(o,'wingL',CAPHOLD,260,EOUT);
+    To(o,'feet',tr(0,-5,0,1,.7),220,EOUT);
+    To(o,'pupilL',tr(5,0),200,EOUT); To(o,'pupilR',tr(5,0),200,EOUT);
+    To(o,'browL',tr(0,-3),300); To(o,'browR',tr(0,-3),300);
+  };
+  const flapOff = () => { flap.forEach(a => a.cancel()); flap = []; };
+  const cycle = () => {
+    const X = off();
+    flapOn();
+    K(o,o.mover,[{transform:`translate(${-X}px,-110px)`},{transform:`translate(${-X*.45}px,-128px)`,offset:.5},{transform:'translate(0px,0px)'}],{duration:1800,easing:'cubic-bezier(.33,.4,.3,1)',fill:'forwards'});
+    T(o,'root',1800,[[0,tr(0,0,12)],[.75,tr(0,0,9),EOUT],[1,tr(0,0,-4)]],{once:true});
+    K(o,o.p.shadow,[{opacity:0,transform:tr(0,0,0,.4)},{opacity:0,transform:tr(0,0,0,.4),offset:.6},{opacity:.13,transform:tr()}],{duration:1800,fill:'forwards',easing:EIN});
+    later(o,1760,() => {
+      flapOff();
+      To(o,'wingR',tr(),420,EB); To(o,'wingL',tr(),520,EB); To(o,'feet',tr(),200,EOUT);
+      K(o,o.p.breath,[{transform:getComputedStyle(o.p.breath).transform},{transform:tr()}],{duration:160,fill:'forwards'});
+      T(o,'root',700,[[0,tr(0,0,-4),EOUT],[.4,tr(0,0,1.5),EIO],[1,tr()]],{once:true});
+      T(o,'squash',700,[[0,tr(),EOUT],[.18,tr(0,0,0,1.17,.82),EOUT],[.42,tr(0,0,0,.95,1.06),EIO],[.66,tr(0,0,0,1.02,.98),EIO],[1,tr()]],{once:true});
+      T(o,'cap',800,[[0,tr()],[.2,tr(0,6,4),EOUT],[.45,tr(0,-3,-2),EIO],[1,tr()]],{once:true});
+      both(o,'pupilL','pupilR',1600,[[0,tr(5,0),EOUT],[.12,tr()],[.4,tr(),EOUT],[.48,tr(-5,1)],[.7,tr(-5,1),EOUT],[.78,tr(5,0)],[1,tr(5,0)]],{once:true});
+      happy(o,1500,[[0,0],[.28,0],[.31,1],[.6,1],[.63,0],[1,0]],{once:true});
+      To(o,'browL',tr(),300); To(o,'browR',tr(),300);
+      later(o,1600,() => { // take off
+        T(o,'squash',260,[[0,tr(),EIO],[1,tr(0,0,0,1.12,.86)]],{once:true});
+        later(o,250,() => {
+          T(o,'squash',300,[[0,tr(0,0,0,1.12,.86),EOUT],[.5,tr(0,0,0,.92,1.1)],[1,tr()]],{once:true});
+          flapOn();
+          K(o,o.mover,[{transform:'translate(0px,0px)'},{transform:`translate(${X*.4}px,-90px)`,offset:.45},{transform:`translate(${X}px,-150px)`}],{duration:1500,easing:'cubic-bezier(.5,0,.75,.6)',fill:'forwards'});
+          T(o,'root',1500,[[0,tr(),EOUT],[.3,tr(0,0,12)],[1,tr(0,0,10)]],{once:true});
+          K(o,o.p.shadow,[{opacity:.13,transform:tr()},{opacity:0,transform:tr(0,0,0,.4),offset:.4},{opacity:0,transform:tr(0,0,0,.4)}],{duration:1500,fill:'forwards'});
+          later(o,1520,cycle);
+        });
+      });
+    });
+  };
+  cycle();
+  o.breeze = 0;
+};
+
+/* ---------- confetti ---------- */
+const CF = ['#F5B83D','#FF7A6B','#3B4BDB','#7CCBFF','#1E2A78','#FFD27A'];
+function confetti(o){
+  const layer = document.getElementById('confetti'); if (!layer) return;
+  const sr = layer.getBoundingClientRect(), r = o.svg.getBoundingClientRect();
+  const cx = r.left - sr.left + r.width/2, cy = r.top - sr.top + r.height*.36;
+  for (let i=0;i<34;i++){
+    const el = document.createElement('i');
+    const w = 6 + Math.random()*6, round = Math.random() < .3;
+    el.style.cssText = `width:${w}px;height:${round?w:w*1.6}px;background:${CF[i%CF.length]};border-radius:${round?'50%':'2px'}`;
+    layer.appendChild(el);
+    const ang = -Math.PI/2 + (Math.random()-.5)*2.4, sp = 170 + Math.random()*190;
+    const dx = Math.cos(ang)*sp, dy = Math.sin(ang)*sp, rot = (Math.random()-.5)*900;
+    const fall = 230 + Math.random()*140;
+    const a = el.animate([
+      {transform:`translate(${cx}px,${cy}px) rotate(0deg) scale(.4)`, opacity:1},
+      {transform:`translate(${cx+dx}px,${cy+dy}px) rotate(${rot*.4}deg) scale(1)`, opacity:1, offset:.32, easing:'cubic-bezier(.4,0,.9,.6)'},
+      {transform:`translate(${cx+dx*1.35}px,${cy+dy+fall}px) rotate(${rot}deg) scale(.9)`, opacity:0}
+    ], {duration:1500+Math.random()*700, easing:'cubic-bezier(.15,.8,.3,1)'});
+    a.onfinish = () => el.remove();
+  }
+}
+
+/* ---------- tassel physics ---------- */
+const BASE_ANG = Math.atan2(45-42, 183-130), BASE_D = Math.hypot(53,3);
+function readCap(o){
+  const a = o.p.ancA.getBoundingClientRect(), b = o.p.ancB.getBoundingClientRect();
+  const ax = a.x+a.width/2, ay = a.y+a.height/2, bx = b.x+b.width/2, by = b.y+b.height/2;
+  const dx = ax-bx, dy = ay-by, s = Math.hypot(dx,dy)/BASE_D || 1;
+  return {x:ax/s, y:ay/s, rot:Math.atan2(dy,dx)-BASE_ANG};
+}
+function setTassel(o, phi, capRot){ o.p.tassel.setAttribute('transform', `rotate(${((-phi-capRot)*180/Math.PI).toFixed(2)} 183 45)`); }
+function hangTassel(o){ const c = readCap(o); setTassel(o, 0, c.rot); }
+let lastT = 0;
+function tick(t){
+  const dt = Math.min(.034, Math.max(.001, (t-lastT)/1000 || .016)); lastT = t;
+  for (const o of live){
+    const c = readCap(o), ph = o.ph;
+    if (!ph.init){ Object.assign(ph,{init:true,x:c.x,y:c.y,vx:0,vy:0}); setTassel(o,0,c.rot); continue; }
+    const vx = (c.x-ph.x)/dt, vy = (c.y-ph.y)/dt;
+    let ax = (vx-ph.vx)/dt, ay = (vy-ph.vy)/dt;
+    const m = Math.hypot(ax,ay), lim = 9000; if (m > lim){ ax *= lim/m; ay *= lim/m; }
+    ph.ax += (ax-ph.ax)*.45; ph.ay += (ay-ph.ay)*.45;
+    ph.x = c.x; ph.y = c.y; ph.vx = vx; ph.vy = vy;
+    const L = 46, g = 1500, damp = 2.6, sub = 3, h = dt/sub;
+    const breeze = o.breeze * 3.2 * Math.sin(t/1000*1.6) + o.breeze * 1.4 * Math.sin(t/1000*2.9+1);
+    for (let i=0;i<sub;i++){
+      const s = Math.sin(ph.phi), co = Math.cos(ph.phi);
+      const alpha = (-g*s - ph.ax*co + ph.ay*s)/L - damp*ph.w + breeze;
+      ph.w += alpha*h; ph.phi += ph.w*h;
+    }
+    const lim2 = 1.75; if (ph.phi > lim2){ ph.phi = lim2; if (ph.w > 0) ph.w *= -.35; } else if (ph.phi < -lim2){ ph.phi = -lim2; if (ph.w < 0) ph.w *= -.35; }
+    setTassel(o, ph.phi, c.rot);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- play / page wiring ---------- */
+function play(o, name){
+  if (RM){ applyPose(o, name); o.state = name; return; }
+  stop(o); o.state = name;
+  later(o, 230, () => { o.blends.forEach(a => a.cancel()); o.blends = []; S[name](o); });
+}
+
+const STATES = [
+  ['idle','Idle','Breathing, blinking, tassel swaying — and a glasses push-up',6400],
+  ['hello','Hello','A hop, a wave, a tip of the cap',3700],
+  ['talking','Talking','Narrating your morning brief',5600],
+  ['listening','Listening','Leans in, brows up, all ears',4600],
+  ['thinking','Thinking','Taps the chin, eyes up, working on it',4800],
+  ['celebrate','Celebrate','Squash, stretch, cap toss, confetti',5200],
+  ['oops','Oops','Glasses slip; a sheepish scratch',3800],
+  ['flying','Flying','Wingbeat loop, holding the cap on, landing settle',8400],
+];
+const stage = document.getElementById('stage');
+const hero = createOwl(stage);
+const chips = document.getElementById('chips');
+const nowName = document.getElementById('nowName'), nowDesc = document.getElementById('nowDesc');
+const autoBtn = document.getElementById('autoBtn');
+let auto = !RM, autoTimer = 0, idx = 0;
+function select(i){
+  idx = i; const [key, label, desc] = STATES[i];
+  nowName.textContent = label; nowDesc.textContent = desc;
+  chips.querySelectorAll('.chip').forEach((c,j) => c.setAttribute('aria-pressed', j===i ? 'true':'false'));
+  play(hero, key);
+}
+function scheduleAuto(){ clearTimeout(autoTimer); if (!auto) return; autoTimer = setTimeout(() => { select((idx+1)%STATES.length); scheduleAuto(); }, STATES[idx][3]); }
+function setAuto(v){ auto = v; autoBtn.setAttribute('aria-pressed', v?'true':'false'); if (v) scheduleAuto(); else clearTimeout(autoTimer); }
+STATES.forEach(([key,label],i) => {
+  const b = document.createElement('button'); b.className='chip'; b.type='button'; b.textContent=label; b.dataset.state = key;
+  b.addEventListener('click', () => { setAuto(false); select(i); });
+  chips.appendChild(b);
+});
+autoBtn.addEventListener('click', () => { const v = !auto; setAuto(v); if (v){ select((idx+1)%STATES.length); scheduleAuto(); } });
+if (RM){ autoBtn.setAttribute('aria-pressed','false'); }
+select(0); scheduleAuto();
+
+// In-app minis
+['owlLight','owlDark'].forEach((id,i) => { const o = createOwl(document.getElementById(id)); setTimeout(() => play(o,'talking'), i*700); });
+
+// Stickers
+const STICK = [
+  ['hello','Hi there!','Welcome, onboarding','#EAF0FF'],
+  ['wink','Got it','Saved, success toast','#FFF3DC'],
+  ['thinking','Hmm…','Loading, analysing','#EEF2FF'],
+  ['whoa','Whoa!','Big change detected','#E6F5FF'],
+  ['oops','Oops','Errors, empty upload','#FFEDEA'],
+  ['celebrate','Nailed it','Goal hit, all clear','#FFF3DC'],
+];
+const sh = document.getElementById('stickers');
+STICK.forEach(([pose,label,use,tint]) => {
+  const card = document.createElement('div'); card.className='sticker'; card.style.setProperty('--tint',tint);
+  card.innerHTML = `<div class="s-owl"></div><div class="lbl">${label}</div><div class="use">${use}</div>`;
+  if (pose==='celebrate'){
+    [['#F5B83D',18,22,20],['#FF7A6B',80,14,-25],['#3B4BDB',12,58,40],['#7CCBFF',84,50,-10],['#FF7A6B',30,8,60]].forEach(([c,l,t,r]) => {
+      const s = document.createElement('span'); s.className='cf'; s.style.cssText=`background:${c};left:${l}%;top:${t}%;transform:rotate(${r}deg)`; card.appendChild(s);
+    });
+  }
+  sh.appendChild(card);
+  const o = createOwl(card.querySelector('.s-owl'), {animated:false});
+  applyPose(o, pose);
+});
+
+if (!RM) requestAnimationFrame(tick);
+else requestAnimationFrame(() => [hero].forEach(hangTassel));
+window.__owl = {hero, select, setAuto, STATES};
+})();
+</script>
+</body>
+</html>

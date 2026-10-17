@@ -293,7 +293,7 @@ export default function CashInputsRail({
             // one of the three "Add expected item" buttons — the other two (the
             // hero pill and the overview summary card) open the same flow and
             // deliberately carry no id, because two elements answering to one
-            // anchor key is a coin that glides somewhere different each time.
+            // anchor key is an owl that flies somewhere different each time.
             id="cf-add-item"
             type="button"
             onClick={() => onAddItem()}

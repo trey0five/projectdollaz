@@ -533,39 +533,6 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
-/* ── KYRO the owl (KyroDove.jsx) — decorative sprite-state keyframes ─────── */
-/* Every consumer gates on motion-safe: and the reduced-motion block below kills
-   all `kyro-*` loops as the belt-and-braces. Transform-origin is set inline to
-   the bird's FEET so breathe/flutter/settle move it about where it stands. */
-/* Perched idle: a slow breath. */
-@keyframes kyro-breathe {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(1.02); }
-}
-/* Speaking: three quick feather-ruffles (the first ~20%), then rest. */
-@keyframes kyro-flutter {
-  0%, 22%, 100% { transform: rotate(0deg) scaleY(1); }
-  4% { transform: rotate(-2.5deg) scaleY(1.03); }
-  8% { transform: rotate(2deg) scaleY(0.99); }
-  12% { transform: rotate(-2deg) scaleY(1.03); }
-  16% { transform: rotate(1.5deg) scaleY(0.99); }
-  20% { transform: rotate(-1deg) scaleY(1.01); }
-}
-/* Speaking/listening: the whole bird breathes up ~3% about its feet (the
-   transform-origin is set inline to the feet). Replaces the coin-era ring —
-   nothing circular sits behind the owl. */
-@keyframes kyro-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-}
-/* Landing settle: a small touchdown bounce, played once when a flight ends. */
-@keyframes kyro-settle {
-  0% { transform: translateY(0); }
-  40% { transform: translateY(4px); }
-  75% { transform: translateY(-2px); }
-  100% { transform: translateY(0); }
-}
-
 /* ── Penny morning brief — voice equalizer bars ─────────── */
 /* Four bars bouncing while Penny narrates (PennyMorningBrief). Decorative;
    staggered via per-bar animation-delay inline. Static under reduced motion. */

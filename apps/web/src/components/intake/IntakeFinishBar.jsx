@@ -16,7 +16,9 @@
 //     secondary with ONE line saying why (the amber "Review N accounts" above
 //     is the primary action — it is not repeated here);
 //   • a small quiet "Add another file" (the intake's own browse).
-// "What changed" (the celebration) stays on the overview, not here.
+// "What changed" (the celebration) stays on the overview, not here. The one
+// flourish the bar adds: once a READY finish goes through, it tells the owl
+// ('penny:mood' { mood: 'celebrate' }) to toss its cap.
 //
 // Purely presentational: the host decides the state.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -25,6 +27,19 @@ import Button from '../ui/surface/Button.jsx'
 import { needsCheckPhrase } from '../../lib/reviewQueue.js'
 
 export const FINISH_LABEL = 'Done — show my numbers'
+
+/**
+ * After a ready finish, the floating owl tosses its cap — unless onFinish
+ * reports a failure (a non-empty error string, false, or a rejection).
+ */
+export function celebrateFinish(result) {
+  Promise.resolve(result)
+    .then((r) => {
+      if (r === false || (typeof r === 'string' && r)) return
+      window.dispatchEvent(new CustomEvent('penny:mood', { detail: { mood: 'celebrate' } }))
+    })
+    .catch(() => {})
+}
 
 /**
  * The bar's words for a state → { primary: bool, disabled: bool, busy: bool, reason: string|null }.
@@ -143,7 +158,10 @@ export default function IntakeFinishBar({
       <Button
         variant={s.primary ? 'primary' : 'secondary'}
         // No click event leaks into onFinish (it takes an optional { periodId }).
-        onClick={() => onFinish?.()}
+        onClick={() => {
+          const result = onFinish?.()
+          if (state === 'ready' && onFinish) celebrateFinish(result)
+        }}
         disabled={s.disabled}
         icon={s.busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
         className="order-2 w-full justify-center sm:order-3 sm:w-auto"

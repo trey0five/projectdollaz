@@ -104,6 +104,12 @@ const PortfolioPage = lazy(() => import('./pages/PortfolioPage.jsx'))
 const HrPage = lazy(() => import('./pages/HrPage.jsx'))
 const PlanningPage = lazy(() => import('./pages/PlanningPage.jsx'))
 
+// /dev/scholar — the Scholar mascot's review page. DEV ONLY: the ternary on
+// import.meta.env.DEV is constant-folded in a production build, so the lazy
+// import (and the whole page) is dropped from dist/ (the build check greps for
+// "ScholarPreview").
+const ScholarPreview = import.meta.env.DEV ? lazy(() => import('./pages/dev/ScholarPreview.jsx')) : null
+
 // Platform admin console (super-admin only) — lazy so its cross-tenant tables +
 // SVG choropleth never ship to a normal tenant's bundle. Mounted OUTSIDE
 // AuthedLayout so OnboardingGate can't trap a school-less founder.
@@ -223,6 +229,16 @@ export default function App() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/eula" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      {import.meta.env.DEV && ScholarPreview && (
+        <Route
+          path="/dev/scholar"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <ScholarPreview />
+            </Suspense>
+          }
+        />
+      )}
       <Route
         path="/forgot-password"
         element={

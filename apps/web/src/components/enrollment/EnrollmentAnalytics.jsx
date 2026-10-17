@@ -356,9 +356,9 @@ export default function EnrollmentAnalytics({
         : null
 
   return (
-    // pb-28 below lg: the floating Penny coin is fixed bottom-right, and at
+    // pb-28 below lg: the floating KYRO owl (the Scholar) is fixed bottom-right, and at
     // narrow widths this data-dense page's last rows (E4's school total, E5's
-    // donut) could never scroll clear of it — the coin sat ON the figures.
+    // donut) could never scroll clear of it — the owl sat ON the figures.
     <div className="au-scope mx-auto max-w-page px-4 py-6 pb-28 sm:px-10 sm:py-8 lg:pb-10">
       {/* ── THE BAND: the registry vitals as glass cards, and ONLY the ones the
           server sent. A figure the server could not compute is absent, never a

@@ -32,7 +32,7 @@ function greeting() {
   return 'Good evening'
 }
 
-function HandsFree({ chat }) {
+function HandsFree({ chat, onListeningChange }) {
   const { supported, listening, transcript, start, stop } = useSpeechInput()
   const [on, setOn] = useState(false)
   const onRef = useRef(false)
@@ -123,6 +123,12 @@ function HandsFree({ chat }) {
     [stop],
   )
 
+  // The hero owl listens (leans in, brows up) while hands-free hears you.
+  useEffect(() => {
+    onListeningChange?.(on && listening)
+    return () => onListeningChange?.(false)
+  }, [on, listening, onListeningChange])
+
   if (!supported) return null
 
   return (
@@ -148,6 +154,17 @@ function HandsFree({ chat }) {
 
 export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
   const reduce = useReducedMotion()
+  // The Scholar's story on the stage: thinks while KYRO AI works, talks while a
+  // reply streams or is read aloud, listens while hands-free hears you.
+  const [handsListening, setHandsListening] = useState(false)
+  const streaming = chat.busy && !!chat.streamingContent
+  const owl = {
+    active: true,
+    tone: 'dark',
+    thinking: chat.busy && !streaming,
+    speaking: chat.tts.speaking || streaming,
+    listening: handsListening,
+  }
   const layoutTransition = reduce ? { duration: 0 } : { duration: 0.5, ease: [0.22, 1, 0.36, 1] }
 
   return (
@@ -169,7 +186,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
         {/* ── index 0: header (compact vs tall) ── */}
         {compact ? (
           <div className="flex items-center gap-3 px-4 pt-3.5 sm:px-6">
-            <PennyAvatar size={30} active speaking={chat.tts.speaking} />
+            <PennyAvatar size={30} {...owl} />
             <div className="min-w-0">
               <p className="font-serif text-[16px] font-semibold leading-tight text-white">KYRO Studio</p>
               <p className="truncate text-[11.5px] text-white/55">
@@ -201,8 +218,8 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
-              {/* Large KYRO owl on the right (no disc/halo behind the bird, by
-                  rule). It settles in ONCE; its own idle lives in the mascot
+              {/* The large Scholar on the right (no disc/halo behind the bird,
+                  by rule). It settles in ONCE; its own idle lives in the mascot
                   (the one sanctioned loop). Sized via --kyro-size. */}
               <motion.div
                 className="relative shrink-0"
@@ -210,8 +227,8 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
               >
-                <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.45)] [--kyro-size:92px] sm:[--kyro-size:172px]">
-                  <PennyAvatar size={172} active speaking={chat.tts.speaking} />
+                <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.45)] [--kyro-size:100px] sm:[--kyro-size:190px]">
+                  <PennyAvatar size={190} {...owl} />
                 </span>
               </motion.div>
             </div>
@@ -229,7 +246,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
             <span className="inline-flex items-center gap-1.5"><Paperclip size={13} aria-hidden className="text-penny-light" /> Drop a trial balance, budget, invoice, policy, or minutes</span>
             <span className="inline-flex items-center gap-1.5"><Zap size={13} aria-hidden className="text-penny-light" /> KYRO files it to the right place automatically</span>
           </div>
-          <HandsFree chat={chat} />
+          <HandsFree chat={chat} onListeningChange={setHandsListening} />
         </div>
       </div>
     </motion.section>

@@ -5,18 +5,27 @@
 // secondary shots are CROPPED to their content region (no sidebar, no top
 // strip, no mascot) so the product's own type stays legible on the landing.
 // Versioned names because public/ ships with a one-year immutable cache — never
-// overwrite a shot in place; bump the version. width/height reserve the box (no
-// layout shift); below-the-fold → lazy.
+// overwrite a shot in place; bump that plate's version in SHOT_VERSIONS (each
+// plate has its own, so re-shooting one never re-ships the others; unlisted
+// plates use DEFAULT_SHOT_VERSION). width/height reserve the box (no layout
+// shift); below-the-fold → lazy.
 //
 // layout="aside" puts the caption in a margin column beside the image (a
 // ledger's margin note) from md up; below md it falls under the image.
 import Reveal from './Reveal.jsx'
 import '../../styles/pending/p5-landing.css'
 
-export const SHOT_VERSION = 'v2'
+export const DEFAULT_SHOT_VERSION = 'v2'
+export const SHOT_VERSIONS = Object.freeze({
+  home: 'v2',
+  finance: 'v2',
+  accreditation: 'v2',
+  scorecard: 'v2',
+})
+export const shotVersion = (name) => SHOT_VERSIONS[name] ?? DEFAULT_SHOT_VERSION
 
 export default function Plate({ name, title, caption, alt, sizes = '100vw', width = 1440, height = 900, layout = 'stack', delay = 0, className = '' }) {
-  const base = `/landing/shots/${name}-${SHOT_VERSION}`
+  const base = `/landing/shots/${name}-${shotVersion(name)}`
   return (
     <Reveal delay={delay} y={16} className={className}>
       <figure className={layout === 'aside' ? 'plate plate-aside' : 'plate'}>

@@ -1,5 +1,5 @@
 // stageAttachments — the PURE file-staging core, lifted verbatim from the inline
-// logic that used to live in PennyInputBar. Extracted so BOTH the coin composer
+// logic that used to live in PennyInputBar. Extracted so BOTH the chat-panel composer
 // (PennyInputBar) and the /penny Studio surfaces (dropzone + StudioAskBar) share
 // ONE validated staging path with byte-identical rules.
 //

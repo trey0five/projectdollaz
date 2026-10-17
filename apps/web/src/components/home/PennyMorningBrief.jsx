@@ -156,7 +156,8 @@ function ComposingCard({ reduce }) {
     >
       <div className="flex items-center gap-4">
         <span className="relative shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.35)]">
-          <PennyAvatar size={56} active listening={!reduce} />
+          {/* The Scholar THINKS while the brief is composed (dark tone on navy). */}
+          <PennyAvatar size={56} active tone="dark" thinking />
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-serif text-[18px] font-semibold leading-snug text-white sm:text-[20px]">
@@ -321,7 +322,8 @@ export default function PennyMorningBrief({
               animate={reduce || !player.playing ? undefined : { y: [0, -5, 0] }}
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <PennyAvatar size={54} speaking={player.playing} celebrate={isZero} active />
+              {/* Talks while the brief plays; an all-clear is a one-shot cap toss. */}
+              <PennyAvatar size={54} tone="dark" speaking={player.playing} celebrate={isZero} active />
             </motion.div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

@@ -54,7 +54,7 @@ export const TARGET_REGISTRY = {
   // Individual analytics KPI tiles — each metric card carries id=`metric-<key>`
   // (MetricCard / HeroVitalTile). Lets Penny glide to a specific metric when the
   // user asks to be shown it (e.g. "show me net tuition per student"). Only the
-  // metrics in the user's current layout are mounted; a hidden one parks the coin.
+  // metrics in the user's current layout are mounted; a hidden one parks the owl.
   'metric.operating_margin': { domId: 'metric-operating_margin', page: 'analytics' },
   'metric.days_cash_on_hand': { domId: 'metric-days_cash_on_hand', page: 'analytics' },
   'metric.months_operating_reserve': { domId: 'metric-months_operating_reserve', page: 'analytics' },
@@ -73,7 +73,7 @@ export const TARGET_REGISTRY = {
   // The KEY strings are byte-identical to WALKTHROUGH_TARGET_KEYS in
   // apps/api/src/assistant/assistant.tools.ts — a key here with no entry there is
   // unreachable, and one there with no row here resolves to nothing and parks the
-  // coin without saying why.
+  // owl without saying why.
   //
   // Some `page` values below are CLIENT-ONLY vocabulary (see the header note on
   // the *-add keys): 'cash-flow-inputs' and 'enrollment-grades' deep-link to a

@@ -290,6 +290,8 @@ export default function IntakeBar({ confirmBandShowing = false, onFinish = null 
     setFinishError('')
     const err = await runFinish({ dirty, canGenerate, save, onFinish })
     if (err) setFinishError(err)
+    // The finish bar reads this: an error string means "no celebration".
+    return err
   }
   const inputRef = useRef(null)
   // Override-upload plumbing: a hidden input whose next selection is pinned to

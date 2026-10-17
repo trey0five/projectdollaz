@@ -12,6 +12,13 @@
 //   0.90–1.00  COLLAPSE — the system spirals into the core, which re-emerges as
 //              the briefing card: "Good morning — 3 things need a decision."
 //
+// KYRO PERFORMS the scroll (orbitOwl.js — pure functions of scroll progress):
+// it flies in on an arc as the track scrolls up into view and lands on the
+// core as the stage pins, waves while the planets erupt, then per dock listens
+// (the planet hands its numbers over), talks (its briefing line) and thinks
+// (in transit), and tosses its cap once every domain is in. Scrubbing back up
+// plays it backwards — it takes off and flies out the way it came.
+//
 // Implementation notes: ONE useMotionValueEvent handler does the trig and
 // writes planet/beam/core styles imperatively via refs (zero re-renders while
 // scrubbing); React state changes ONLY on dock
@@ -30,7 +37,6 @@ import {
   motion,
   AnimatePresence,
   animate,
-  useInView,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
@@ -51,6 +57,17 @@ import {
 } from 'lucide-react'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import useMediaQuery from './useMediaQuery.js'
+import {
+  FLIGHT_IDLE_MS,
+  beatOwl,
+  flightPhase,
+  flightPoint,
+  flightProgress,
+  orbitBeat,
+  settleDuration,
+  settleTarget,
+  travelDir,
+} from './orbitOwl.js'
 import '../../styles/landing-orbit.css'
 
 // The eight domains — hue, proof line, the payload stat, and a PHOTOGRAPH.
@@ -84,9 +101,6 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
 const smooth = (t) => t * t * (3 - 2 * t)
-// Seconds the owl's fly-in arc takes (shared by the framer keyframes and the
-// flying→gliding→perched sprite timers so the handoff lands with touchdown).
-const ENTRANCE_S = 1.15
 
 // ── Per-domain payload visualizations — each dock deals in its OWN chart type
 // (area, bars, gauge, stacked status, thermometer, milestones, pictogram),
@@ -337,27 +351,122 @@ export default function OrbitScrolly() {
   const [shockKey, setShockKey] = useState(0)
   const activeRef = useRef(0)
 
-  // KYRO's entrance: the first time the orbit scrolls into view the owl FLIES
-  // in on an arc from the top-left (sprite flapping), glides for the last
-  // stretch, and perches at the core facing right. `phase` drives the sprite
-  // state; the arc itself is the framer keyframe on the inner wrapper below.
-  // The timings mirror the arc's duration (ENTRANCE_S) so the glide→perch
-  // handoff lands with the touchdown.
-  const pennyIn = useInView(stageRef, { once: true, amount: 0.55 })
-  const [phase, setPhase] = useState('perched')
-  useEffect(() => {
-    if (!pennyIn || reduce) return undefined
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: the sprite must switch to 'flying' on the SAME frame the framer arc starts (a deferred set would show one perched frame mid-air); the later phases are timer-driven.
-    setPhase('flying')
-    const t1 = setTimeout(() => setPhase('gliding'), (ENTRANCE_S - 0.25) * 1000)
-    const t2 = setTimeout(() => setPhase('perched'), ENTRANCE_S * 1000)
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
+  // KYRO's entrance, scrubbed by scroll: as the track rises from the bottom
+  // of the viewport to the pin (`approach` 0→1) the Scholar flies in on an arc
+  // from past the left edge (wing beating, mirrored to face its travel),
+  // glides the last stretch and lands on the core — its own landing one-shot
+  // plays the touchdown. Scrolling back up it takes off and flies back out,
+  // facing left. The arc is written straight to the wrapper's style (no
+  // re-render per frame); React state changes only when the phase or the
+  // direction does.
+  //
+  // A visitor who STOPS mid-arc (the nav's "How it works" anchor lands there)
+  // never leaves the owl hanging: after FLIGHT_IDLE_MS the flight finishes by
+  // itself — it lands on the core (scrolling down) or flies back out
+  // (scrolling up) — and stays there while the scroll carries on the same
+  // way. Turning back, the owl rejoins the scrubbed arc with a short chase
+  // instead of a jump. `flight` holds { f, mode: scrub|settle|latched|chase }.
+  // Phones: 84px, so the perch lift (below) keeps the cap clear of the
+  // three-line subtitle while the owl waves hello.
+  const owlSize = phone ? 84 : 140
+  const wide = useMediaQuery('(min-width: 1280px)')
+  const { scrollYProgress: approachRaw } = useScroll({ target: trackRef, offset: ['start end', 'start start'] })
+  const approach = useSpring(approachRaw, { stiffness: 120, damping: 24, mass: 0.35 })
+  const flyRef = useRef(null)
+  const perchRef = useRef(null)
+  const travelRef = useRef({ dir: 1, anchor: 0 })
+  const flightRef = useRef({ f: 0, mode: 'scrub', to: null, anim: null, idle: 0 })
+  const [flyDir, setFlyDir] = useState(1)
+  const [flyPhase, setFlyPhase] = useState('flying')
+  const paintFlight = (f, dir) => {
+    const pt = flightPoint(f, {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      owlW: owlSize * 0.73,
+    })
+    const el = flyRef.current
+    if (el) {
+      el.style.transform = `translate3d(${pt.x.toFixed(1)}px, ${pt.y.toFixed(1)}px, 0)`
+      el.style.opacity = String(pt.o)
     }
-  }, [pennyIn, reduce])
+    setFlyPhase(flightPhase(f, dir))
+  }
+  const paintRef = useRef(paintFlight)
+  useEffect(() => {
+    paintRef.current = paintFlight
+  })
+  const runFlight = (to, duration, ease, dir, done) => {
+    const F = flightRef.current
+    F.anim?.stop()
+    F.anim = animate(F.f, to, {
+      duration,
+      ease,
+      onUpdate: (f) => {
+        F.f = f
+        paintRef.current(f, dir)
+      },
+      onComplete: done,
+    })
+  }
+  const settleFlight = () => {
+    const F = flightRef.current
+    const { dir } = travelRef.current
+    const to = settleTarget(F.f, dir)
+    if (F.mode !== 'scrub' || to == null) return
+    F.mode = 'settle'
+    F.to = to
+    runFlight(to, settleDuration(F.f, to), 'easeInOut', dir, () => {
+      F.mode = 'latched'
+    })
+  }
+  useEffect(
+    () => () => {
+      const F = flightRef.current
+      window.clearTimeout(F.idle)
+      F.anim?.stop()
+    },
+    [],
+  )
+  useMotionValueEvent(approach, 'change', (a) => {
+    if (reduce) return
+    travelRef.current = travelDir(travelRef.current, a)
+    const { dir } = travelRef.current
+    const target = flightProgress(a)
+    const F = flightRef.current
+    window.clearTimeout(F.idle)
+    setFlyDir(dir)
+    // Carrying on the way it finished (or is finishing): hold there until the
+    // scroll catches up, then scrub again.
+    if (F.mode === 'settle' || F.mode === 'latched') {
+      const sameWay = F.to === 1 ? dir > 0 : dir < 0
+      const caughtUp = F.to === 1 ? target >= 1 : target <= 0
+      if (caughtUp && F.mode === 'latched') F.mode = 'scrub'
+      else if (sameWay) return
+      else F.mode = 'chase'
+    }
+    if (F.mode === 'chase') {
+      runFlight(target, 0.35, 'easeOut', dir, () => {
+        F.mode = 'scrub'
+      })
+    } else {
+      F.anim?.stop()
+      F.f = target
+      paintRef.current(target, dir)
+    }
+    if (settleTarget(target, dir) != null) F.idle = window.setTimeout(settleFlight, FLIGHT_IDLE_MS)
+  })
+
+  // Perched, its beat follows the orbit (hello → listen/talk/think per dock →
+  // celebrate); see orbitOwl.js. Set only when the beat changes.
+  const [owlBeat, setOwlBeat] = useState('arrive')
+  const owlBeatRef = useRef('arrive')
 
   useMotionValueEvent(p, 'change', (v) => {
+    const beat = orbitBeat(v)
+    if (beat !== owlBeatRef.current) {
+      owlBeatRef.current = beat
+      setOwlBeat(beat)
+    }
     const sys = sysRef.current
     if (!sys) return
     const form = backOut(seg(v, 0, 0.1))
@@ -370,6 +479,16 @@ export default function OrbitScrolly() {
     const RX = W < 420 ? W * 0.5 - 52 : W * 0.5 - 34
     const RY = RX * 0.46
     const rf = Math.max(form * (1 - collapse), 0.001)
+    // Perch lift: the docked planet sits at the ellipse front (y = +RY, scaled
+    // ~1.17, layered above the core), so the owl rises just enough for its
+    // feet to clear that tile. It rises as the planets come out (they layer
+    // above the owl only once rf ≥ 0.85) and settles back as they collapse —
+    // so the fly-in still lands exactly on the core.
+    const tileReach = (phone ? 40 : 50) * 1.17 // planet centre → tile top (sm+ tiles are bigger)
+    const perchLift = Math.max(0, owlSize / 2 + 8 - (RY - tileReach))
+    if (perchRef.current) {
+      perchRef.current.style.transform = `translate3d(0, ${(-perchLift * clamp(rf / 0.85, 0, 1)).toFixed(1)}px, 0)`
+    }
     let frontX = 0
     let frontY = 0
 
@@ -386,8 +505,10 @@ export default function OrbitScrolly() {
       // BEHIND KYRO (z < core's 60) and branch out from it; only once the
       // orbit is formed do front-half passes layer above the owl.
       el.style.zIndex = String(rf < 0.85 ? 10 + Math.round(depth * 20) : 30 + Math.round(depth * 40))
-      // Depth is carried by scale + opacity alone (no blur filter).
-      el.style.opacity = String((0.4 + 0.6 * depth) * (1 - collapse))
+      // Depth is carried by scale + opacity alone (no blur filter). Hidden
+      // until formation starts, so they never sit stacked on the empty core
+      // (labels overprinting) while the owl flies in — they erupt from it.
+      el.style.opacity = String((0.4 + 0.6 * depth) * (1 - collapse) * seg(v, 0, 0.02))
       if (i === activeRef.current) { frontX = x; frontY = y }
     })
 
@@ -435,6 +556,15 @@ export default function OrbitScrolly() {
 
   const d = DOMAINS[active]
   const sev = SEV[d.brief.sev] ?? SEV.info
+  // In the air it faces its travel; perched, the orbit beat sets its mood.
+  const perchedOwl = beatOwl(owlBeat, { wide })
+  const owl =
+    flyPhase === 'perched'
+      ? perchedOwl
+      : { facing: flyDir < 0 ? 'left' : 'right', moodHold: true }
+  // The dock shockwave: a centred CIRCLE (not the owl's tall box) about the
+  // owl's width, expanding once per dock.
+  const shock = Math.round(owlSize * 0.73)
 
   // ── Reduced motion: one static, settled composition — no pin, no scrub. ────
   if (reduce) {
@@ -446,7 +576,8 @@ export default function OrbitScrolly() {
             Everything orbits KYRO.
           </h2>
           <div className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-2">
-            <PennyAvatar size={72} state="perched" facing="right" />
+            {/* Reduced motion: the still Scholar (never in the animation loop). */}
+            <PennyAvatar size={72} state="perched" />
             {DOMAINS.map((dom) => (
               <span key={dom.key} className="inline-flex items-center gap-2 rounded-sm border border-hair/[.18] bg-white px-2.5 py-1 text-[13px] font-semibold text-ink">
                 <dom.Icon size={14} style={{ color: dom.hue }} aria-hidden="true" /> {dom.label}
@@ -522,32 +653,22 @@ export default function OrbitScrolly() {
                 outer handler-driven collapse transform. */}
             <div className="absolute left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2">
               <div ref={coreRef} className="relative will-change-transform">
-                <motion.div
-                  initial={{ x: -260, y: -170, opacity: 0 }}
-                  animate={
-                    pennyIn
-                      ? {
-                          x: [-260, -120, 0, 0],
-                          y: [-170, -210, 4, 0],
-                          scaleY: [1, 1, 0.96, 1],
-                          opacity: [0, 1, 1, 1],
-                        }
-                      : {}
-                  }
-                  transition={{
-                    duration: ENTRANCE_S,
-                    times: [0, 0.4, 0.92, 1],
-                    ease: ['easeOut', 'easeIn', 'easeOut', 'easeOut'],
-                  }}
-                  style={{ transformOrigin: '50% 100%' }}
-                >
-                  <PennyAvatar size={phone ? 96 : 128} state={phase} facing="right" />
-                </motion.div>
-                <span
-                  key={shockKey}
-                  className="orbit-shock pointer-events-none absolute inset-0 rounded-full border"
-                  style={{ borderColor: d.hue }}
-                />
+                {/* The perch lift (handler-written) keeps the owl's feet above
+                    the docked planet; the ring rides with the owl. */}
+                <div ref={perchRef} className="relative will-change-transform">
+                  {/* The scroll-scrubbed flight (transform + opacity written by
+                      the approach handler; starts hidden at the arc's start). No
+                      squash here: the Scholar's own landing plays the touchdown. */}
+                  <div ref={flyRef} className="will-change-transform" style={{ opacity: 0 }}>
+                    <PennyAvatar size={owlSize} state={flyPhase} {...owl} />
+                  </div>
+                  {/* Centred by margins, not translate: the keyframe owns transform. */}
+                  <span
+                    key={shockKey}
+                    className="orbit-shock pointer-events-none absolute left-1/2 top-1/2 rounded-full border"
+                    style={{ borderColor: d.hue, width: shock, height: shock, marginLeft: -shock / 2, marginTop: -shock / 2 }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -655,8 +776,11 @@ export default function OrbitScrolly() {
 
           {/* Payload figure — deals in on every dock: the domain's photograph
               as a framed plate, the counting figure, the proof line, its own
-              chart. A 2px hue rule over a hairline-closed figure; no box. */}
-          <div ref={payWrapRef} className="relative z-[3] mt-3 w-[min(520px,90vw)]" style={{ opacity: 0 }}>
+              chart. A 2px hue rule over a hairline-closed figure; no box. The
+              wrapper reserves the tallest figure's height, so a shorter chart
+              never re-centres the stage and jolts the orbit (and the owl
+              perched on it) up or down at a dock. */}
+          <div ref={payWrapRef} className="relative z-[3] mt-3 min-h-[224px] w-[min(520px,90vw)] sm:min-h-[208px]" style={{ opacity: 0 }}>
             <motion.figure
               key={d.key}
               initial={{ y: 12, opacity: 0.2 }}

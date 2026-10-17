@@ -199,6 +199,30 @@ const HEAD = {
   sub: 'From the bookkeeper’s export to the packet in the committee’s inbox. Watch an afternoon happen, then run it on your own books.',
 }
 
+// KYRO talks while its three narrative lines deal in (the last lands ~1.35s
+// after the beat starts), then idles beside them.
+const NARRATE_MS = 1500
+function NarratingOwl() {
+  const [talking, setTalking] = useState(true)
+  useEffect(() => {
+    const t = setTimeout(() => setTalking(false), NARRATE_MS)
+    return () => clearTimeout(t)
+  }, [])
+  return <PennyAvatar size={40} speaking={talking} />
+}
+
+// The cap toss waits for the CTA row it rides in to fade in (delay 0.5s +
+// 0.4s), so the lift plays where it can be seen.
+const CTA_SHOWN_MS = 900
+function CelebratingOwl() {
+  const [celebrate, setCelebrate] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setCelebrate(true), CTA_SHOWN_MS)
+    return () => clearTimeout(t)
+  }, [])
+  return <PennyAvatar size={44} celebrate={celebrate} />
+}
+
 export default function BoardReadyShow() {
   const reduce = useReducedMotion()
   const stageRef = useRef(null)
@@ -369,7 +393,7 @@ export default function BoardReadyShow() {
                       className="absolute top-1/2 -mt-[120px] w-[300px]"
                     >
                       <div className="flex items-center gap-2.5">
-                        <PennyAvatar size={40} />
+                        <NarratingOwl />
                         <span className={CAPS}>KYRO drafts the story</span>
                       </div>
                       <ul className="mt-3 border-b border-hair bg-white">
@@ -430,6 +454,10 @@ export default function BoardReadyShow() {
                     transition={{ delay: 0.5, duration: 0.4, ease: EASE }}
                     className="absolute inset-x-0 bottom-5 z-40 flex flex-wrap items-center justify-center gap-3 px-4"
                   >
+                    {/* The packet is ready: the Scholar tosses its cap once
+                        (it mounts with the CTA, one per run, and tosses
+                        once the row has faded in). */}
+                    <CelebratingOwl />
                     <Button to="/register" variant="primary">
                       Run it on your books
                     </Button>

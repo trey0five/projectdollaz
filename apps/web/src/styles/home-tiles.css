@@ -19,7 +19,7 @@
   height: 30px;
 }
 
-/* The owl inside the KYRO Studio tile keeps its own box. */
+/* The Scholar inside the KYRO Studio tile keeps its own box. */
 .home-page .tile-icon > :not(svg) {
   display: inline-flex;
 }

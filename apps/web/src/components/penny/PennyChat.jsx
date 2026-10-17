@@ -1,11 +1,12 @@
-// Penny AI — the streaming assistant chat, launched by Penny (the gold coin).
+// Penny AI — the streaming assistant chat, launched by Penny (KYRO, the Scholar).
 //
 // This is now a THIN SHELL: all the brains (the preserved SSE stream loop, the
 // growing-message update() closure, proposal confirm/apply, periodId-from-
 // localStorage scoping, the activeId guard) live in chat/usePennyChat.js, which
 // also layers on smooth token streaming, voice (two-way), sessions/new-chat, and
-// attachments. The shell owns the flashy navy→gold frame: an animated Penny
-// avatar, a sheen-swept gradient banner, the TTS voice toggle, the history menu,
+// attachments. The shell owns the flashy navy→gold frame: the animated Scholar
+// (dark tone; it thinks while KYRO AI works and talks while a reply streams or is
+// read aloud), a sheen-swept gradient banner, the TTS voice toggle, the history menu,
 // a panel-wide drag/drop overlay, an image lightbox, and the mobile bottom sheet.
 //
 // Assistant markdown is now rendered richly (renderMarkdown in PennyMessage), so
@@ -20,7 +21,7 @@ import PennyMessageList from './chat/PennyMessageList.jsx'
 import PennyInputBar from './chat/PennyInputBar.jsx'
 import PennyHistoryMenu from './chat/PennyHistoryMenu.jsx'
 
-export default function PennyChat({ open, onClose }) {
+export default function PennyChat({ open, onClose, onBusyChange }) {
   const { activeId } = useSchools()
   const reduced = useReducedMotion()
 
@@ -42,6 +43,12 @@ export default function PennyChat({ open, onClose }) {
     deleteSession,
     tts,
   } = usePennyChat()
+
+  // Tell the floating owl (Penny.jsx) when KYRO AI is working, so it thinks too.
+  useEffect(() => {
+    onBusyChange?.(busy)
+    return () => onBusyChange?.(false)
+  }, [busy, onBusyChange])
 
   const [panelDrag, setPanelDrag] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState(null)
@@ -137,25 +144,25 @@ export default function PennyChat({ open, onClose }) {
                 <span className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-penny/25 blur-2xl" />
               </span>
 
-              {/* Animated KYRO owl with online pulse dot. */}
-              <div className="relative shrink-0">
-                <PennyAvatar size={30} active speaking={tts.speaking} />
-                {/* The owl fills its box (the box IS the perched still), so the badge
-                    is inset a few px onto the bird's lower-right body rather than
-                    pinned to the box corner. */}
+              {/* The animated Scholar (dark tone on the navy banner) with its online
+                  dot NEXT to it, beside the feet — never on or behind the bird. */}
+              <div className="relative flex shrink-0 items-end gap-1">
+                <PennyAvatar
+                  size={30}
+                  active
+                  tone="dark"
+                  thinking={busy && !streamingContent}
+                  speaking={tts.speaking || (busy && !!streamingContent)}
+                />
                 <span
                   aria-hidden
-                  className="absolute bottom-[5px] right-[8px] h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400 motion-safe:animate-pulse"
+                  className="mb-0.5 h-2 w-2 rounded-full border border-navy bg-emerald-400 motion-safe:animate-pulse"
                 />
               </div>
 
               <div className="relative min-w-0 flex-1">
                 <p className="truncate text-[15px] font-semibold text-white">KYRO AI</p>
-                <p className="flex items-center gap-1 truncate text-[11px] text-white/55">
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300 motion-safe:animate-pulse"
-                  />
+                <p className="truncate text-[11px] text-white/55">
                   {busy ? status || 'Working…' : 'Reads your numbers — never guesses.'}
                 </p>
               </div>

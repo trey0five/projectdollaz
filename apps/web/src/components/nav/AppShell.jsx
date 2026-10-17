@@ -737,7 +737,7 @@ export default function AppShell({ children }) {
       <div className="min-h-screen lg:flex">
         {/* ── Desktop sidebar (lg+): fixed left rail, carries the frozen navIds. ── */}
         {!uiV2 && (
-          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
+          <aside data-kyro-wall className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
             <div className="shrink-0 border-b border-white/10 px-4 py-4">{brand}</div>
             {navBody(true)}
             <div className="shrink-0 border-t border-white/10 px-3 py-3">{settingsLink(true)}</div>
@@ -748,7 +748,7 @@ export default function AppShell({ children }) {
             school⇄org toggle up top, the three global destinations, and a foot
             with Settings + the account menu. Carries the frozen Penny ids. ── */}
         {uiV2 && (
-          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/10 bg-[#0A1628] lg:flex">
+          <aside data-kyro-wall className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/10 bg-[#0A1628] lg:flex">
             {/* 1. Logo — centered + prominent, with the tagline beneath it. */}
             <div className="flex shrink-0 flex-col items-center gap-1.5 border-b border-white/10 px-4 py-5">
               {v2RailBrand}

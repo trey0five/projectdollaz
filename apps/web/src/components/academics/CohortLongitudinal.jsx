@@ -359,7 +359,7 @@ export default function CohortLongitudinal({ payload, loading = false, error = '
   return (
     // id: Penny walkthrough anchor 'academics.cohortPanels'. On the ROOT rather
     // than the grid itself — the grid carries a measurement ref and is absent in
-    // the loading and empty branches, so anchoring there would park the coin
+    // the loading and empty branches, so anchoring there would park the owl
     // exactly when a reader most needs to be shown where the panels will appear.
     <div id="academics-cohort-panels" className="coh-root space-y-4">
       <PrintRules />

@@ -1,34 +1,42 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Penny — ONE global floating mascot (mounted once in AuthedLayout), replacing
 // the old bottom-right "Ask FinRep" launcher AND the data-hub-only guide mascot.
-// "Penny" is the internal codename; what the user sees is KYRO the owl
-// (KyroDove via PennyAvatar). KYRO plays two roles:
+// "Penny" is the internal codename; what the user sees is KYRO, drawn as "the
+// Scholar" (scholar/ScholarOwl.jsx via PennyAvatar). KYRO plays two roles:
 //   • GUIDE: when usePenny() has an active guide, KYRO measures the target element
 //     by id, scrolls it into view if off-screen, FLIES from its home corner
 //     (bottom-right) in an arc to just beside the card (flying → gliding for the
-//     last ~200ms → perched with a settle bounce), and shows a speech bubble
-//     (message + optional CTA + tour Step n/m + Next/Done + dismiss). A gold
-//     chevron points at the card. KYRO faces its direction of travel while
-//     flying, faces the card once perched, and faces LEFT into the page at home.
+//     last ~200ms → perched, where the Scholar plays its own landing), and shows
+//     a speech bubble (message + optional CTA + tour Step n/m + Next/Done +
+//     dismiss). A gold chevron points at the card. KYRO MIRRORS to face its
+//     direction of travel only while airborne; perched beside a card it turns
+//     its eyes and head toward the card, and at home it looks straight out.
+//     Once it has landed beside a new step it says hello.
 //   • AI: clicking the owl opens "KYRO AI" (the streaming PennyChat) and clears
-//     any active guide — KYRO IS the assistant.
+//     any active guide — KYRO IS the assistant. It thinks while KYRO AI works.
+//   • STORY: it talks while the morning brief is read aloud (the existing
+//     'penny:narrate-active' event) and plays one-shot moods sent on
+//     'penny:mood' { mood } — the upload finish bar sends 'celebrate' (a cap
+//     toss) after "Done — show my numbers".
 //
 // HOOKS DISCIPLINE: the ONLY setState-in-effect are `box` (genuine DOM
-// measurement, mirroring the old GuideMascot), `flight` (the flying → gliding →
-// perched phase machine, keyed on the travel target) and `bob` (timer). Everything
+// measurement, mirroring the old GuideMascot) and `flight` (the flying → gliding →
+// perched phase machine, keyed on the travel target); `mood`, `narrating` and
+// `aiBusy` are set only from timers, event listeners or the chat. Everything
 // else — the active step, travel offset, flight duration/arc/facing, chevron
 // position — is derived during render via const/useMemo, never stored in state.
 // All hooks run unconditionally; Penny ALWAYS renders (no !activeId early return
 // here — that guard lives only in PennyChat).
 //
-// GEOMETRY: the owl is a BOX (height doveH, width doveH × aspect) whose three
-// sprite states share one anchor point inside it, so the box position is all the
-// travel math needs: bubble/chevron alignment matches the old coin behaviour.
+// GEOMETRY: the owl is a BOX (height doveH, width doveH × aspect) that IS the
+// resting Scholar (feet on the bottom edge, cap at the top), and every state
+// shares its centre, so the box position is all the travel math needs:
+// bubble/chevron alignment matches the old behaviour.
 //
 // ACCESSIBILITY: the bubble is role=status aria-live=polite; the owl is a real
 // <button> with aria-label + aria-expanded; the avatar/chevron are aria-hidden.
-// Reduced motion: no flight/bob/sprite/smooth-scroll — the target is jumped into
-// view instantly and the owl is placed beside it, perched, so guidance is still
+// Reduced motion: no flight/bob/owl motion/smooth-scroll — the target is jumped
+// into view instantly and the still owl is placed beside it, so guidance is still
 // fully available. Small re-targets while perched (a scroll nudging the measured
 // rect by less than one owl-height) tween in place without a take-off.
 // PRINT: everything is wrapped in .no-print.
@@ -39,7 +47,8 @@ import { useLocation } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
 import { usePenny } from '../../context/PennyContext.jsx'
 import PennyAvatar from './PennyAvatar.jsx'
-import { useKyroGeometry } from './KyroDove.jsx'
+import { useScholarGeometry } from './scholar/useScholarGeometry.js'
+import { STATES as SCHOLAR_STATES, MOODS as SCHOLAR_MOODS } from './scholar/core/scholarTracks.js'
 import PennyChat from './PennyChat.jsx'
 
 const MARGIN = 12 // viewport edge clamp
@@ -47,6 +56,9 @@ const HOME_X = 20 // home corner inset (matches bottom-5 right-5, ~20px)
 const HOME_Y = 20
 const SPEED = 900 // px/s cruising speed → duration = clamp(dist/SPEED, 0.6, 1.4)
 const GLIDE_S = 0.2 // the last 200ms of every flight are a glide
+// The Scholar's touchdown one-shot; a hello waits for it to finish (the landing
+// outranks a mood, so an earlier hello would be swallowed).
+const LANDING_MS = SCHOLAR_STATES.landing.dur
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const flightFor = (dx, dy) => {
@@ -62,9 +74,9 @@ export default function Penny() {
   const reduce = useReducedMotion()
   const { pathname } = useLocation()
   const { chatOpen, toggleChat, closeChat, guide, advance, dismissGuide } = usePenny()
-  const geom = useKyroGeometry()
+  const geom = useScholarGeometry()
 
-  // The sanctioned setState-in-effect writes: measured target rect, flight phase, bob.
+  // The sanctioned setState-in-effect writes: measured target rect, flight phase.
   const [box, setBox] = useState(null)
   const [flight, setFlight] = useState({
     phase: 'perched',
@@ -75,9 +87,14 @@ export default function Penny() {
     moved: false,
     hop: false, // small perched re-target: tween without a wingbeat/arc
   })
-  const [bob, setBob] = useState(false)
+  // One-shot mood for the owl ({ name, key }) — hello on a new guide step,
+  // celebrate from 'penny:mood'. Set only from timers / event listeners.
+  const [mood, setMood] = useState(null)
+  // Story signals: the morning brief is being read aloud; KYRO AI is working.
+  const [narrating, setNarrating] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
 
-  // KYRO renders smaller on phones (the 64px mascot overlapped cards on mobile).
+  // KYRO renders smaller on phones (it overlapped cards on mobile).
   const [compact, setCompact] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
   )
@@ -87,7 +104,7 @@ export default function Penny() {
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [])
-  const doveH = compact ? 46 : 64
+  const doveH = compact ? 52 : 72
   const H = doveH
   const W = Math.round(doveH * geom.aspect)
 
@@ -138,6 +155,7 @@ export default function Penny() {
 
   // DERIVED (never stored in state via effect).
   const step = guide ? guide.steps[guide.index] : null
+  const measureKey = step ? `${guide.index}-${step.targetId}` : null
   // Agent walkthroughs always show Step n/m + Done (even single-step) so the user
   // can dismiss; page tours only show the strip when multi-step.
   const touring = !!guide && (guide.steps.length > 1 || guide.agent)
@@ -170,6 +188,13 @@ export default function Penny() {
         el.scrollIntoView({ behavior: reduce ? 'instant' : 'smooth', block: 'center' })
       }
       if (cancelled) return
+      // The app's fixed left sidebar (marked data-kyro-wall): the owl never
+      // perches on it beside a card in the content column.
+      let wall = 0
+      for (const w of document.querySelectorAll('[data-kyro-wall]')) {
+        const wr = w.getBoundingClientRect()
+        if (wr.width && wr.height) wall = Math.max(wall, wr.right)
+      }
       setBox({
         top: r.top,
         left: r.left,
@@ -177,6 +202,10 @@ export default function Penny() {
         bottom: r.bottom,
         width: r.width,
         height: r.height,
+        wall,
+        // Which step this rect belongs to: a new step keeps the old rect until
+        // its own target is measured, and the hello must wait for that.
+        stepKey: measureKey,
       })
     }
     // Bounded retry schedule (idempotent measure): an agent guide may navigate to a
@@ -193,7 +222,7 @@ export default function Penny() {
       window.removeEventListener('resize', onMove)
       window.removeEventListener('scroll', onMove)
     }
-  }, [step, chatOpen, reduce])
+  }, [step, measureKey, chatOpen, reduce])
 
   // ── Travel geometry (pure; derived from box). Returns the owl BOX's offset from
   // its home corner so the travelling wrapper can animate x/y. ──────────────────
@@ -208,11 +237,22 @@ export default function Penny() {
     let bl = box.left - 18 - W
     const cy0 = box.top + box.height / 2
     let bt = cy0 - H / 2
-    if (bl < 16) {
-      placeRight = true
-      bl = box.right + 18
+    // A card in the content column never pushes the owl onto the sidebar
+    // (navy, under the nav): it perches on the card's right instead, or — no
+    // room there — just clear of the sidebar. A target IN the sidebar (a nav
+    // item) is unaffected: it already perches to its right.
+    const wall = box.wall && box.left >= box.wall ? box.wall + 8 : 0
+    let minLeft = MARGIN
+    if (bl < Math.max(16, wall)) {
+      if (!wall || box.right + 18 + W <= vw - MARGIN) {
+        placeRight = true
+        bl = box.right + 18
+      } else {
+        bl = wall
+        minLeft = wall
+      }
     }
-    bl = clamp(bl, MARGIN, vw - MARGIN - W)
+    bl = clamp(bl, minLeft, vw - MARGIN - W)
     bt = clamp(bt, MARGIN + 150, vh - MARGIN - H) // reserve 150px for the bubble
     // Home corner is bottom-RIGHT (the box sits HOME_X in from the right edge).
     // The flight transform (bl − homeL) then carries KYRO to a target — including
@@ -263,32 +303,14 @@ export default function Penny() {
     }
   }, [travel.x, travel.y, reduce, H])
 
-  // ── Idle head-bob: a 260ms burst every 5–9s while perched (skipped in reduce). ─
-  useEffect(() => {
-    if (reduce || flight.phase !== 'perched') return undefined
-    let timer
-    let off
-    const loop = () => {
-      timer = window.setTimeout(() => {
-        setBob(true)
-        off = window.setTimeout(() => setBob(false), 260)
-        loop()
-      }, 5000 + Math.random() * 4000)
-    }
-    loop()
-    return () => {
-      window.clearTimeout(timer)
-      window.clearTimeout(off)
-    }
-  }, [reduce, flight.phase])
-
   // Derived flight numbers for THIS leg (from → to).
   const dx = flight.toX - flight.fromX
   const dy = flight.toY - flight.fromY
   const { dur, lift } = flightFor(dx, dy)
   const phase = reduce ? 'perched' : flight.phase
-  // Facing: direction of travel while airborne; once perched, toward the card
-  // (or LEFT into the page when parked at home).
+  // Facing: direction of travel while airborne (the owl mirrors); once perched
+  // beside a card, toward the card (the owl turns its gaze, never mirrors);
+  // parked at home, straight out (undefined → front).
   const facing =
     phase !== 'perched' && dx !== 0
       ? dx < 0
@@ -298,9 +320,53 @@ export default function Penny() {
         ? travel.placeRight
           ? 'left'
           : 'right'
-        : 'left'
+        : undefined
 
   const showBubble = step && !chatOpen
+  const stepKey = showBubble ? measureKey : null
+
+  // ── Hello on each new guide step, once the owl has landed beside it. A step
+  // whose target needs no flight says hello at once; after a flight it waits
+  // for the Scholar's touchdown. Reduced motion: the still owl, no mood.
+  const helloRef = useRef(null) // the step key that already said hello
+  const landedAtRef = useRef(0)
+  const prevPhaseRef = useRef('perched')
+  useEffect(() => {
+    if (prevPhaseRef.current !== 'perched' && phase === 'perched') landedAtRef.current = Date.now()
+    prevPhaseRef.current = phase
+  }, [phase])
+  useEffect(() => {
+    if (reduce || !stepKey || !box || box.stepKey !== stepKey || phase !== 'perched' || helloRef.current === stepKey) {
+      return undefined
+    }
+    const wait = Math.max(0, landedAtRef.current + LANDING_MS - Date.now())
+    const t = window.setTimeout(() => {
+      helloRef.current = stepKey
+      setMood({ name: 'hello', key: stepKey })
+    }, wait + 60)
+    return () => window.clearTimeout(t)
+  }, [reduce, stepKey, box, phase])
+
+  // ── Story events: talking while the brief is read aloud ('penny:narrate-
+  // active' fires per segment; `playing` false / itemId null when it stops),
+  // and one-shot moods on 'penny:mood' { mood }.
+  useEffect(() => {
+    const onActive = (e) => {
+      const d = e?.detail || {}
+      setNarrating(typeof d.playing === 'boolean' ? d.playing : d.itemId != null)
+    }
+    let seq = 0
+    const onMood = (e) => {
+      const name = e?.detail?.mood
+      if (typeof name === 'string' && SCHOLAR_MOODS.includes(name)) setMood({ name, key: `ev${++seq}` })
+    }
+    window.addEventListener('penny:narrate-active', onActive)
+    window.addEventListener('penny:mood', onMood)
+    return () => {
+      window.removeEventListener('penny:narrate-active', onActive)
+      window.removeEventListener('penny:mood', onMood)
+    }
+  }, [])
   const lastIndex = guide ? guide.steps.length - 1 : 0
   const isLast = guide ? guide.index >= lastIndex : true
 
@@ -358,7 +424,9 @@ export default function Penny() {
               ? { duration: 0.3, ease: 'easeOut' }
               : {
                   x: { duration: dur, ease: 'easeInOut' },
-                  y: { duration: dur, times: [0, 0.45, 1], ease: ['easeOut', 'easeIn'] },
+                  // The descent eases in AND out: a steep dive slows into the
+                  // perch, so the last 200ms glide is the Scholar's slow-down.
+                  y: { duration: dur, times: [0, 0.45, 1], ease: ['easeOut', [0.45, 0, 0.25, 1]] },
                 }
         }
       >
@@ -420,49 +488,45 @@ export default function Penny() {
           )}
         </AnimatePresence>
 
-        {/* Landing settle (one-shot CSS keyframe when a flight ends), then the
-            parked 3s bob loop + the randomized head-bob — all composed, all off
-            in reduce. */}
-        <div
-          className={
-            !reduce && phase === 'perched' && flight.moved
-              ? 'motion-safe:animate-[kyro-settle_280ms_ease-out_1]'
-              : ''
+        {/* The Scholar plays its own landing when a flight ends (no CSS settle
+            bounce); parked at home it rides a gentle 3px, 3s bob. Off in reduce. */}
+        <motion.div
+          animate={reduce || !travel.parked || phase !== 'perched' ? { y: 0 } : { y: [0, -3, 0] }}
+          transition={
+            reduce || !travel.parked || phase !== 'perched'
+              ? { duration: 0 }
+              : { duration: 3, repeat: Infinity, ease: 'easeInOut' }
           }
         >
-          <motion.div
-            animate={reduce || !travel.parked || phase !== 'perched' ? { y: 0 } : { y: [0, -5, 0] }}
-            transition={
-              reduce || !travel.parked || phase !== 'perched'
-                ? { duration: 0 }
-                : { duration: 3, repeat: Infinity, ease: 'easeInOut' }
-            }
+          <button
+            type="button"
+            data-testid="kyro-dove"
+            onClick={() => {
+              dismissGuide()
+              toggleChat()
+            }}
+            aria-label={chatOpen ? 'Close KYRO AI' : 'Open KYRO AI'}
+            aria-expanded={chatOpen}
+            className="pointer-events-auto relative block rounded-2xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
           >
-            <motion.div
-              animate={bob && !reduce ? { y: [0, -2, 0], rotate: [0, -3, 0] } : { y: 0, rotate: 0 }}
-              transition={{ duration: 0.26, ease: 'easeInOut' }}
-              style={{ transformOrigin: '60% 90%' }}
-            >
-              <button
-                type="button"
-                data-testid="kyro-dove"
-                onClick={() => {
-                  dismissGuide()
-                  toggleChat()
-                }}
-                aria-label={chatOpen ? 'Close KYRO AI' : 'Open KYRO AI'}
-                aria-expanded={chatOpen}
-                className="pointer-events-auto relative block rounded-2xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-              >
-                <PennyAvatar size={doveH} state={phase} facing={facing} active={chatOpen} />
-              </button>
-            </motion.div>
-          </motion.div>
-        </div>
+            <PennyAvatar
+              size={doveH}
+              state={phase}
+              facing={facing}
+              active={chatOpen}
+              speaking={narrating}
+              thinking={aiBusy}
+              thinkingDots={!showBubble}
+              mood={mood?.name ?? null}
+              moodKey={mood?.key}
+              onMoodEnd={() => setMood(null)}
+            />
+          </button>
+        </motion.div>
       </motion.div>
 
       {/* (iii) KYRO AI chat — controlled, anchored bottom-right above the owl. */}
-      <PennyChat open={chatOpen} onClose={closeChat} />
+      <PennyChat open={chatOpen} onClose={closeChat} onBusyChange={setAiBusy} />
     </div>
   )
 }

@@ -47,17 +47,24 @@ export default function PennyDemo() {
         inert
         className="flex h-[480px] flex-col bg-white"
       >
-        {/* Header — the real owl, driven by the script. It stays perched in the
-            header (no flight in a chat header); the script's glance becomes the
-            facing direction, and its blink loop is ignored by the owl. */}
+        {/* Header — the real Scholar, driven by the script. It stays perched in
+            the header (no flight in a chat header); the script's glance is a
+            gaze turn (eyes + head, never a mirror) and its blink beats are real
+            blinks. Its moods follow the chat: it LISTENS while the question is
+            typed, THINKS while the typing dots show and while an action
+            applies, TALKS while the answer streams, and tosses its cap when the
+            action lands. */}
         <div className="flex items-center gap-3 border-b border-hair px-5 py-2.5">
           <PennyAvatar
             size={44}
             active
             state="perched"
-            facing={state.glance < 0 ? 'left' : 'right'}
+            glance={state.glance}
+            blink={state.blink}
             celebrate={state.celebrate}
             speaking={state.speaking}
+            listening={state.showUser && !state.showTyping && !state.assistantVisible}
+            thinking={state.showTyping || state.proposal?.status === 'applying'}
           />
           <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
             KYRO · AI Chief of Staff
@@ -65,8 +72,11 @@ export default function PennyDemo() {
           </p>
         </div>
 
-        {/* Transcript — newest content pinned to the bottom, clipping at the top. */}
-        <div className="flex flex-1 flex-col justify-end overflow-hidden px-5 py-3">
+        {/* Transcript — newest content pinned to the bottom, clipping at the top.
+            overflow-anchor: none — its lines move up as the script types, and
+            the browser must never use one as the page's scroll anchor (it
+            would nudge the whole page up a line, mid-scroll). */}
+        <div className="flex flex-1 flex-col justify-end overflow-hidden px-5 py-3 [overflow-anchor:none]">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={scenarioIndex}

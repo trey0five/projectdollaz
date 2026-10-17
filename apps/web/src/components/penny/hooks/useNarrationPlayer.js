@@ -10,9 +10,10 @@
 //
 // Events dispatched (canonical, see the narration contract):
 //   • 'penny:voice-claim' { owner: 'brief' }  — on play(), so chat TTS stops.
-//   • 'penny:narrate-active' { itemId|null }  — as each ITEM segment goes live
-//     (null when leaving items / stopping). The boards listen and gold-ring the
-//     matching card.
+//   • 'penny:narrate-active' { itemId|null, playing }  — as each ITEM segment goes
+//     live (null when leaving items / stopping). The boards listen and gold-ring
+//     the matching card; `playing` (true while any segment is being read) lets
+//     the floating owl talk through the whole brief.
 //
 // A monotonically-increasing run id invalidates any in-flight loop the instant we
 // pause / skip / stop / the data changes, so old awaited segments can't advance
@@ -25,7 +26,7 @@ function emitActive(segments, idx) {
   const seg = idx >= 0 ? segments?.[idx] : null
   const itemId = seg && seg.kind === 'item' ? seg.itemId ?? null : null
   try {
-    window.dispatchEvent(new CustomEvent('penny:narrate-active', { detail: { itemId } }))
+    window.dispatchEvent(new CustomEvent('penny:narrate-active', { detail: { itemId, playing: !!seg } }))
   } catch {
     /* ignore */
   }
@@ -121,6 +122,9 @@ export function useNarrationPlayer(segments, schoolId) {
     return () => {
       runIdRef.current += 1
       ttsStop()
+      // The bumped run id makes the awaiting loop return silently, so say the
+      // brief stopped here — the app-wide owl talks until it hears playing:false.
+      emitActive(null, -1)
     }
   }, [ttsStop])
 
@@ -135,6 +139,8 @@ export function useNarrationPlayer(segments, schoolId) {
     resumeAtRef.current = 0
     activeIndexRef.current = -1
     ttsStop()
+    // Same as unmount: the invalidated loop never reports its own stop.
+    emitActive(null, -1)
     Promise.resolve().then(() => {
       // A play() that started AFTER this effect ran (e.g. a "Brief me" click racing
       // the first narration load) bumps runIdRef past myRun — don't clobber its

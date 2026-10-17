@@ -7,7 +7,7 @@
 //
 // Finance is CORE (base license) — there is NO entitlement gate here. Instead the
 // states are integration-shaped: a school with no QuickBooks connection gets a
-// friendly connect nudge (Penny coin + a button to /data), an org-consolidated
+// friendly connect nudge (the KYRO owl + a button to /data), an org-consolidated
 // (diocesan) school gets an "aging coming soon" note, and a connected school with
 // nothing outstanding reads as "all clear". Live+cached from QuickBooks; the
 // header Refresh button forces a fresh pull.
