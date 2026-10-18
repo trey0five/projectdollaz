@@ -1,26 +1,29 @@
-// LandingFooter — the page's foot on the ground: a hairline, the KYRO mark +
-// set wordmark, copyright and the labeled footer nav. (The page's one ink band
-// is the hero; the footer no longer adds a second.)
+// LandingFooter — the page's navy foot (restored 2026-10-17 to the pre-P5 look,
+// 74caaba): the stacked KYRO lockup, copyright and the labeled footer nav on
+// the deep navy band.
 import { Link } from 'react-router-dom'
 import { FOOTER } from './landingContent.js'
 
-const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50 focus-visible:ring-offset-2'
+const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold-light/70'
 
 export default function LandingFooter() {
   return (
-    <footer className="border-t border-hair py-8">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-5 sm:flex-row sm:px-8">
-        <Link to="/" aria-label="KYRO — home" className={`flex items-center gap-2 rounded-sm py-1 ${FOCUS_RING}`}>
-          <img src="/kyro-mark.png" alt="" width="40" height="40" loading="lazy" className="h-10 w-10 shrink-0 scale-[1.35] object-contain" />
-          <span className="text-[15px] font-semibold tracking-[0.32em] text-ink">KYRO</span>
+    <footer className="border-t border-white/10 bg-navy-deep py-10">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-5 sm:flex-row sm:px-8">
+        <Link
+          to="/"
+          aria-label="KYRO — home"
+          className={`flex items-center gap-2.5 rounded-[8px] px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+        >
+          <img src="/kyro-lockup.png" alt="" loading="lazy" className="h-14 w-auto shrink-0 object-contain" />
         </Link>
-        <p className="text-[13px] text-ink2">{FOOTER.copyright}</p>
+        <p className="text-[13px] text-white/60">{FOOTER.copyright}</p>
         <nav aria-label="Footer" className="flex items-center gap-6">
           {FOOTER.links.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className={`rounded-sm text-[13px] font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS_RING}`}
+              className={`rounded-[6px] text-[13px] font-semibold text-white/70 transition-colors hover:text-gold-light ${FOCUS_RING}`}
             >
               {link.label}
             </Link>

@@ -1,0 +1,313 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   landing-restore-top.css — the landing page's TOP band restored to its
+   pre-redesign look (74caaba): the navy glass nav, the dark frosted headline
+   card with the blue-gradient accent line, the glowing 3D "GET STARTED" pills,
+   and the glassy floating KYRO demo panel.
+
+   Every rule is scoped to an `lr-` class used ONLY by the landing's
+   LandingNav / LandingHero / PennyDemo, so nothing here touches the app.
+   Values are LITERAL on purpose: under ui.v2 the shared tokens moved on
+   (font-serif is EB Garamond, rounded-* clamp to 8px, named shadows collapse,
+   gold/cta gradients re-map), and the landing must keep the look it had.
+   Plain CSS rather than Tailwind arbitrary values: comma'd arbitrary values
+   drop out of the dev JIT.
+
+   Motion: the only loops here (the demo's status-dot pulse) run inside
+   prefers-reduced-motion: no-preference; everything has a still fallback.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Nav ──────────────────────────────────────────────────────────────────── */
+/* line-height 1.65 throughout: the pre-redesign body measure these blocks
+   inherited (the app body is 1.5 now). */
+.lr-nav,
+.lr-hero-card,
+.lr-chat,
+.lr-see-label,
+.lr-cta,
+.lr-ghost {
+  line-height: 1.65;
+}
+.lr-nav {
+  font-family: var(--font-body);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+.lr-nav.is-scrolled {
+  border-bottom-color: rgb(255 255 255 / 0.1);
+  background-color: rgb(10 18 41 / 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.lr-nav-link {
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.7);
+  transition: color 0.2s ease;
+}
+.lr-nav-link.is-strong {
+  color: rgb(255 255 255 / 0.85);
+}
+.lr-nav-link:hover {
+  color: #7dd3fc;
+}
+.lr-focus:focus-visible {
+  outline: 2px solid rgb(125 211 252 / 0.85);
+  outline-offset: 2px;
+}
+
+/* ── The glowing 3D pill (was .btn-cta under the blue CTA remap) ──────────── */
+.lr-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  border-radius: 12px;
+  border: 1px solid rgb(37 99 235 / 0.55);
+  font-family: var(--font-body);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #fff;
+  background-image:
+    linear-gradient(180deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0) 46%),
+    linear-gradient(140deg, #7dd3fc, #3b82f6 55%, #2563eb);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 5px rgb(0 0 0 / 0.28),
+    0 4px 10px -2px rgb(37 99 235 / 0.45),
+    0 12px 28px -8px rgb(37 99 235 / 0.5);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+.lr-cta:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.07) saturate(1.06);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -2px 5px rgb(0 0 0 / 0.24),
+    0 6px 14px -2px rgb(37 99 235 / 0.5),
+    0 16px 36px -8px rgb(37 99 235 / 0.55),
+    0 0 34px rgb(56 189 248 / 0.35);
+}
+.lr-cta:active {
+  transform: translateY(0) scale(0.985);
+  filter: brightness(0.96);
+}
+.lr-cta-nav {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+@media (min-width: 768px) {
+  .lr-cta-nav {
+    padding: 10px 20px;
+    font-size: 13px;
+  }
+}
+.lr-cta-lg {
+  padding: 16px 32px;
+  font-size: 13px;
+}
+.lr-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 2px solid rgb(255 255 255 / 0.25);
+  padding: 14px 24px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #fff;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+.lr-ghost:hover {
+  border-color: rgb(125 211 252 / 0.6);
+  color: #7dd3fc;
+}
+
+/* ── The straddling headline card (dark frosted glass) ────────────────────── */
+.lr-hero-card {
+  border-radius: 24px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  background-color: rgb(13 27 51 / 0.75);
+  box-shadow: 0 30px 80px -20px rgb(4 10 26 / 0.7);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  padding: 28px;
+  font-family: var(--font-body);
+}
+@media (min-width: 640px) {
+  .lr-hero-card {
+    padding: 40px;
+  }
+}
+.lr-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #38bdf8;
+}
+/* Montserrat semibold — the pre-redesign display face (font-serif is EB
+   Garamond now, so the headline names the sans face explicitly). */
+.lr-h1 {
+  font-family: var(--font-body);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+@media (min-width: 640px) {
+  .lr-h1 {
+    font-size: 54px;
+  }
+}
+@media (min-width: 1024px) {
+  .lr-h1 {
+    font-size: 60px;
+  }
+}
+.lr-accent {
+  display: inline-block;
+  padding-bottom: 0.16em;
+  background-image: linear-gradient(135deg, #7dd3fc 0%, #3b82f6 45%, #2563eb 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lr-subhead {
+  font-size: 16.5px;
+  line-height: 1.625;
+  color: rgb(255 255 255 / 0.75);
+}
+
+/* ── The floating KYRO demo panel ─────────────────────────────────────────── */
+/* Desktop: a navy glass frame with a blue hairline and a soft lift. */
+.lr-demo-float {
+  border-radius: 16px;
+  border: 1px solid rgb(37 99 235 / 0.25);
+  background-color: rgb(13 27 51 / 0.6);
+  padding: 6px;
+  box-shadow:
+    0 22px 60px rgb(16 28 61 / 0.22),
+    0 0 46px -12px rgb(56 189 248 / 0.35);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+/* Phones: a white frame floating on the light page ground. */
+.lr-demo-card {
+  border-radius: 16px;
+  border: 1px solid rgb(37 99 235 / 0.3);
+  background-color: #fff;
+  padding: 6px;
+  box-shadow: 0 26px 60px -24px rgb(16 28 61 / 0.3);
+}
+.lr-demo-inner {
+  overflow: hidden;
+  border-radius: 12px;
+  background-color: #f8faff;
+}
+.lr-see-label {
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #7a5e00;
+}
+
+/* The chat frame inside it. */
+.lr-chat {
+  border-radius: 12px;
+  background-color: #f8faff;
+  font-family: var(--font-body);
+}
+.lr-chat-head {
+  border-bottom: 1px solid rgb(217 226 242 / 0.6);
+  padding: 12px 16px;
+}
+.lr-chat-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #101c3d;
+}
+.lr-chat-dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 9999px;
+  background-color: #2563eb;
+  box-shadow:
+    0 0 0 1px rgb(37 99 235 / 0.45),
+    0 0 14px rgb(37 99 235 / 0.55);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lr-chat-dot {
+    animation: lr-dot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+@keyframes lr-dot-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.lr-chat-compose {
+  border-top: 1px solid rgb(217 226 242 / 0.6);
+  padding: 10px 12px;
+}
+.lr-chat-input {
+  border-radius: 9999px;
+  border: 1px solid rgb(217 226 242 / 0.7);
+  background-color: #fff;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #44506e;
+}
+.lr-chat-send {
+  height: 32px;
+  width: 32px;
+  border-radius: 9999px;
+  color: #101c3d;
+  background-image: linear-gradient(135deg, #7dd3fc 0%, #3b82f6 45%, #2563eb 100%);
+  box-shadow: 0 4px 12px -2px rgb(37 99 235 / 0.45);
+}
+.lr-click-pulse {
+  border-radius: 9999px;
+  background-color: rgb(37 99 235 / 0.7);
+}
+
+/* ── Phones: the same type down-scale index.css applies to text-[Npx] ─────── */
+@media (max-width: 639px) {
+  .lr-nav-link,
+  .lr-cta-lg,
+  .lr-ghost,
+  .lr-chat-input {
+    font-size: 11.5px;
+  }
+  .lr-cta-nav,
+  .lr-kicker,
+  .lr-see-label {
+    font-size: 11px;
+  }
+  .lr-subhead {
+    font-size: 14.5px;
+  }
+  .lr-chat-title {
+    font-size: 13px;
+  }
+}

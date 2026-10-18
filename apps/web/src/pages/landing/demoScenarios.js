@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// demoScenarios.js — the scripted Penny hero demo as DATA. Three scenarios,
-// played once in order, each a sorted beat timeline `{ at, patch?, type?, advance? }`:
+// demoScenarios.js — the scripted Penny hero demo as DATA. Three looping
+// scenarios, each a sorted beat timeline `{ at, patch?, type?, advance? }`:
 //   patch   → shallow-merged into the demo state at `at` ms
 //   type    → start a bounded typewriter into `field` at `ms` per char
 //             (cancelled early if a later patch writes the same field)
@@ -141,8 +141,10 @@ const SCENARIO_2 = {
 
 // ── Scenario 3 — Diocese question (~12s) ─────────────────────────────────────
 const S3_USER = 'Which of our schools are behind on their June close?'
+// The same FICTIONAL Bayview network the #networks console shows (never a
+// customer's school); demo-scenarios.spec.js keeps the two in step.
 const S3_ASSISTANT =
-  'Two of your five schools aren’t closed yet:\n\n- **St. Anne’s** — trial balance in, statements not generated\n- **Holy Cross** — no June trial balance yet\n\nWant me to nudge both business offices and draft the diocese rollup for the three that are done?'
+  'Two of your six schools aren’t closed yet:\n\n- **St. Aurelia Academy** — trial balance in, statements not generated\n- **Mangrove Point Catholic High** — no June trial balance yet\n\nWant me to nudge both business offices and draft the diocese rollup for the four that are done?'
 
 const SCENARIO_3 = {
   id: 'diocese',
@@ -152,7 +154,7 @@ const SCENARIO_3 = {
     {
       at: 3000,
       patch: { showTyping: false, assistantVisible: true, speaking: true, assistantStreaming: true },
-      type: { field: 'assistantText', text: S3_ASSISTANT, ms: 16 },
+      type: { field: 'assistantText', text: S3_ASSISTANT, ms: 15 },
     },
     {
       at: 7200,

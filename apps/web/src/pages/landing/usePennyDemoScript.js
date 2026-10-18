@@ -11,22 +11,22 @@
 //   • Full teardown on unmount / dependency change (every timer id tracked).
 //   • useReducedMotion → Scenario 1's finished frame, statically, zero timers.
 //
-// ONE pass, never a loop (Premium UI P5: motion is one-shot): each scenario's
-// final `advance` beat bumps scenarioIndex; the effect re-runs, resets the
-// transcript, and schedules the next scenario after a short gap so
-// AnimatePresence (keyed on scenarioIndex, mode="wait") can fade the old
-// transcript out. The LAST scenario's advance beat ends the show: its finished
-// transcript stays on screen and no timer is ever scheduled again.
+// The scenario loop: the final `advance` beat bumps scenarioIndex (mod 3); the
+// effect re-runs, resets the transcript, and schedules the next scenario after
+// a short gap so AnimatePresence (keyed on scenarioIndex, mode="wait") can fade
+// the old transcript out before fresh content types in. It only runs while the
+// demo is in view, and never under reduced motion (static finished frame).
+// The Scholar blinks by itself; the scripted blink beats add the extra ones.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
 import { useInView, useReducedMotion } from 'framer-motion'
 import { INITIAL_DEMO_STATE, SCENARIOS, STATIC_FINAL_FRAME } from './demoScenarios.js'
 
 // Hero load orchestration: the script starts at t=1300 on first run so the
-// headline mask-reveal lands first; scenario hand-offs wait just past the 300ms
+// headline mask-reveal lands first; loop hand-offs wait just past the 300ms
 // AnimatePresence exit fade.
 const FIRST_RUN_DELAY = 1300
-const HANDOFF_DELAY = 400
+const LOOP_DELAY = 400
 
 export default function usePennyDemoScript() {
   const reduce = useReducedMotion()
@@ -37,13 +37,10 @@ export default function usePennyDemoScript() {
   // Flipped to false only once beats actually start, so a StrictMode
   // mount→unmount→mount still gives the real first run the full hero delay.
   const firstRunRef = useRef(true)
-  // Set once the last scenario has played to its end — the demo then rests on
-  // that finished frame for good (scrolling away and back does not replay it).
-  const finishedRef = useRef(false)
 
   // ── Beat runner ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (reduce || !inView || finishedRef.current) return undefined
+    if (reduce || !inView) return undefined
     const scenario = SCENARIOS[scenarioIndex]
     const timers = new Set()
     const typers = new Map() // field → interval id
@@ -76,8 +73,7 @@ export default function usePennyDemoScript() {
       const beat = scenario.beats[beatIndex]
       if (!beat) return
       if (beat.advance) {
-        if (scenarioIndex >= SCENARIOS.length - 1) finishedRef.current = true
-        else setScenarioIndex(scenarioIndex + 1)
+        setScenarioIndex((i) => (i + 1) % SCENARIOS.length)
         return
       }
       if (beat.patch) {
@@ -93,7 +89,7 @@ export default function usePennyDemoScript() {
       }
     }
 
-    const startDelay = firstRunRef.current ? FIRST_RUN_DELAY : HANDOFF_DELAY
+    const startDelay = firstRunRef.current ? FIRST_RUN_DELAY : LOOP_DELAY
     const startId = setTimeout(() => {
       firstRunRef.current = false
       // Reset here (after the exit fade), not synchronously on effect run, so

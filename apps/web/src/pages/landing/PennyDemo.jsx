@@ -7,10 +7,12 @@
 // The transcript is decorative theatre: aria-hidden + `inert` (React 19) so
 // none of the real buttons inside are reachable; the adjacent sr-only <p>
 // carries the meaning. AnimatePresence mode="wait" keyed on scenarioIndex
-// gives each scenario hand-off a clean fade-out → fresh-mount reset; the three
-// scenarios play ONCE and the last one's finished frame stays (no loop).
-// Rendered inside the hero's Panel: a header row on a hairline, the transcript
-// on white, a faux composer on a hairline — no tinted slab, no pulsing dot.
+// gives each scenario hand-off (and the loop back to the first) a clean
+// fade-out → fresh-mount reset.
+// Rendered inside the hero's floating glass frame: a header with the Scholar
+// and a pulsing status dot, the transcript on a pale-blue slab, and a faux
+// composer with a round input and a blue gradient send button. The three
+// scenarios loop while the demo is on screen. Styles: landing-restore-top.css.
 // ─────────────────────────────────────────────────────────────────────────────
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUp, Mic } from 'lucide-react'
@@ -19,6 +21,7 @@ import PennyTypingIndicator from '../../components/penny/chat/PennyTypingIndicat
 import PennyMessage from '../../components/penny/chat/PennyMessage.jsx'
 import usePennyDemoScript from './usePennyDemoScript.js'
 import { HERO } from './landingContent.js'
+import '../../styles/landing-restore-top.css'
 
 const noop = () => {}
 
@@ -45,7 +48,7 @@ export default function PennyDemo() {
         ref={frameRef}
         aria-hidden="true"
         inert
-        className="flex h-[480px] flex-col bg-white"
+        className="lr-chat flex h-[480px] flex-col"
       >
         {/* Header — the real Scholar, driven by the script. It stays perched in
             the header (no flight in a chat header); the script's glance is a
@@ -54,7 +57,7 @@ export default function PennyDemo() {
             typed, THINKS while the typing dots show and while an action
             applies, TALKS while the answer streams, and tosses its cap when the
             action lands. */}
-        <div className="flex items-center gap-3 border-b border-hair px-5 py-2.5">
+        <div className="lr-chat-head flex items-center gap-3">
           <PennyAvatar
             size={44}
             active
@@ -66,9 +69,9 @@ export default function PennyDemo() {
             listening={state.showUser && !state.showTyping && !state.assistantVisible}
             thinking={state.showTyping || state.proposal?.status === 'applying'}
           />
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+          <p className="lr-chat-title flex items-center gap-2">
             KYRO · AI Chief of Staff
-            <span className="h-1.5 w-1.5 rounded-full bg-penny" />
+            <span className="lr-chat-dot" />
           </p>
         </div>
 
@@ -76,7 +79,7 @@ export default function PennyDemo() {
             overflow-anchor: none — its lines move up as the script types, and
             the browser must never use one as the page's scroll anchor (it
             would nudge the whole page up a line, mid-scroll). */}
-        <div className="flex flex-1 flex-col justify-end overflow-hidden px-5 py-3 [overflow-anchor:none]">
+        <div className="flex flex-1 flex-col justify-end overflow-hidden px-4 py-3 [overflow-anchor:none]">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={scenarioIndex}
@@ -99,10 +102,10 @@ export default function PennyDemo() {
                     onSetProposalStatus={noop}
                     messageIndex={0}
                   />
-                  {/* Gold click-pulse over the Confirm button as the script "clicks". */}
+                  {/* A blue click-pulse over the Confirm button as the script "clicks". */}
                   {state.clickPulse && (
                     <motion.span
-                      className="pointer-events-none absolute bottom-3 left-14 h-9 w-9 rounded-full bg-penny/70"
+                      className="lr-click-pulse pointer-events-none absolute bottom-3 left-14 h-9 w-9"
                       initial={{ scale: 0.5, opacity: 0.9 }}
                       animate={{ scale: 1.5, opacity: 0 }}
                       transition={{ duration: 0.45, ease: 'easeOut' }}
@@ -115,12 +118,12 @@ export default function PennyDemo() {
         </div>
 
         {/* Faux composer strip — pure decoration. */}
-        <div className="flex items-center gap-2 border-t border-hair px-4 py-2.5">
-          <span className="flex-1 select-none rounded-md border border-hair/[.18] bg-white px-3 py-2 text-[13px] text-ink2">
+        <div className="lr-chat-compose flex items-center gap-2">
+          <span className="lr-chat-input flex-1 select-none">
             Ask KYRO anything…
           </span>
-          <Mic size={16} className="shrink-0 text-ink2" />
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-penny text-ink">
+          <Mic size={16} className="shrink-0 text-[#44506e]" />
+          <span className="lr-chat-send flex shrink-0 items-center justify-center">
             <ArrowUp size={15} />
           </span>
         </div>

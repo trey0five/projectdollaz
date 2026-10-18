@@ -1,15 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// LandingPage — the public marketing homepage at "/". Premium UI P5: the app's
-// "ledger" system at editorial scale. ONE ink band (the hero video + its
-// straddling headline card); everything after it sits on the page ground,
-// divided by hairline section rules — no frosted cards, no glass except the
-// nav once scrolled, no infinite loops (the owl's idle is the one exception).
+// LandingPage — the public marketing homepage at "/". The dynamic look: the
+// hero video with a dark frosted headline card straddling it, then every
+// section on the light-blue page ground (#e9f0fb) with glass cards, hue glows
+// and live micro-demos. Ambient loops run only under
+// prefers-reduced-motion: no-preference; each has a still fallback.
 //
 // Composition: video + hero/KYRO demo → the ORBIT set-piece (pinned; nine
-// domains dock into KYRO and collapse into the briefing) → the platform as
-// REAL product screenshots + a ruled index → TB → four statements → the cash
-// forecast workbook → the network roll-up → the one-click board packet → the
-// privacy statement → footer. Default export, loaded via React.lazy (App.jsx).
+// domains dock into KYRO and collapse into the briefing) → the live bento wall
+// (glassy micro-demos of today's app: briefing, analytics, QuickBooks sync,
+// Ask KYRO, tasks, enrollment, board reports, strategy + the nine module tiles)
+// → TB → four statements (the statement tabs auto-cycle) → the cash forecast
+// workbook → the network roll-up → the one-click board packet → the privacy
+// statement → footer.
+// No product screenshots: every app screen is a live, fictional-data mock.
+// Default export, loaded via React.lazy (App.jsx).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useState } from 'react'
 import LandingNav from './LandingNav.jsx'
@@ -23,7 +27,6 @@ import OrgCommandShow from './OrgCommandShow.jsx'
 import BoardReadyShow from './BoardReadyShow.jsx'
 import LandingFooter from './LandingFooter.jsx'
 import TrustBar from './TrustBar.jsx'
-import '../../styles/pending/p5-landing.css'
 
 export default function LandingPage() {
   // The fixed nav stays hidden until the hero video settles. The callback is
@@ -31,8 +34,9 @@ export default function LandingPage() {
   const [navShown, setNavShown] = useState(false)
   const revealNav = useCallback(() => setNavShown(true), [])
 
+  // The pre-redesign light-blue page ground (#e9f0fb) under every section.
   return (
-    <div className="bg-ground text-ink">
+    <div className="bg-[#e9f0fb] text-ink">
       <LandingNav show={navShown} />
       <main id="main">
         {/* The product video OPENS the page; the headline card straddles its
@@ -42,9 +46,9 @@ export default function LandingPage() {
         {/* The set-piece: nine domains dock into KYRO, then collapse into the
             morning briefing. */}
         <OrbitScrolly />
-        {/* The breadth: real product screens + a ruled index of the rest. */}
+        {/* The breadth: a live bento of glassy micro-demos, one per module. */}
         <BentoWall />
-        {/* TB → four statements, stepping through once. */}
+        {/* TB → four statements; the statement tabs auto-cycle. */}
         <TbToStatements />
         {/* The self-typing QuickBooks cash forecast. */}
         <CashForecastCinema />

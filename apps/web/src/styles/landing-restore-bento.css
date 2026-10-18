@@ -1,0 +1,567 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   landing-restore-bento.css — the live bento wall on the public landing
+   (#platform, pages/landing/BentoWall.jsx), restored from the pre-redesign
+   landing (74caaba) at the owner's request (2026-10-17), with each micro-demo
+   redrawn to look like TODAY's app (Aurora band, verdict pills, the Scholar,
+   the nine module tiles).
+
+   SCOPE. Every selector is `bwr-` namespaced, so nothing here reaches the app,
+   the orbit (landing-orbit.css) or another landing section. No global token is
+   touched: radii, shadows and the pre-redesign ground are literals here.
+
+   MOTION. Every loop sits inside `prefers-reduced-motion: no-preference`; with
+   reduced motion each demo shows its finished still (lit bar, ticked task,
+   drawn line), never a half-frame. `.bwr-paused` (set while the wall is off
+   screen) parks the loops.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ═══ Daily briefing — a pocket Aurora band ═══════════════════════════════ */
+.bwr-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: #fff;
+  background: radial-gradient(
+    120% 140% at 0% 0%,
+    #1b45a5 0%,
+    #0f2a63 46%,
+    #07142f 100%
+  );
+  box-shadow:
+    0 14px 30px -18px rgba(29, 63, 168, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.bwr-blob {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(26px);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.bwr-blob-1 {
+  width: 180px;
+  height: 120px;
+  left: -50px;
+  top: -60px;
+  background: #3b82f6;
+}
+.bwr-blob-2 {
+  width: 200px;
+  height: 120px;
+  right: -60px;
+  top: -30px;
+  background: #8b5cf6;
+}
+.bwr-blob-3 {
+  width: 220px;
+  height: 90px;
+  left: 35%;
+  bottom: -70px;
+  background: #22d3ee;
+  opacity: 0.55;
+}
+.bwr-grain {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.4;
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.16) 1px,
+    transparent 1px
+  );
+  background-size: 16px 16px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 70%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 70%);
+}
+.bwr-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(100deg, #3b6ef5, #8b5cf6 55%, #ff6b5c);
+  box-shadow: 0 6px 16px -6px rgba(255, 107, 92, 0.7);
+}
+
+/* Small verdict pills inside the cells (the app's .au-pill, one size down). */
+.bwr-wall .au-pill {
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  font-size: 10.5px;
+}
+.bwr-wall .au-pill-i {
+  width: 15px;
+  height: 15px;
+}
+.bwr-wall .au-pill-i > svg {
+  width: 9px;
+  height: 9px;
+}
+
+/* ═══ Ask KYRO — the chat bubbles ═════════════════════════════════════════ */
+.bwr-bubble {
+  border-radius: 12px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+.bwr-bubble-user {
+  margin-left: auto;
+  border-bottom-right-radius: 4px;
+  color: #fff;
+  background: linear-gradient(120deg, #2563eb, #4f46e5);
+}
+.bwr-bubble-kyro {
+  border-bottom-left-radius: 4px;
+  color: #101c3d;
+  background: #fff;
+  border: 1px solid rgba(16, 28, 61, 0.1);
+  box-shadow: 0 6px 16px -10px rgba(16, 28, 61, 0.35);
+}
+.bwr-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* ═══ Nine domains — the Home tiles ═══════════════════════════════════════ */
+.bwr-mod {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 28, 61, 0.09);
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in srgb, var(--hue) 14%, transparent),
+      transparent 62%
+    ),
+    rgba(255, 255, 255, 0.92);
+  padding: 9px 6px 8px;
+  transition: transform 0.3s ease;
+}
+.bwr-mod-art {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 13%, #fff);
+}
+.bwr-mod-art > svg {
+  width: 21px;
+  height: 21px;
+}
+.bwr-mod-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+}
+/* Phones: a compact 3×3 — the name on top (never truncated), then a small
+   icon beside the verdict word. sm+ keeps the stacked Home-tile look. */
+@media (max-width: 639.98px) {
+  .bwr-mod {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'label label'
+      'art verdict';
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 5px;
+    padding: 7px 7px 8px;
+  }
+  .bwr-mod-label {
+    grid-area: label;
+  }
+  .bwr-mod-art {
+    grid-area: art;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+  }
+  .bwr-mod-art > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .bwr-mod-verdict {
+    grid-area: verdict;
+    margin-top: 0;
+  }
+}
+
+/* ═══ Board reports — the four pages ═════════════════════════════════════ */
+.bwr-page {
+  position: absolute;
+  bottom: 0;
+  width: 34px;
+  height: 44px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid rgba(16, 28, 61, 0.12);
+  box-shadow: 0 6px 14px -8px rgba(16, 28, 61, 0.45);
+  transform-origin: 50% 100%;
+  transform: translateX(var(--x)) rotate(var(--r));
+}
+.bwr-page::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  top: 6px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hue);
+}
+.bwr-page::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 9px;
+  top: 14px;
+  height: 18px;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(16, 28, 61, 0.16) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+/* ═══ Loops (pre-redesign bw-* keyframes, renamed bwr-*) ═════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  .bwr-blob {
+    animation: bwr-drift 14s ease-in-out infinite alternate;
+  }
+  .bwr-blob-2 {
+    animation-duration: 18s;
+    animation-delay: -5s;
+  }
+  .bwr-blob-3 {
+    animation-duration: 21s;
+    animation-delay: -2s;
+  }
+
+  .bwr-pulse::before,
+  .bwr-pulse::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 2px solid rgb(37 99 235 / 0.9);
+    animation: bwr-ring 2.2s ease-out infinite;
+  }
+  .bwr-pulse::after {
+    animation-delay: 1.1s;
+  }
+
+  .bwr-sort {
+    animation: bwr-sort 4.2s ease infinite;
+    animation-delay: var(--bwr-delay, 0s);
+  }
+  .bwr-sort .bwr-sort-tick {
+    animation: bwr-sort-tick 4.2s ease infinite;
+    animation-delay: var(--bwr-delay, 0s);
+  }
+
+  .bwr-type i {
+    animation: bwr-ty 1.2s ease-in-out infinite;
+  }
+  .bwr-type i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .bwr-type i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  .bwr-tickbox::after {
+    animation: bwr-tick 3.2s ease infinite;
+  }
+  .bwr-strike {
+    animation: bwr-strike 3.2s ease infinite;
+  }
+
+  .bwr-spark {
+    stroke-dasharray: 100;
+    animation: bwr-draw 3.6s ease-in-out infinite;
+  }
+  .bwr-area {
+    animation: bwr-area 3.6s ease-in-out infinite;
+  }
+  .bwr-end {
+    animation: bwr-end 3.6s ease-in-out infinite;
+  }
+  .bwr-end::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 999px;
+    background: #2563eb;
+    animation: bwr-ping 1.8s ease-out infinite;
+  }
+
+  .bwr-col {
+    animation: bwr-rise 3.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    animation-delay: var(--bwr-delay, 0s);
+  }
+
+  .bwr-page {
+    animation: bwr-fan 3.6s cubic-bezier(0.16, 1.1, 0.3, 1) infinite;
+  }
+
+  .bwr-dot {
+    animation: bwr-light 3.6s ease infinite;
+    animation-delay: var(--bwr-delay, 0s);
+  }
+
+  .bwr-goal {
+    animation: bwr-goal 3.4s ease-in-out infinite;
+  }
+
+  .bwr-mod {
+    animation: bwr-mod 5.4s ease infinite;
+    animation-delay: var(--bwr-delay, 0s);
+  }
+
+  .bwr-paused,
+  .bwr-paused *,
+  .bwr-paused *::before,
+  .bwr-paused *::after {
+    animation-play-state: paused !important;
+  }
+}
+
+/* Reduced motion: every demo at its finished still. */
+@media (prefers-reduced-motion: reduce) {
+  .bwr-tickbox::after {
+    transform: scale(1) !important;
+  }
+  .bwr-strike {
+    text-decoration-color: rgb(16 28 61 / 0.55);
+    color: rgb(16 28 61 / 0.5);
+  }
+  .bwr-goal {
+    width: 72% !important;
+  }
+  .bwr-dot {
+    background: #d4b47a;
+  }
+}
+
+@keyframes bwr-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(34px, 14px) scale(1.12);
+  }
+  100% {
+    transform: translate(-22px, 10px) scale(0.95);
+  }
+}
+@keyframes bwr-ring {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+@keyframes bwr-sort {
+  0%,
+  8% {
+    transform: translateY(-6px);
+    opacity: 0.6;
+  }
+  20%,
+  86% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 0.6;
+  }
+}
+@keyframes bwr-sort-tick {
+  0%,
+  18% {
+    transform: scale(0);
+  }
+  28%,
+  86% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+@keyframes bwr-ty {
+  30% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes bwr-tick {
+  0%,
+  18% {
+    transform: scale(0);
+  }
+  30%,
+  80% {
+    transform: scale(1);
+  }
+  92%,
+  100% {
+    transform: scale(0);
+  }
+}
+@keyframes bwr-strike {
+  0%,
+  18% {
+    text-decoration-color: transparent;
+    color: rgb(16 28 61 / 0.88);
+  }
+  30%,
+  80% {
+    text-decoration-color: rgb(16 28 61 / 0.55);
+    color: rgb(16 28 61 / 0.45);
+  }
+  92%,
+  100% {
+    text-decoration-color: transparent;
+    color: rgb(16 28 61 / 0.88);
+  }
+}
+@keyframes bwr-draw {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  55%,
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes bwr-area {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  64%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes bwr-end {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  56%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes bwr-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+@keyframes bwr-rise {
+  0% {
+    transform: scaleY(0.08);
+  }
+  30%,
+  84% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes bwr-fan {
+  0%,
+  10% {
+    transform: translateX(0) rotate(0);
+  }
+  35%,
+  82% {
+    transform: translateX(var(--x)) rotate(var(--r));
+  }
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+}
+@keyframes bwr-light {
+  25%,
+  70% {
+    background: #d4b47a;
+    box-shadow: 0 0 12px #d4b47a;
+  }
+}
+@keyframes bwr-goal {
+  0%,
+  15% {
+    width: 8%;
+  }
+  60%,
+  85% {
+    width: 72%;
+  }
+  100% {
+    width: 72%;
+    opacity: 0.4;
+  }
+}
+@keyframes bwr-mod {
+  0%,
+  1% {
+    transform: none;
+    box-shadow: none;
+  }
+  4%,
+  13% {
+    transform: translateY(-3px);
+    border-color: var(--hue);
+    box-shadow:
+      0 0 0 1px var(--hue),
+      0 10px 24px -10px var(--hue);
+  }
+  20% {
+    transform: none;
+    border-color: var(--hue);
+    box-shadow: none;
+  }
+  42%,
+  100% {
+    transform: none;
+    border-color: rgba(16, 28, 61, 0.09);
+    box-shadow: none;
+  }
+}

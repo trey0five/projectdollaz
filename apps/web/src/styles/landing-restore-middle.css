@@ -1,0 +1,124 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   landing-restore-middle.css — motion + surfaces for three landing sections
+   restored to the pre-Premium-UI look (74caaba): TB → statements
+   (TbToStatements), the cash-forecast cinema band (CashForecastCinema) and the
+   networks console (OrgCommandShow).
+
+   SCOPE. Every selector is `lrm-` prefixed and only those three components
+   use them, so nothing here reaches the app, the orbit or a print document.
+   Global tokens (tailwind.config.js / tokens.css / surface.css) are NOT
+   touched: the radii and shadows the v2 clamp collapses are written here as
+   literals instead.
+
+   MOTION. Every loop lives inside prefers-reduced-motion: no-preference; under
+   reduce the still frame is the resting state (the components also gate their
+   framer loops on useReducedMotion).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── A mini Aurora band (the depicted app's module band) ─────────────────── */
+/* The app's band (aurora.css .au-hero) at card scale: the module hue's dark
+   radial ground, with the app's own drifting blobs (.au-fx/.au-blob, which
+   aurora.css already stops under reduced motion) behind the content. */
+.lrm-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #fff;
+  background: radial-gradient(
+    120% 160% at 0% 0%,
+    var(--au-d0, #1b45a5) 0%,
+    var(--au-d1, #0f2a63) 46%,
+    var(--au-d2, #07142f) 100%
+  );
+}
+.lrm-band .au-blob {
+  opacity: 0.6;
+}
+
+/* ── Glass on the dark cinema band ───────────────────────────────────────── */
+.lrm-glass-dark {
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04) 70%);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* ── Loops (no-preference only) ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* The TB → statements packet beam: dashes march toward the statements. */
+  .lrm-flow {
+    stroke-dasharray: 4 14;
+    animation: lrm-flow 1s linear infinite;
+  }
+  /* The trial-balance file floats a few pixels, like a card held up. */
+  .lrm-float {
+    animation: lrm-float 6s ease-in-out infinite;
+  }
+  /* A live dot's sonar ring. */
+  .lrm-ping {
+    animation: lrm-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  /* A soft breathing glow (the low-point marker, the live roll-up dot). */
+  .lrm-breathe {
+    animation: lrm-breathe 1.8s ease-in-out infinite;
+  }
+  /* A sheen that crosses a progress bar once per loop. */
+  .lrm-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .lrm-sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0.55) 50%, transparent 100%);
+    transform: translateX(-100%);
+    animation: lrm-sheen 2.6s ease-in-out 1.2s infinite;
+  }
+}
+
+@keyframes lrm-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+@keyframes lrm-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes lrm-ping {
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@keyframes lrm-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.45);
+    opacity: 0.75;
+  }
+}
+@keyframes lrm-sheen {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media print {
+  .lrm-band {
+    background: #fff;
+    color: #101c3d;
+  }
+}

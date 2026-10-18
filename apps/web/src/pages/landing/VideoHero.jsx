@@ -4,15 +4,32 @@
 // single video byte arrives (no black hole, no reveal delay); the entrance is a
 // quick unobtrusive settle that starts at once rather than waiting for canplay.
 // Autoplays muted/looped (browser policy), inline on mobile, audio stripped in
-// the encode. This band is the page's ONE ink surface; the bottom stays mostly
-// clear of overlays — the headline card from the section below straddles up
-// onto it (144px on desktop; see LandingHero). Reduced-motion: static.
+// the encode. The bottom stays mostly clear of overlays — the frosted headline
+// card from the section below straddles up onto it (144px on desktop; see
+// LandingHero). Reduced-motion: static — no autoplay/loop, the video is held
+// paused on its poster/first frame (and paused if the preference flips on).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 export default function VideoHero({ onShown }) {
   const reduce = useReducedMotion()
+  const videoRef = useRef(null)
+
+  // Reduced motion: hold the clip still on its first frame. autoPlay is also
+  // omitted below, but pause() covers a preference that flips mid-session and
+  // browsers that start playback before React reconciles the attribute.
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    if (reduce) {
+      v.pause()
+      try { v.currentTime = 0 } catch { /* metadata not loaded yet — poster shows */ }
+    } else {
+      const p = v.play?.()
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    }
+  }, [reduce])
 
   // Fixed-nav hand-off shortly after mount (the headline block also calls this;
   // whichever fires first wins — the callback is memoized upstream).
@@ -38,10 +55,11 @@ export default function VideoHero({ onShown }) {
             Versioned file names because public/ ships with a one-year immutable
             cache — never overwrite a hero file in place. */}
         <video
+          ref={videoRef}
           poster="/homepage-hero-poster-v3.webp"
-          autoPlay
+          autoPlay={!reduce}
           muted
-          loop
+          loop={!reduce}
           playsInline
           preload="metadata"
           className="h-[72svh] min-h-[420px] w-full object-cover object-bottom"
@@ -56,11 +74,10 @@ export default function VideoHero({ onShown }) {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 90% at 50% 40%, transparent 60%, rgba(10,21,38,0.4) 100%), linear-gradient(to bottom, rgba(10,21,38,0.55), transparent 20%, transparent 90%, rgba(10,21,38,0.55) 100%)',
+              'radial-gradient(120% 90% at 50% 40%, transparent 60%, rgba(10,21,38,0.4) 100%), linear-gradient(to bottom, rgba(10,21,38,0.35), transparent 18%, transparent 90%, rgba(10,21,38,0.55) 100%)',
           }}
         />
-        {/* A white hairline draws once across the base as the settle finishes
-            (gold is KYRO's colour only). */}
+        {/* Gold hairline draws across the base as the settle finishes. */}
         {!reduce && (
           <motion.span
             aria-hidden="true"
@@ -68,7 +85,7 @@ export default function VideoHero({ onShown }) {
             animate={{ scaleX: 1 }}
             transition={{ duration: 1.1, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-x-0 bottom-0 h-px origin-left"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)' }}
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.75), transparent)' }}
           />
         )}
       </motion.div>

@@ -1,0 +1,47 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   landing-restore-bottom.css — section-scoped rules for the restored (pre-P5,
+   74caaba) bottom of the public landing: the board-ready stage and the trust
+   strip. Everything is namespaced `lrb-` so nothing here reaches the app or
+   another landing section. Screen only.
+
+   Why a file at all: the stage depicts TODAY's app, so its sheets and KYRO's
+   lines wear the app's own Aurora verdict pill (components/ui/aurora/
+   VerdictPill.jsx, styled by aurora.css). At the stage's miniature scale the
+   pill needs a smaller cut — the word + icon + colour stay, only the size
+   shrinks. Infinite loops on these sections are framer-driven and mount only
+   under prefers-reduced-motion: no-preference; the one CSS loop (the button's
+   pulse halo) is stopped below for reduced motion as a belt-and-braces guard.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.au-pill.lrb-pill-xs {
+  flex: none;
+  gap: 4px;
+  padding: 3px 7px 3px 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+}
+.au-pill.lrb-pill-xs .au-pill-i {
+  width: 13px;
+  height: 13px;
+}
+.au-pill.lrb-pill-xs .au-pill-i svg {
+  width: 8px;
+  height: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lrb-stage .animate-pulse {
+    animation: none;
+  }
+}
+
+/* ── Trust chips: the frosted chip's resting drop and its blue hover glow
+   (plain CSS: a comma'd shadow list drops out of the dev JIT). ─────────────── */
+.lrb-trust-chip {
+  box-shadow: 0 14px 36px -18px rgba(16, 28, 61, 0.35);
+}
+.lrb-trust-chip:hover {
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.45),
+    0 10px 34px rgba(37, 99, 235, 0.28);
+}

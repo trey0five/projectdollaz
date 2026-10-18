@@ -1,10 +1,20 @@
 /* ────────────────────────────────────────────────────────────────────────────
-   landing-orbit.css — the one keyframe the ORBIT set-piece on the public
-   landing still needs. Scoped by the .orbit-* prefix so nothing leaks into the
-   app. Premium UI P5: every infinite loop that lived here (beam packet flow,
-   the bento pulses/typing/tick/strike/spark/dot/goal cycles) is gone — motion
-   on the landing is one-shot.
+   landing-orbit.css — keyframes for the ORBIT set-piece on the public landing.
+   Scoped by the .orbit-* prefix so nothing leaks into the app. The beam's
+   packet-flow loop (restored with the pre-Premium-UI orbit look) sits behind
+   prefers-reduced-motion: no-preference; the dock shockwave is one-shot.
    ──────────────────────────────────────────────────────────────────────────── */
+
+/* Beam packet flow (dashed overlay marching toward the core). */
+@media (prefers-reduced-motion: no-preference) {
+  .orbit-beam-flow {
+    stroke-dasharray: 4 14;
+    animation: orbit-flow 1s linear infinite;
+  }
+}
+@keyframes orbit-flow {
+  to { stroke-dashoffset: -18; }
+}
 
 /* Dock shockwave — one expanding hue ring per dock hand-off (re-keyed per dock,
    so each ring plays exactly once). */

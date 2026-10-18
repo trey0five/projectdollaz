@@ -29,7 +29,7 @@ export const HERO = {
   ctaPrimary: { label: 'Get started', to: '/register' },
   ctaGhost: { label: 'Sign in', to: '/login' },
   trustLine:
-    'Built for heads of school, business officers, and diocese finance teams · Built to FERPA standards. No student logins.',
+    'Built for heads of school, business officers, and diocese finance teams · Built to FERPA standards. No student-facing surfaces.',
   demoSrSummary:
     'Demo: KYRO imports a trial balance, generates statements, files a document, and answers a multi-school question.',
 }
@@ -54,26 +54,30 @@ export const ORG_COMMAND = {
   h2: 'Every school on one screen.',
   sub: 'The superintendent view consolidates the whole network — finances, enrollment, alerts and the morning brief roll up from every school, and every number drills back down to the school that produced it.',
   consoleKicker: 'Superintendent view',
-  consoleTitle: 'Diocese of Sample · FY26',
+  // A FICTIONAL network (the same made-up Bayview schools the product demo
+  // uses) — never a customer's name.
+  consoleTitle: 'Bayview Catholic Schools · FY26',
   kpis: [
     { label: 'Schools', value: 6 },
     { label: 'Students', value: 2840 },
     { label: 'Collections', value: 93, suffix: '%' },
     { label: 'Need attention', value: 2, tone: 'amber' },
   ],
+  // `pace` = collections pace (%); `short` labels the compare bars.
   schools: [
-    { name: "St. Mary's Academy", stat: 'Collections 8 days behind', tone: 'amber' },
-    { name: 'Holy Cross Prep', stat: 'Audit packet clean', tone: 'good' },
-    { name: 'Sacred Heart', stat: 'Enrollment +4% vs plan', tone: 'good' },
-    { name: "St. Joseph's", stat: 'Maintenance backlog rising', tone: 'amber' },
-    { name: 'Immaculata High', stat: 'Cash runway 121 days', tone: 'good' },
-    { name: 'Our Lady of Peace', stat: 'On plan across domains', tone: 'good' },
+    { name: 'St. Aurelia Academy', short: 'St. Aurelia', stat: 'Collections 8 days behind', tone: 'amber', pace: 86 },
+    { name: 'Cedar Ridge Preparatory', short: 'Cedar Ridge', stat: 'Audit packet clean', tone: 'good', pace: 97 },
+    { name: 'Brightwater School', short: 'Brightwater', stat: 'Enrollment +4% vs plan', tone: 'good', pace: 94 },
+    { name: 'Mangrove Point Catholic High', short: 'Mangrove Point', stat: 'Maintenance backlog rising', tone: 'amber', pace: 88 },
+    { name: 'St. Odile Catholic School', short: 'St. Odile', stat: 'Cash runway 121 days', tone: 'good', pace: 99 },
+    { name: 'Heron Cove Academy', short: 'Heron Cove', stat: 'On plan across domains', tone: 'good', pace: 95 },
   ],
+  // Each line carries the tone of the school (or the network) it names.
   brief: [
-    "St. Mary's — tuition collections are 8 days behind the network pace.",
-    'Consolidated cash runway is 94 days; two schools carry the drag.',
-    "St. Joseph's — maintenance backlog crossed its budget line.",
-    'Holy Cross — board packet is clean and ready to send.',
+    { text: 'St. Aurelia — tuition collections are 8 days behind the network pace.', tone: 'amber' },
+    { text: 'Consolidated cash runway is 94 days; two schools carry the drag.', tone: 'amber' },
+    { text: 'Mangrove Point — maintenance backlog crossed its budget line.', tone: 'amber' },
+    { text: 'Cedar Ridge — board packet is clean and ready to send.', tone: 'good' },
   ],
   closing: 'One login. Every school. Drill from the network to a single invoice.',
 }
