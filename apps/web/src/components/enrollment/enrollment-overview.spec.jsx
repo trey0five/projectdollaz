@@ -102,7 +102,7 @@ describe('B4 — honest emptiness + intact masking', () => {
     expect(section).toMatch(/formatted: formatMinCell\(n\)/)
     // Masked rows still drop the share gutter so the pair can't be re-derived.
     expect(section).toMatch(/share: !masked && total > 0/)
-    expect(section).toMatch(/Aggregate counts only — cells under 5 show as &lt;5\./)
+    expect(section).toMatch(/Aggregate counts only — on the whole roster, cells under 5 show as &lt;5/)
   })
 })
 

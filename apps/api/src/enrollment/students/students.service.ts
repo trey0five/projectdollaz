@@ -26,6 +26,7 @@ import { PrismaService } from '../../prisma/prisma.service.js'
 import { AuditService } from '../../common/audit/audit.service.js'
 import { EnrollmentService } from '../enrollment.service.js'
 import { rosterRollup } from './roster-rollup.js'
+import { tallyByStatus, type StatusTallies, type TallyRow } from './aggregate-tally.js'
 import { parseStudentImport, type StudentCandidate } from './student-import.parser.js'
 import type {
   CreateStudentDto,
@@ -81,6 +82,45 @@ export interface StudentAggregate {
     flags: { iep: number; plan504: number; ell: number; any: number }
   }
   kpis: { enrolled: number; waitlist: number; flagged: number; newThisYear: number }
+  /**
+   * What the PUBLIC gate needs to decide, never published itself
+   * (aggregate-suppression.ts): the whole roster, the request's population
+   * without its status filter, and — per active attribute filter — the
+   * population without that filter, each split BY STATUS. Every demographic
+   * breakdown is published over one status group, and a filtered read is
+   * withheld whole when it would select a value the read it narrows hides.
+   */
+  suppressionBasis?: AggregateSuppressionBasis
+}
+
+/** The filters a request can narrow by (status has its own base). Grade is
+ *  here too: it is not an ATTRIBUTE filter, but a grade read is still a
+ *  narrowing that can be differenced against the read without it. */
+export type AggregateFilterDim = 'grade' | 'race' | 'gender' | 'ethnicity' | 'ageBand' | 'flags'
+export const AGGREGATE_FILTER_DIMS: readonly AggregateFilterDim[] = ['grade', 'race', 'gender', 'ethnicity', 'ageBand', 'flags']
+
+export interface AggregateSuppressionBasis {
+  /** The whole register. */
+  roster: StatusTallies
+  /** The request's rows with its STATUS filter removed. */
+  base: StatusTallies
+  /** The status filter as sent (null when none). */
+  statusSelection: StudentStatusKey[] | null
+  /** Per active filter: what it selected, and the rows with that filter AND
+   *  the status filter removed. */
+  filterBases: Partial<Record<AggregateFilterDim, { selected: string[]; tallies: StatusTallies }>>
+  /** Per filter with SEVERAL values selected: for each value, the rows (status
+   *  filter removed) with just that value dropped from the selection — the
+   *  narrower read a multi-value selection can be differenced against. */
+  subsetBases: Partial<Record<AggregateFilterDim, Record<string, StatusTallies>>>
+  /** The whole register as the no-name projection the tallies count — what
+   *  the JOINT table decisions (aggregate-joint.ts) cross-tabulate. Absent ⇒
+   *  the gate fails closed on every filtered read. */
+  rosterRows?: TallyRow[]
+  /** True when the request carried a name search (`q`): the gate withholds
+   *  every filter-dependent figure (two searches that differ by one name are a
+   *  tracker on that student). */
+  nameSearch?: boolean
 }
 
 export interface ImportPreviewRow {
@@ -591,26 +631,73 @@ export class StudentsService {
    *  client display rule; register roles already see rows, so counts stay true). */
   async aggregate(schoolId: string, query: StudentFilterQueryDto): Promise<StudentAggregate> {
     const asOf = new Date()
-    const [filtered, all] = await Promise.all([
-      this.prisma.student.findMany({
-        where: this.buildWhere(schoolId, query),
-        select: {
-          grade: true,
-          status: true,
-          gender: true,
-          race: true,
-          ethnicity: true,
-          birthDate: true,
-          hasIep: true,
-          has504: true,
-          ell: true,
-        },
-      }),
-      this.prisma.student.findMany({
-        where: { schoolId },
-        select: { status: true, hasIep: true, has504: true, ell: true, enrolledOn: true },
-      }),
+    const select = {
+      grade: true,
+      status: true,
+      gender: true,
+      race: true,
+      ethnicity: true,
+      birthDate: true,
+      hasIep: true,
+      has504: true,
+      ell: true,
+    } as const
+    // The suppression basis (see AggregateSuppressionBasis): the request without
+    // its status filter, and the request without each active attribute filter.
+    // Same WHERE builder as the request itself, so the bases can never filter
+    // differently from the read they protect.
+    const statusSelection = query.status?.length ? [...query.status] : null
+    const dims = AGGREGATE_FILTER_DIMS.filter((d) => (query[d]?.length ?? 0) > 0)
+    const without = (drop: (keyof StudentFilterQueryDto)[]): StudentFilterQueryDto => {
+      const q = { ...query }
+      for (const k of drop) delete q[k]
+      return q
+    }
+    const subsets = dims.flatMap((d) => {
+      const sel = (query[d] ?? []) as string[]
+      return sel.length > 1 ? sel.map((v) => ({ d, v })) : []
+    })
+    const [filtered, all, baseRows, ...rest] = await Promise.all([
+      this.prisma.student.findMany({ where: this.buildWhere(schoolId, query), select }),
+      this.prisma.student.findMany({ where: { schoolId }, select: { ...select, enrolledOn: true } }),
+      statusSelection
+        ? this.prisma.student.findMany({ where: this.buildWhere(schoolId, without(['status'])), select })
+        : Promise.resolve(null),
+      ...dims.map((d) =>
+        this.prisma.student.findMany({ where: this.buildWhere(schoolId, without([d, 'status'])), select }),
+      ),
+      ...subsets.map(({ d, v }) =>
+        this.prisma.student.findMany({
+          where: this.buildWhere(schoolId, {
+            ...without(['status']),
+            [d]: ((query[d] ?? []) as string[]).filter((x) => x !== v),
+          } as StudentFilterQueryDto),
+          select,
+        }),
+      ),
     ])
+    const dimRows = rest.slice(0, dims.length)
+    const subsetRows = rest.slice(dims.length)
+    const toRow = (s: (typeof filtered)[number]): TallyRow => ({
+      status: s.status,
+      grade: s.grade,
+      gender: s.gender,
+      race: s.race,
+      ethnicity: s.ethnicity,
+      ageBand: ageBandFromBirthDate(s.birthDate, asOf),
+      hasIep: s.hasIep,
+      has504: s.has504,
+      ell: s.ell,
+    })
+    const filterBases: AggregateSuppressionBasis['filterBases'] = {}
+    dims.forEach((d, i) => {
+      filterBases[d] = { selected: [...(query[d] as string[])], tallies: tallyByStatus(dimRows[i].map(toRow)) }
+    })
+    const rosterRows = all.map(toRow)
+    const subsetBases: AggregateSuppressionBasis['subsetBases'] = {}
+    subsets.forEach(({ d, v }, i) => {
+      ;(subsetBases[d] ??= {})[v] = tallyByStatus(subsetRows[i].map(toRow))
+    })
 
     const grade: Partial<Record<string, number>> = {}
     const gender: Partial<Record<string, number>> = {}
@@ -653,6 +740,15 @@ export class StudentsService {
       filteredTotal: filtered.length,
       counts: { grade, status, gender, race, ethnicity, ageBand, flags },
       kpis,
+      suppressionBasis: {
+        roster: tallyByStatus(rosterRows),
+        base: tallyByStatus((baseRows ?? filtered).map(toRow)),
+        statusSelection,
+        filterBases,
+        subsetBases,
+        rosterRows,
+        nameSearch: typeof query.q === 'string' && query.q.trim().length > 0,
+      },
     }
   }
 

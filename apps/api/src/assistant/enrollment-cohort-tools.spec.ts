@@ -115,7 +115,9 @@ function view(over: Record<string, unknown> = {}) {
     reconciliation: { promoted: 435, currentReading: 436, diverged: true },
     demographics: null,
     mix: {
-      status: { enrolled: 436, waitlist: 3, withdrawn: 1, graduated: 0 },
+      // Statuses arrive SUPPRESSED from the analytics service (the overview's
+      // own decision); 3 and 1 are under the floor.
+      status: { enrolled: shown(436), waitlist: withheld(), withdrawn: withheld(), graduated: shown(0) },
       flags: { iep: shown(28), plan504: withheld(), ell: withheld(), any: shown(41) },
       datedCoverage: { withStartDate: 400, total: 436, complete: false },
       newThisYear: withheld(),
@@ -308,9 +310,9 @@ describe('get_enrollment_analytics — structural honesty', () => {
     // The withheld shapes say WHY, and every non-headcount signal survives.
     const mix = res.mix as Record<string, unknown>
     expect(mix.status).toEqual({
-      waitlist: 3,
-      withdrawn: 1,
-      graduated: 0,
+      waitlist: { suppressed: true },
+      withdrawn: { suppressed: true },
+      graduated: { value: 0 },
       withheld: 'headcount_reconciliation',
     })
     expect(mix.datedCoverage).toEqual({ complete: false, withheld: 'headcount_reconciliation' })
@@ -323,7 +325,12 @@ describe('get_enrollment_analytics — structural honesty', () => {
     })
     const res = await run(svc, 'get_enrollment_analytics', { section: 'mix' })
     const mix = res.mix as Record<string, unknown>
-    expect(mix.status).toEqual({ enrolled: 436, waitlist: 3, withdrawn: 1, graduated: 0 })
+    expect(mix.status).toEqual({
+      enrolled: { value: 436 },
+      waitlist: { suppressed: true },
+      withdrawn: { suppressed: true },
+      graduated: { value: 0 },
+    })
     expect(mix.datedCoverage).toEqual({ withStartDate: 400, total: 436, complete: false })
   })
 

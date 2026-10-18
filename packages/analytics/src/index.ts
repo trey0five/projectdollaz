@@ -269,6 +269,7 @@ export {
   defaultFirstBillingDate,
   spreadDisbursements,
   spreadReceipts,
+  parseFiscalYearStart,
   workbookRows,
   categoryLabel,
   // Pure civil-date helpers — exported because the API layer builds horizons.
@@ -303,6 +304,27 @@ export type {
 
 // Version
 export { ANALYTICS_VERSION } from './version.js'
+
+// ── Complementary small-cell suppression for GROUPS of counts ────────────────
+// The ONE group rule (partition + overlapping support-flag group) every surface
+// that prints roster demographics / support flags passes through.
+export {
+  suppressPartition,
+  suppressLinkedPartitions,
+  decideLinkedPartitions,
+  suppressOverlapGroup,
+  overlapGroupHasHidden,
+  pooledDiversityIndex,
+  isSmallCount,
+} from './small-cell-groups.js'
+export type {
+  GroupCell,
+  GroupOptions,
+  LinkedDecision,
+  LinkedOptions,
+  PartitionOptions,
+  WithheldReason,
+} from './small-cell-groups.js'
 
 // ── Academics — the pure assessment layer (both test families, one engine) ────
 export {

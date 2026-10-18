@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowRight, RotateCcw, Building2, BarChart3, CloudUpload, History, Wrench } from 'lucide-react'
+import { ArrowRight, RotateCcw, Building2, BarChart3, CloudUpload, History, Wrench, Lock } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -81,6 +81,22 @@ function GatePanel({ notLicensed }) {
         </AuroraLightButton>
       }
     />
+  )
+}
+
+// The register shows each student's name beside their ISP / 504 / ELL flags, so
+// the API serves it to owners and business managers only (privacy review round
+// 6 — the same line academics draws for named results). Everyone else reads the
+// roster through the suppressed counts on the Overview and Analytics tabs.
+function RosterRestricted() {
+  return (
+    <p className="flex items-start gap-2.5 border-l-2 border-hair pl-3 text-small text-ink2">
+      <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>
+        The student roster is visible to owners and business managers only — it shows each student&rsquo;s name
+        beside their support plans. The counts on the Overview and Analytics tabs are open to everyone.
+      </span>
+    </p>
   )
 }
 
@@ -440,14 +456,18 @@ function EnrollmentWorkspace() {
               activeTab="students"
               onNew={canEdit ? goAddStudents : undefined}
               registerTable={
-                <StudentRegister
-                  schoolId={activeId}
-                  canEdit={canEdit}
-                  hue={moduleHue('enrollment')}
-                  onChanged={load}
-                  // A grade row on the overview deep-links here filtered to its grade.
-                  initialGrade={searchParams.get('grade')}
-                />
+                canEdit ? (
+                  <StudentRegister
+                    schoolId={activeId}
+                    canEdit={canEdit}
+                    hue={moduleHue('enrollment')}
+                    onChanged={load}
+                    // A grade row on the overview deep-links here filtered to its grade.
+                    initialGrade={searchParams.get('grade')}
+                  />
+                ) : (
+                  <RosterRestricted />
+                )
               }
             />
           }

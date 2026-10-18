@@ -35,6 +35,7 @@ import StudentFilterBar, {
   EMPTY_STUDENT_FILTERS,
   GRADE_LABELS,
   buildStudentParams,
+  facetsFromAggregate,
 } from './studentFilters.jsx'
 import StudentSlideOver, { StatusPill, FlagBadges, STATUS_TONE } from './StudentSlideOver.jsx'
 import RegisterEmpty from '../module/RegisterEmpty.jsx'
@@ -433,7 +434,7 @@ export default function StudentRegister({
       enrollmentApi.students
         .aggregate(schoolId)
         .then((res) => {
-          if (!cancelled) setFacets((res.data ?? res)?.counts ?? null)
+          if (!cancelled) setFacets(facetsFromAggregate(res.data ?? res))
         })
         .catch(() => {
           // Unknown ⇒ null ⇒ the bar falls back to the full vocabulary. Not

@@ -259,6 +259,8 @@ export class TwinRegisterService {
         code: s.code,
         title: s.title,
         isAssurance: s.isAssurance === true,
+        // A domain parent is a heading, never rubric-scored (ACC-UNSCORED).
+        isLeaf: s.isLeaf !== false,
         assuranceSatisfied:
           s.isAssurance === true && satisfiedById.has(s.id) ? satisfiedById.get(s.id)! : null,
         rubricScore: s.rubricScore ?? null,

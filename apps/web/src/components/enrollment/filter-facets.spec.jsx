@@ -32,7 +32,15 @@ describe('a picker offers only what the roster holds', () => {
   it('shows the count next to each value', () => {
     // The count tells you the answer before you ask, so an empty result is never
     // a surprise — which is the whole failure being fixed.
-    expect(bar).toMatch(/facets\?\.\[d\.key\]\?\.\[k\] != null \? ` \(\$\{facets\[d\.key\]\[k\]\}\)` : ''/)
+    expect(bar).toMatch(/facets\?\.\[d\.key\]\?\.\[k\] != null && facets\[d\.key\]\[k\] !== true \? ` \(\$\{facets\[d\.key\]\[k\]\}\)` : ''/)
+  })
+
+  it('a presence-only facet (the server’s `facets` list) is offered WITHOUT a count', () => {
+    // The breakdowns count enrolled students; a filter returns every status —
+    // no published count is what the option would return, so none is shown.
+    expect(bar).toMatch(/v === '<5' \|\| v === true \? 1 : v/)
+    expect(register).toMatch(/setFacets\(facetsFromAggregate\(res\.data \?\? res\)\)/)
+    expect(analytics).toMatch(/setFacets\(facetsFromAggregate\(res\.data \?\? res\)\)/)
   })
 
   it('disables a dimension the roster carries no data for, and says why', () => {

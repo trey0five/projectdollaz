@@ -125,8 +125,32 @@ function availableKeys(dim, facets) {
   if (!raw || typeof raw !== 'object') return []
   // A '<5' facet (a server-suppressed small cell, normalized by the bar) still
   // means the value EXISTS in the register — positive for availability.
-  const counts = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === '<5' ? 1 : v]))
+  // `true` is a presence-only facet (the server's `facets` list): it EXISTS.
+  const counts = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === '<5' || v === true ? 1 : v]))
   return dim.keys.filter((k) => Number(counts[k] ?? 0) > 0)
+}
+
+/**
+ * The picker vocabulary from a GET …/students/aggregate payload. The server now
+ * sends `facets` — which values exist anywhere on the register, any status,
+ * presence only — because its `counts` breakdowns count ONE status group
+ * (enrolled by default), and a value held only by waitlisted or graduated
+ * students must still be offered. Older payloads (no `facets`) fall back to
+ * `counts`, exactly as before.
+ */
+export function facetsFromAggregate(agg) {
+  if (!agg || typeof agg !== 'object') return null
+  if (agg.facets && typeof agg.facets === 'object') {
+    const out = {}
+    for (const [dim, keys] of Object.entries(agg.facets)) {
+      // `true` = present, no count: the breakdowns count enrolled students
+      // while a filter returns every status, so no published count is the
+      // number this option would return — none is printed beside it.
+      out[dim] = Array.isArray(keys) ? Object.fromEntries(keys.map((k) => [k, true])) : {}
+    }
+    return out
+  }
+  return agg.counts ?? null
 }
 
 /**
@@ -262,7 +286,7 @@ export default function StudentFilterBar({
                 {d.labels[k] ?? k}
                 {/* The count is the point: it tells you the answer before you
                     ask, so an empty result is never a surprise. */}
-                {facets?.[d.key]?.[k] != null ? ` (${facets[d.key][k]})` : ''}
+                {facets?.[d.key]?.[k] != null && facets[d.key][k] !== true ? ` (${facets[d.key][k]})` : ''}
               </option>
             ))}
           </select>

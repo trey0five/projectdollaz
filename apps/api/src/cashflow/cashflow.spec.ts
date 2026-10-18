@@ -283,10 +283,13 @@ describe('a forecast SAYS what is missing from it', () => {
         totalExpenses: 2_000_000,
         lines: {
           revenue: { tuition: 3_000_000 },
+          // A FULL year of phasing: a one-month spread would leave the rest of
+          // the 13-week window without operating spend, which is now (rightly)
+          // reported as 'budget_spread_ends'.
           spread: {
             fiscalYearStart: '2026-07-01',
             accounts: [
-              { acct: '6200', label: 'Supplies', category: 'supplies', section: 'expense', months: [10_000] },
+              { acct: '6200', label: 'Supplies', category: 'supplies', section: 'expense', months: Array(12).fill(10_000) },
             ],
           },
         },
@@ -612,5 +615,191 @@ it('EVERY injected dependency is available in this module, guards AND providers'
     })
     expect(r.projection).not.toBeNull()
     expect(r.disclaimer).toBe(CONFIDENCE_DISCLAIMER)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A REAL IMPORTED SPREAD — 'YYYY-MM', SCoA categories — reaches the forecast.
+//
+// Every spread fixture above uses fiscalYearStart '2026-07-01', a shape no
+// imported spread has: budget.service persists `spread.fiscalYearStart` straight
+// from the ingestion parser, which emits the first month KEY ('2026-07'). With
+// that real shape the phasing helpers returned nothing and the forecast ran on
+// commitments alone while reporting no omission. The rows below mirror what
+// rollupSpread persists (SCoA category, section, includedInTotals).
+// ─────────────────────────────────────────────────────────────────────────────
+const IMPORTED_SPREAD_BUDGET = {
+  totalExpenses: 2_000_000,
+  lines: {
+    spread: {
+      fiscalYearStart: '2026-07',
+      monthKeys: ['2026-07', '2026-08'],
+      accounts: [
+        { acct: 6200, label: 'Supplies', category: 'instrSup', section: 'expense', includedInTotals: true, months: [10_000, 20_000], annual: 30_000 },
+        { acct: 5010, label: 'Teacher salaries', category: 'instrSal', section: 'expense', includedInTotals: true, months: [400_000, 0], annual: 400_000 },
+        { acct: 865, label: 'Depreciation', category: 'deprExpense', section: 'expense', includedInTotals: true, months: [50_000, 50_000], annual: 100_000 },
+        { acct: 4500, label: 'Summer program', category: 'other', section: 'revenue', includedInTotals: true, months: [0, 5_000], annual: 5_000 },
+      ],
+    },
+  },
+}
+
+describe("an imported 'YYYY-MM' spread phases the forecast", () => {
+  it('reads the month key, phases by month, and reports no missing-spread omission', async () => {
+    const { svc } = makeService({ budget: IMPORTED_SPREAD_BUDGET })
+    const r = await svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-07-01', granularity: 'month',
+    })
+    expect(r.omissions.map((o) => o.key)).not.toContain('no_budget_spread')
+    const [july, august] = r.projection!.buckets
+    // Supplies 10k + salaries 400k in July; supplies 20k in August. Depreciation
+    // is budgeted but never paid, so it is not a disbursement.
+    expect(july.disbursements).toBe(410_000)
+    expect(august.disbursements).toBe(20_000)
+    expect(august.receipts).toBe(5_000)
+    expect(r.flows.some((f) => f.sourceRef === 'budget:865')).toBe(false)
+  })
+
+  it('falls back to the first month key when fiscalYearStart was not stored', async () => {
+    const budget = {
+      ...IMPORTED_SPREAD_BUDGET,
+      lines: { spread: { ...IMPORTED_SPREAD_BUDGET.lines.spread, fiscalYearStart: null } },
+    }
+    const r = await makeService({ budget }).svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-07-01', granularity: 'month',
+    })
+    expect(r.projection!.buckets[0].disbursements).toBe(410_000)
+  })
+
+  it('a payroll commitment suppresses the spread salary lines (no double count)', async () => {
+    // The commitment says 'payroll'; the spread says 'instrSal'. Matching keys
+    // alone would let both through and draw the trough twice as deep.
+    const { svc } = makeService({ budget: IMPORTED_SPREAD_BUDGET, commitments: [PAYROLL] })
+    const r = await svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-07-01', granularity: 'month',
+    })
+    // July: two semi-monthly payroll runs (200k) + supplies 10k; the 400k
+    // instrSal row is excluded.
+    expect(r.projection!.buckets[0].disbursements).toBe(210_000)
+    expect(r.flows.some((f) => f.sourceRef === 'budget:5010')).toBe(false)
+  })
+
+  it('an unreadable spread start is still reported as missing phasing', async () => {
+    const budget = {
+      ...IMPORTED_SPREAD_BUDGET,
+      lines: { spread: { ...IMPORTED_SPREAD_BUDGET.lines.spread, fiscalYearStart: 'July', monthKeys: [] } },
+    }
+    const r = await makeService({ budget }).svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-07-01', granularity: 'month',
+    })
+    expect(r.omissions.map((o) => o.key)).toContain('no_budget_spread')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The demo network's real spread rows: depreciation and payroll taxes filed
+// under fixedOther at import time (review findings). The category rule alone
+// phased Cedar's Depreciation as $450k of cash and counted its payroll taxes
+// beside the payroll calendar.
+// ─────────────────────────────────────────────────────────────────────────────
+const FIXED_OTHER_SPREAD = {
+  totalExpenses: 2_000_000,
+  lines: {
+    spread: {
+      fiscalYearStart: '2026-07',
+      monthKeys: Array.from({ length: 12 }, (_, i) => `${2026 + Math.floor((6 + i) / 12)}-${String(((6 + i) % 12) + 1).padStart(2, '0')}`),
+      accounts: [
+        { acct: 6200, label: 'Classroom Supplies', category: 'instrSup', section: 'expense', includedInTotals: true, months: Array(12).fill(10_000) },
+        { acct: 5010, label: 'Faculty Salaries', category: 'instrSal', section: 'expense', includedInTotals: true, months: Array(12).fill(300_000) },
+        { acct: 8650, label: 'Depreciation', category: 'fixedOther', section: 'expense', includedInTotals: true, months: Array(12).fill(37_000) },
+        { acct: 8100, label: 'Payroll Taxes', category: 'fixedOther', section: 'expense', includedInTotals: true, months: Array(12).fill(25_000) },
+        { acct: 8110, label: 'Employee Benefits', category: 'fixedOther', section: 'expense', includedInTotals: true, months: Array(12).fill(80_000) },
+        { acct: 8400, label: 'Interest Expense', category: 'fixedOther', section: 'expense', includedInTotals: true, months: Array(12).fill(7_000) },
+        { acct: 8300, label: 'Property & Liability Insurance', category: 'fixedOther', section: 'expense', includedInTotals: true, months: Array(12).fill(5_000) },
+      ],
+    },
+  },
+}
+const DEBT = {
+  id: 'd1', label: 'Mortgage', category: 'debt_service', direction: 'out', amount: 20_000,
+  confidence: 'committed', recurrence: 'monthly',
+  startDate: new Date('2026-07-31'), endDate: null, dayRule: [31], notes: null,
+}
+const opts1 = { openingCash: 5_000_000, asOfDate: '2026-07-01', granularity: 'month' as const }
+const budgetRefs = (r: { flows: { sourceRef?: string | null }[] }) =>
+  new Set(r.flows.map((f) => f.sourceRef).filter((x) => String(x).startsWith('budget:')))
+
+describe('depreciation filed under fixedOther is still not cash', () => {
+  it('a Depreciation row categorised fixedOther is never phased as a disbursement', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD }).svc.project('s1', 'u1', opts1)
+    const refs = budgetRefs(r)
+    expect(refs.has('budget:8650')).toBe(false)
+    // …and nothing else fixedOther was swept out with it.
+    expect(refs.has('budget:8100')).toBe(true)
+    expect(refs.has('budget:8400')).toBe(true)
+    // July: supplies 10k + salaries 300k + taxes 25k + benefits 80k + interest 7k + insurance 5k.
+    expect(r.projection!.buckets[0].disbursements).toBe(427_000)
+  })
+})
+
+describe('a payroll commitment covers the payroll run, not benefits', () => {
+  it('drops salaries AND employer payroll taxes; benefits stay, and the note names them', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD, commitments: [PAYROLL] }).svc.project('s1', 'u1', opts1)
+    const refs = budgetRefs(r)
+    expect(refs.has('budget:5010')).toBe(false)
+    expect(refs.has('budget:8100')).toBe(false)
+    expect(refs.has('budget:8110')).toBe(true)
+    const note = r.omissions.find((o) => o.key === 'payroll_benefits_overlap')
+    expect(note).toBeTruthy()
+    expect(note!.message).toMatch(/benefits/i)
+    expect(note!.message).toMatch(/counted twice/)
+  })
+
+  it('no payroll commitment ⇒ payroll taxes stay in and there is no note', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD }).svc.project('s1', 'u1', opts1)
+    expect(budgetRefs(r).has('budget:8100')).toBe(true)
+    expect(r.omissions.map((o) => o.key)).not.toContain('payroll_benefits_overlap')
+  })
+
+  it('a debt-service commitment covers the interest line, and only it', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD, commitments: [DEBT] }).svc.project('s1', 'u1', opts1)
+    const refs = budgetRefs(r)
+    expect(refs.has('budget:8400')).toBe(false)
+    expect(refs.has('budget:8300')).toBe(true)
+    expect(refs.has('budget:8110')).toBe(true)
+  })
+})
+
+describe('a spread on file is not phasing in the window', () => {
+  it("last year's spread (every month before the as-of date) is reported, not silently dropped", async () => {
+    const lastYear = {
+      ...FIXED_OTHER_SPREAD,
+      lines: { spread: { ...FIXED_OTHER_SPREAD.lines.spread, fiscalYearStart: '2025-07', monthKeys: [] } },
+    }
+    const r = await makeService({ budget: lastYear }).svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-10-17',
+    })
+    expect(r.projection!.totalDisbursements).toBe(0)
+    const o = r.omissions.find((x) => x.key === 'budget_spread_out_of_window')
+    expect(o).toBeTruthy()
+    expect(o!.message).toContain('July 2025 to June 2026')
+    expect(r.omissions.map((x) => x.key)).not.toContain('no_budget_spread')
+  })
+
+  it('a horizon that runs past the spread says where phasing ends', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD }).svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-10-17', horizon: '12m',
+    })
+    const o = r.omissions.find((x) => x.key === 'budget_spread_ends')
+    expect(o).toBeTruthy()
+    expect(o!.message).toContain('June 2027')
+  })
+
+  it('a window wholly inside the spread says nothing about it', async () => {
+    const r = await makeService({ budget: FIXED_OTHER_SPREAD }).svc.project('s1', 'u1', {
+      openingCash: 1_000_000, asOfDate: '2026-10-17',
+    })
+    const keys = r.omissions.map((x) => x.key)
+    expect(keys.filter((k) => k.startsWith('budget_spread'))).toEqual([])
   })
 })

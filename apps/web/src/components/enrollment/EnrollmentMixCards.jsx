@@ -69,6 +69,7 @@ import {
   cellState,
   cellTitle,
   cellToken,
+  isComplementary,
   fmtCount,
   fmtShare,
   hasValue,
@@ -169,6 +170,7 @@ export function EnrollmentDemographicsCard({ demographics }) {
   const dim = demographics[activeKey]
   const parts = toParts(activeKey, dim.cells)
   const anyMasked = dim.cells.some((c) => cellState(c.count) === CELL_MASKED)
+  const anyComplementary = dim.cells.some((c) => isComplementary(c.count))
 
   return (
     <div className="space-y-3">
@@ -177,7 +179,9 @@ export function EnrollmentDemographicsCard({ demographics }) {
         {dim.diversityIndex != null ? (
           <Pill
             variant="count"
-            title="Blau/Simpson diversity index: the chance that two students picked at random report different races. 0 means everyone reports the same; 1 means maximally mixed."
+            title={`Blau/Simpson diversity index: the chance that two students picked at random report different races. 0 means everyone reports the same; 1 means maximally mixed.${
+              anyMasked ? ' Withheld categories are counted together as one group, so the index cannot be used to work them out.' : ''
+            }`}
           >
             diversity {dim.diversityIndex.toFixed(2)}
           </Pill>
@@ -203,6 +207,9 @@ export function EnrollmentDemographicsCard({ demographics }) {
         {anyMasked
           ? ' Those categories are listed but not drawn: sizing a wedge for them would put the withheld count back on the page as geometry.'
           : ''}
+        {anyComplementary
+          ? ' A category marked “withheld” is not small itself: it is hidden too, so the small one cannot be worked out by subtracting the others from the total.'
+          : ''}
       </p>
     </div>
   )
@@ -226,7 +233,14 @@ export function EnrollmentSupportNeedsCard({ mix }) {
     )
   }
 
-  const statusRows = STUDENT_STATUS_KEYS.map((k) => [k, STUDENT_STATUS_LABELS[k], mix.status?.[k] ?? 0])
+  // Status cells arrive SUPPRESSED like every other cell here (the overview's
+  // own decision — a lone small status is the school total minus the rest), as
+  // `{ value, suppressed, reason? }`. A bare number (an older payload) still
+  // renders as itself.
+  const statusRows = STUDENT_STATUS_KEYS.map((k) => {
+    const c = mix.status?.[k]
+    return [k, STUDENT_STATUS_LABELS[k], typeof c === 'number' || c == null ? { value: c ?? 0, suppressed: false } : c]
+  })
   const coverage = mix.datedCoverage
   const newHidden = cellState(mix.newThisYear) !== 'value'
 
@@ -239,13 +253,16 @@ export function EnrollmentSupportNeedsCard({ mix }) {
         {FLAGS.map(([k, label]) => {
           const c = mix.flags?.[k]
           const masked = cellState(c) === 'masked'
+          // A complementary cell (the union while one flag is under the floor)
+          // is NOT small: it prints "withheld" with its own reason, never '<5'.
+          const complementary = isComplementary(c)
           return (
             <Stat
               key={k}
               label={label}
               value={cellToken(c)}
               status={hasValue(c) && c.value > 0 ? 'hue' : null}
-              note={masked ? 'fewer than 5 — withheld' : null}
+              note={complementary ? 'withheld so a small group can’t be worked out' : masked ? 'fewer than 5 — withheld' : null}
               title={cellTitle(c) ?? undefined}
             />
           )
@@ -256,10 +273,10 @@ export function EnrollmentSupportNeedsCard({ mix }) {
       <div>
         <h5 className="mb-1.5 text-micro font-semibold uppercase text-ink2">Register status</h5>
         <div className="flex flex-wrap gap-1.5">
-          {statusRows.map(([k, label, n]) => (
-            <Pill key={k} variant="count">
+          {statusRows.map(([k, label, c]) => (
+            <Pill key={k} variant="count" title={cellTitle(c) ?? undefined}>
               <span className="font-medium text-ink2">{label}</span>
-              <span className="font-semibold text-ink tabular-nums">{fmtCount(n)}</span>
+              <span className="font-semibold text-ink tabular-nums">{cellToken(c)}</span>
             </Pill>
           ))}
         </div>

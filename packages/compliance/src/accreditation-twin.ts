@@ -78,7 +78,16 @@ import {
 } from './trend-signal.js'
 import type { SmallCell } from './small-cells.js'
 
-export const ACCREDITATION_TWIN_VERSION = '1.0.0'
+/**
+ * Stamped on every twin result and every finding's evidencePayload.engine.
+ *
+ * 1.0.0 → 1.1.0: ACC-UNSCORED (and its acc.unscored_standards signal) counts
+ * only rubric-SCORABLE standards — domain parents and must-pass assurance gates
+ * are no longer "unscored". A history row stamped 1.0.0 counted them, so a drop
+ * across the bump (21 → 10 on the demo register) is a definition change, not
+ * progress, and the stamp is how a reader tells the two apart.
+ */
+export const ACCREDITATION_TWIN_VERSION = '1.1.0'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // §1.2 INPUT VIEWS
@@ -133,6 +142,12 @@ export interface TwinStandardView {
   code: string
   title: string
   isAssurance: boolean
+  /**
+   * False for a GROUPING row — a domain parent such as COG-KC1 or COG-ASR, which
+   * holds child standards and is never itself rubric-scored. Absent is read as a
+   * leaf (hand-made registers and older fixtures have no hierarchy to report).
+   */
+  isLeaf?: boolean
   /** Binary assurance gate result from `computeAssurances`. Null for non-assurances. */
   assuranceSatisfied: boolean | null
   rubricScore: number | null
@@ -1976,6 +1991,15 @@ const ENR_FEEDER_EROSION: TwinRuleDef = {
 /** The chip row is capped; the DATA is not. The full list rides in evidence. */
 const ACC_UNSCORED_TAG_CAP = 12
 
+/**
+ * A standard that takes a 1–4 rubric self-score: a LEAF that is not a must-pass
+ * assurance gate. The same population readiness scores over (non-assurance
+ * leaves), so "unscored" here and the readiness denominator never disagree.
+ */
+export function isRubricScorable(st: Pick<TwinStandardView, 'isAssurance' | 'isLeaf'>): boolean {
+  return st.isLeaf !== false && st.isAssurance !== true
+}
+
 const ACC_UNSCORED: TwinRuleDef = {
   id: 'ACC-UNSCORED',
   kind: 'standard',
@@ -1987,15 +2011,22 @@ const ACC_UNSCORED: TwinRuleDef = {
   domainKeys: ['continuous_improvement'],
   defaultDomainKey: 'continuous_improvement',
   standardCodes: NO_CODES,
-  rationaleTemplate: '{{unscoredCount}} of {{totalStandards}} standards carry no rubric score at all.',
+  rationaleTemplate:
+    '{{unscoredCount}} of {{totalStandards}} scorable standards carry no rubric score at all.',
   unlock: null,
   evaluate(c) {
     const s = c.signal('acc.unscored_standards')
     const unscoredSignal = num(s.value)
     if (unscoredSignal === null || unscoredSignal < 1) return []
-    const unscored = sortedStandards(c.register).filter((x) => x.rubricScore === null)
+    // ONLY the standards a rubric score can be given to. A domain parent is a
+    // heading over its children and a must-pass gate is binary (met / not met) —
+    // neither ever carries a 1–4 score, so counting them reported "21 of 42
+    // unscored" on a register whose scorable standards were mostly scored, and
+    // pushed the severity toward critical on headings alone.
+    const scorable = sortedStandards(c.register).filter(isRubricScorable)
+    const unscored = scorable.filter((x) => x.rubricScore === null)
     if (unscored.length === 0) return []
-    const total = c.register.standards.length
+    const total = scorable.length
     const codes = unscored.map((x) => x.code)
     return [
       {
@@ -2006,7 +2037,12 @@ const ACC_UNSCORED: TwinRuleDef = {
         standardCodes: codes.slice(0, ACC_UNSCORED_TAG_CAP),
         evidence: [
           ev('unscoredCount', 'Standards with no rubric score', unscored.length, fmtCount(unscored.length), s.observedOn, s.lineage),
-          ev('totalStandards', 'Standards in the register', total, fmtCount(total)),
+          ev(
+            'totalStandards',
+            'Scorable standards in the register (domain headings and must-pass gates are not rubric-scored)',
+            total,
+            fmtCount(total),
+          ),
           ev('unscoredCodes', 'Every unscored standard', codes.join(', '), codes.join(', ')),
         ],
         severity:

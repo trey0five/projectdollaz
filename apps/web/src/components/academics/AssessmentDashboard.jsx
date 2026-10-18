@@ -71,6 +71,29 @@ const signed = (v, digits = 1) => {
 }
 
 /**
+ * The precision a score is PRINTED at, per score type — and therefore the
+ * precision every difference between two of those scores must be printed at.
+ * An ACT composite is shown to a tenth; a percentile is a whole number. A move
+ * from 25.6 to 25.2 rounded to a whole point reads "0" beside a falling arrow,
+ * and a +0.7 in the band above reads "+1" in the table below it.
+ */
+const scoreDp = (scoreType) => (scoreType === 'scale' ? 1 : 0)
+
+/** True when `v` PRINTS as zero at `dp` — nothing to point an arrow at. */
+const showsAsZero = (v, dp) => signed(v, dp) === '0'
+
+/**
+ * What kpis.average.peer IS, named: the average of every OTHER school —
+ * "Peer average (excl. Cedar Ridge Preparatory)". When the selected school has
+ * no score in this selection (a high school on TerraNova) nothing was excluded:
+ * the same figure is simply the network's average, and is called that.
+ */
+const focusScored = (rows, focusId) =>
+  (rows ?? []).some((r) => r.schoolId === focusId && r.current !== null && r.current !== undefined)
+const peerLineLabel = (focusName, scored = true) =>
+  !scored ? 'Network average' : focusName ? `Peer average (excl. ${shortName(focusName, 28)})` : 'Peer average (this school excluded)'
+
+/**
  * FIVE QUESTIONS, FIVE DOORS. Not five slices of one question — the ordering is
  * the reading order a leadership team actually uses: where do we stand, what is
  * happening in the classrooms, are we moving, are these the same children, and
@@ -778,11 +801,11 @@ function Distribution({ slices, reduce }) {
  * gap to each reference. Sortable because the question changes — "who is
  * highest" and "who moved most" are different meetings.
  */
-function ComparisonTable({ rows, scoreType }) {
+export function ComparisonTable({ rows, scoreType, focusId = null, focusName = null }) {
   // A PERCENTILE is a whole number; an ACT composite is not. materialGap for the
   // ACT is 0.5, so rounding to zero decimals erased every difference the module
   // considers worth reporting — two schools 0.4 apart printed the same number.
-  const dp = scoreType === 'scale' ? 1 : 0
+  const dp = scoreDp(scoreType)
   const [sort, setSort] = useState('current')
   const sorted = useMemo(() => {
     const copy = [...rows]
@@ -816,7 +839,12 @@ function ComparisonTable({ rows, scoreType }) {
             <th scope="col" className="dt-num">This year</th>
             <th scope="col" className="dt-num">Last year</th>
             <th scope="col" className="dt-num">Change</th>
-            <th scope="col" className="dt-num">vs network</th>
+            {/* NOT "vs network": each row is measured against ITS OWN peers
+                (every other school, itself excluded), so only the selected
+                school's row is measured against the dashed peer line above. */}
+            <th scope="col" className="dt-num" title="This school against the average of every other school, itself excluded">
+              vs its peers
+            </th>
             <th scope="col" className="dt-num">vs national</th>
             <th scope="col" className="dt-num">Tested</th>
           </tr>
@@ -833,7 +861,7 @@ function ComparisonTable({ rows, scoreType }) {
               </td>
               <td className="dt-num text-ink2">{fmt(r.prior, dp)}</td>
               <td className="dt-num">
-                <ChangeBadge value={r.change} />
+                <ChangeBadge value={r.change} dp={dp} />
               </td>
               <td className={`dt-num ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, dp)}</td>
               <td className={`dt-num ${gapTone(r.vsNational)}`}>
@@ -847,6 +875,15 @@ function ComparisonTable({ rows, scoreType }) {
         </tbody>
       </table>
       </div>
+      <p className="mt-2 text-[11px] leading-snug text-muted">
+        <span className="font-semibold text-ink2">vs its peers</span> — each school against the tester-weighted average
+        of the other schools, itself excluded.{' '}
+        {!focusScored(rows, focusId)
+          ? 'So each row has its own benchmark, and none is exactly the dashed network-average line in the chart above.'
+          : focusName
+            ? `Only ${focusName}'s row is measured against the dashed peer-average line in the chart above.`
+            : 'Only the selected school is measured against the dashed peer-average line in the chart above.'}
+      </p>
     </div>
   )
 }
@@ -863,14 +900,16 @@ function subjectMax(ctx) {
 // carries the semantic mark (Pill) so the table is never colour-alone.
 const gapTone = (v) => (v === null || v === undefined || v === 0 ? 'text-ink2' : 'text-ink')
 
-function ChangeBadge({ value }) {
+export function ChangeBadge({ value, dp = 1 }) {
   if (value === null || value === undefined) return <span className="text-ink2">—</span>
   const up = value > 0
-  const flat = Math.abs(value) < 0.05
+  // FLAT IS WHAT THE READER SEES: a move that prints as "0" at the score's own
+  // precision gets no arrow and no colour, whatever its sign underneath.
+  const flat = showsAsZero(value, dp)
   return (
     <Pill variant="status" tone={flat ? 'neutral' : up ? 'good' : 'risk'}>
       {flat ? null : up ? <TrendingUp size={10} aria-hidden="true" /> : <TrendingDown size={10} aria-hidden="true" />}
-      {signed(value, 0)}
+      {signed(value, dp)}
     </Pill>
   )
 }
@@ -1224,17 +1263,24 @@ export default function AssessmentDashboard({
                 ctx={ctx}
                 example={kpis?.average?.value}
                 peerAvg={peerAvg}
+                peerName={peerLineLabel(data?.school?.name, focusScored(data?.table, data?.school?.id))}
                 refs={['national', 'network']}
               />
             }
           >
-            <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['national', 'network']} />
+            <MeasureKey
+              ctx={ctx}
+              peerAvg={peerAvg}
+              refs={['national', 'network']}
+              peerName={peerLineLabel(data?.school?.name, focusScored(data?.table, data?.school?.id))}
+            />
             <BoardReportBars
               rows={data.table}
               national={ctx?.nationalReference}
               peerAvg={peerAvg}
               range={ctx?.scoreRange}
               focusId={data?.school?.id}
+              focusName={data?.school?.name ?? null}
               scoreType={ctx?.scoreType}
               reduce={reduce}
             />
@@ -1250,13 +1296,18 @@ export default function AssessmentDashboard({
               <span>{ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}</span>
             }
           >
-            <ComparisonTable rows={data.table} scoreType={ctx?.scoreType} />
+            <ComparisonTable
+              rows={data.table}
+              scoreType={ctx?.scoreType}
+              focusId={data?.school?.id ?? null}
+              focusName={data?.school?.name ?? null}
+            />
           </Section>
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Section eyebrow="Is the comparison fair?" title="Participation against score" icon={Scale} reduce={reduce}>
-            <ParticipationFairness rows={data?.table ?? []} />
+            <ParticipationFairness rows={data?.table ?? []} scoreType={ctx?.scoreType} />
           </Section>
 
           <Section
@@ -1536,7 +1587,8 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
  * everyone else" — because that is a question about the GAP between two bars,
  * and a gap has to be seen rather than subtracted.
  */
-function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, reduce }) {
+export function BoardReportBars({ rows, national, peerAvg, range, focusId, focusName = null, scoreType, reduce }) {
+  const dp = scoreDp(scoreType)
   const data = (rows ?? []).filter((r) => r.current !== null && r.current !== undefined)
   if (data.length === 0) return <p className="text-[12.5px] text-muted">No results to rank for this selection.</p>
 
@@ -1621,7 +1673,7 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
                 animate={{ opacity: 1 }}
                 transition={{ delay: reduce ? 0 : 0.5 + i * 0.06, duration: 0.4 }}
               >
-                {fmt(r.current, scoreType === 'scale' ? 1 : 0)}
+                {fmt(r.current, dp)}
               </motion.text>
 
               <text
@@ -1642,10 +1694,10 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
                   fontSize="9"
                   fontWeight="700"
                   textAnchor="middle"
-                  fill={r.change >= 0 ? INK.ahead : INK.behind}
+                  fill={showsAsZero(r.change, dp) ? '#64748b' : r.change > 0 ? INK.ahead : INK.behind}
                   opacity={data.length > 6 ? 0 : 1}
                 >
-                  {signed(r.change, 0)}
+                  {signed(r.change, dp)}
                 </text>
               ) : null}
             </g>
@@ -1653,20 +1705,33 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
         })}
 
         {[
-          national !== null && national !== undefined ? { v: national, c: INK.national, t: `National ${fmt(national, 0)}` } : null,
-          peerAvg !== null && peerAvg !== undefined ? { v: peerAvg, c: INK.network, t: `Network ${fmt(peerAvg, 0)}` } : null,
+          national !== null && national !== undefined ? { v: national, c: INK.national, t: `National ${fmt(national, dp)}` } : null,
+          // kpis.average.peer EXCLUDES the selected school — so the line is
+          // named for what it is, at the key's precision ("Network 24" beside
+          // a 24.1 in the key read as two different numbers).
+          peerAvg !== null && peerAvg !== undefined
+            ? { v: peerAvg, c: INK.network, t: `${peerLineLabel(focusName, focusScored(data, focusId))} ${fmt(peerAvg, 1)}` }
+            : null,
         ]
           .filter(Boolean)
           .filter((l) => l.v >= lo && l.v <= hi)
-          .map((l) => (
-            <g key={l.t}>
-              <line x1={PAD.l} x2={W - PAD.r} y1={y(l.v)} y2={y(l.v)} stroke={l.c} strokeWidth="1.6" strokeDasharray="6 4" opacity="0.9" />
-              <rect x={PAD.l + 4} y={y(l.v) - 13} width={l.t.length * 5.4 + 10} height="14" rx="7" fill={l.c} opacity="0.12" />
-              <text x={PAD.l + 9} y={y(l.v) - 3} fontSize="8.5" fontWeight="700" fill={l.c}>
-                {l.t}
-              </text>
-            </g>
-          ))}
+          .map((l) => {
+            // Labelled at the RIGHT end: schools are ranked high → low left to
+            // right, so the space above a reference line is clear at the low
+            // end and crowded by the leaders' bars at the high end — a long
+            // "Peer average (excl. …)" label laid over the top school's bars.
+            const w = l.t.length * 5.4 + 10
+            const x1 = W - PAD.r - 4 - w
+            return (
+              <g key={l.t}>
+                <line x1={PAD.l} x2={W - PAD.r} y1={y(l.v)} y2={y(l.v)} stroke={l.c} strokeWidth="1.6" strokeDasharray="6 4" opacity="0.9" />
+                <rect x={x1} y={y(l.v) - 13} width={w} height="14" rx="7" fill={l.c} opacity="0.12" />
+                <text x={x1 + 5} y={y(l.v) - 3} fontSize="8.5" fontWeight="700" fill={l.c}>
+                  {l.t}
+                </text>
+              </g>
+            )
+          })}
 
         <text x={PAD.l - 6} y={PAD.t + 5} fontSize="10" textAnchor="end" fill="#64748b">{Math.round(hi)}</text>
         <text x={PAD.l - 6} y={floor} fontSize="10" textAnchor="end" fill="#64748b">{Math.round(lo)}</text>
@@ -1760,7 +1825,7 @@ function MovementHighlights({ movements, national }) {
  * stated in words. It reads at a glance at three schools and still reads at
  * thirty.
  */
-function ParticipationFairness({ rows }) {
+function ParticipationFairness({ rows, scoreType }) {
   const data = (rows ?? []).filter(
     (r) => r.participationRate !== null && r.participationRate !== undefined && r.current !== null,
   )
@@ -1805,7 +1870,7 @@ function ParticipationFairness({ rows }) {
             color: ok ? HUE : '#F59E0B',
             formatted: `${p}%`,
             meta: [
-              { label: 'Score', value: fmt(r.current, 0) },
+              { label: 'Score', value: fmt(r.current, scoreDp(scoreType)) },
               { label: 'Verdict', value: ok ? 'comparison fair' : 'read with care' },
             ],
           }
@@ -1862,7 +1927,7 @@ function CostChain({ rows, scoreType }) {
         <Stat label="Cost per pupil" value={money(focus.costPerPupil)} note="expenses ÷ enrolment" />
         <Stat
           label="→ Produced"
-          value={fmt(focus.score, scoreType === 'scale' ? 1 : 0)}
+          value={fmt(focus.score, scoreDp(scoreType))}
           status="hue"
           note={scoreType === 'percentile' ? 'national percentile' : 'scale score'}
         />
@@ -1870,7 +1935,7 @@ function CostChain({ rows, scoreType }) {
 
       <p className="sec-note">
         {peers.length > 0
-          ? `${peers.length} peer school${peers.length === 1 ? '' : 's'} scored ${peers.map((p) => fmt(p.score, 0)).join(', ')}. Their staffing and spending stay with them — this reads only the ledger of the school you are signed in to.`
+          ? `${peers.length} peer school${peers.length === 1 ? '' : 's'} scored ${peers.map((p) => fmt(p.score, scoreDp(scoreType))).join(', ')}. Their staffing and spending stay with them — this reads only the ledger of the school you are signed in to.`
           : 'Outcomes beside the money and the class size that produced them — the read a standalone score dashboard cannot do, because it has no ledger.'}
       </p>
     </div>

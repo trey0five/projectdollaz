@@ -172,6 +172,21 @@ describe('TwinRegisterService — the shape', () => {
   })
 })
 
+describe('TwinRegisterService — the hierarchy reaches ACC-UNSCORED', () => {
+  it('a domain parent projects isLeaf:false, so its missing score is never counted', async () => {
+    const h = harness({
+      standards: [
+        standard({ id: 'kc1', code: 'COG-KC1', rubricScore: null, isLeaf: false }),
+        standard({ id: 's1', code: 'COG-1', isLeaf: true }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    const byCode = new Map(register.standards.map((s) => [s.code, s]))
+    expect(byCode.get('COG-KC1')?.isLeaf).toBe(false)
+    expect(byCode.get('COG-1')?.isLeaf).toBe(true)
+  })
+})
+
 describe('TwinRegisterService — assurance satisfaction is never guessed', () => {
   it('null for a NON-assurance — false would read as an unmet gate', async () => {
     const h = harness({ standards: [standard({ isAssurance: false })] })

@@ -22,13 +22,18 @@ import RosterUpload from './RosterUpload.jsx'
 const inputCls =
   'h-9 w-full rounded-md border border-hair/30 bg-white px-3 text-small text-ink outline-none transition-colors focus:border-ink disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
-// The live-connection providers offered in the picker (CSV/manual are handled by the
+// The live-connection providers in the picker (CSV/manual are handled by the
 // dropzone / manual entry, not here). Blackbaud = OAuth; the rest = key/basic.
+// OFFERED ≠ BUILT: FACTS / Veracross / OneRoster API ship built-to-spec but are
+// DARK (customer-gated; apps/api config `enrollment.*` keys empty, and
+// status.configured only ever reports Blackbaud). They stay visible as clearly
+// "coming soon" and can never be picked — a connector we do not offer must not
+// look connectable.
 const LIVE_PROVIDERS = [
-  { key: 'blackbaud', label: 'Blackbaud SKY', oauth: true },
-  { key: 'oneroster_api', label: 'OneRoster API', oauth: false },
-  { key: 'facts', label: 'FACTS SIS', oauth: false },
-  { key: 'veracross', label: 'Veracross', oauth: false },
+  { key: 'blackbaud', label: 'Blackbaud SKY', oauth: true, available: true },
+  { key: 'oneroster_api', label: 'OneRoster API', oauth: false, available: false },
+  { key: 'facts', label: 'FACTS SIS', oauth: false, available: false },
+  { key: 'veracross', label: 'Veracross', oauth: false, available: false },
 ]
 
 const PROVIDER_LABEL = {
@@ -234,8 +239,8 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
                     onChange={(e) => setProvider(e.target.value)}
                   >
                     {LIVE_PROVIDERS.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.label}
+                      <option key={p.key} value={p.key} disabled={!p.available}>
+                        {p.available ? p.label : `${p.label} — coming soon`}
                       </option>
                     ))}
                   </select>
@@ -247,7 +252,7 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
                     <Button variant="primary" onClick={connectOAuth} disabled={busy || !status.configured} icon={<Plug size={14} />} className="mt-4">
                       {busy ? 'Redirecting…' : `Connect ${selected.label}`}
                     </Button>
-                  ) : status.configured ? (
+                  ) : selected.available && status.configured ? (
                     <div className="mt-4 space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <input className={inputCls} placeholder="API key / client id" value={keyForm.apiKeyId} onChange={setKey('apiKeyId')} />

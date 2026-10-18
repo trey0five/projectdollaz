@@ -10,6 +10,7 @@ import {
   projectCash,
   spreadDisbursements,
   spreadReceipts,
+  parseFiscalYearStart,
   tuitionReceipts,
 } from '@finrep/analytics'
 import type {
@@ -23,6 +24,57 @@ import type {
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { QboEventsService } from './qbo-events.service.js'
+import {
+  benefitsLeftBesidePayroll,
+  coveredCategories,
+  coveredSet,
+  isCoveredExpense,
+  isNonCashExpense,
+  NON_CASH_CATEGORIES,
+  PAYROLL_BENEFITS_NOTE,
+} from './covered-categories.js'
+
+/**
+ * The spread's LAST month key ('YYYY-MM'): the first month plus the longest
+ * month column any row carries (or the stored monthKeys, when longer). Null when
+ * the start is unreadable or no row has a month column.
+ */
+function spreadLastMonth(
+  fiscalYearStart: string,
+  accounts: readonly SpreadAccountLike[],
+  monthKeys: readonly string[] | undefined,
+): string | null {
+  const start = parseFiscalYearStart(fiscalYearStart)
+  if (!start) return null
+  let n = Array.isArray(monthKeys) ? monthKeys.length : 0
+  for (const row of accounts) {
+    if (Array.isArray(row?.months)) n = Math.max(n, row.months.length)
+  }
+  if (n === 0) return null
+  const total = start.y * 12 + (start.m - 1) + (n - 1)
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`
+}
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+/** The 'YYYY-MM' key of a spread start in either stored shape. */
+function monthKeyOf(fiscalYearStart: string): string | null {
+  const start = parseFiscalYearStart(fiscalYearStart)
+  return start ? `${start.y}-${String(start.m).padStart(2, '0')}` : null
+}
+
+/** '2027-06' → '2027-06-30'. */
+function lastDayOfMonthKey(key: string): string {
+  const d = new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0)).getUTCDate()
+  return `${key}-${String(d).padStart(2, '0')}`
+}
+
+/** '2027-06' → 'June 2027'. */
+function monthLabel(key: string): string {
+  return `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The cash-flow projection service — assembly, not arithmetic.
@@ -568,7 +620,7 @@ export class CashFlowService {
     // own monthly P&L history. Anything the school entered by hand suppresses
     // the derived version of that same category — a business manager's payroll
     // calendar beats an average of last year's payroll, every time.
-    const manualCategories = [...new Set(commitmentInputs.map((c) => c.category))]
+    const manualCategories = coveredCategories(commitmentInputs.map((c) => c.category))
     const qbo =
       opts.useQuickBooks === false
         ? null
@@ -588,7 +640,10 @@ export class CashFlowService {
     const qboHistoryActive = (qbo?.sources.qbo_history.count ?? 0) > 0
     const budgeted = qboHistoryActive
       ? []
-      : await this.budgetEvents(schoolId, commitmentInputs, omissions)
+      : await this.budgetEvents(schoolId, commitmentInputs, omissions, {
+          asOfDate: opts.asOfDate,
+          horizonEnd,
+        })
 
     const commitmentEvents = expandCommitments(commitmentInputs, opts.asOfDate, horizonEnd)
     const assembled: CashEvent[] = [
@@ -968,6 +1023,7 @@ export class CashFlowService {
     schoolId: string,
     commitments: readonly CashCommitmentInput[],
     omissions: { key: string; message: string }[],
+    window: { asOfDate: string; horizonEnd: string },
   ): Promise<CashEvent[]> {
     const budget = await this.prisma.periodBudget
       .findFirst({
@@ -976,10 +1032,18 @@ export class CashFlowService {
       })
       .catch(() => null)
     const lines = (budget?.lines ?? null) as {
-      spread?: { accounts?: SpreadAccountLike[]; fiscalYearStart?: string }
+      spread?: { accounts?: SpreadAccountLike[]; fiscalYearStart?: string | null; monthKeys?: string[] }
     } | null
     const spread = lines?.spread
-    if (!spread?.accounts?.length || !spread.fiscalYearStart) {
+    // An imported spread stores its first month as a 'YYYY-MM' key (and the
+    // same key leads monthKeys); the phasing helper reads that shape directly.
+    const fiscalYearStart =
+      parseFiscalYearStart(spread?.fiscalYearStart) != null
+        ? spread!.fiscalYearStart!
+        : parseFiscalYearStart(spread?.monthKeys?.[0]) != null
+          ? spread!.monthKeys![0]
+          : null
+    if (!spread?.accounts?.length || !fiscalYearStart) {
       omissions.push({
         key: 'no_budget_spread',
         message:
@@ -988,18 +1052,75 @@ export class CashFlowService {
       return []
     }
 
-    const excludeCategories = [...new Set(commitments.map((c) => c.category))]
+    // Every category a commitment already covers (crosswalked into the spread's
+    // SCoA vocabulary — 'payroll' covers the salary lines), plus the non-cash
+    // lines: depreciation is budgeted but never paid.
+    const excludeCategories = [
+      ...coveredCategories(commitments.map((c) => c.category)),
+      ...NON_CASH_CATEGORIES,
+    ]
+    // …and the same two rules LINE by line, because a spread row's category is
+    // fixed at import: a chart that filed "Depreciation" or "Payroll Taxes" under
+    // fixedOther stores them that way forever, and the category rule alone
+    // phases depreciation as cash and pays the payroll taxes twice.
+    const covered = coveredSet(commitments.map((c) => c.category))
+    const accounts = spread.accounts.filter(
+      (row) =>
+        !row ||
+        row.section !== 'expense' ||
+        !(isNonCashExpense(row) || isCoveredExpense(row, covered)),
+    )
+    if (
+      benefitsLeftBesidePayroll(
+        accounts.filter((r) => r?.section === 'expense' && r.includedInTotals !== false),
+        covered,
+      )
+    ) {
+      omissions.push({ ...PAYROLL_BENEFITS_NOTE })
+    }
     // Tuition is always excluded from spread revenue: the driver produces it, and
     // counting a school's largest receipt twice is the same error in the other
     // direction.
     const input = {
-      accounts: spread.accounts,
-      fiscalYearStart: spread.fiscalYearStart,
+      accounts,
+      fiscalYearStart,
     }
-    return [
+    const events = [
       ...spreadDisbursements({ ...input, excludeCategories }),
       ...spreadReceipts({ ...input, excludeCategories: [...excludeCategories, 'tuition'] }),
     ]
+
+    // A spread on file is not phasing IN THE WINDOW. The latest budget can be a
+    // year that has already ended (every event before the as-of date, all of
+    // them dropped by the projection), or a year that ends before the horizon
+    // does. Either way part of the forecast runs without operating spend and
+    // receipts, and it must say so rather than claim phasing it does not have.
+    const lastMonth = spreadLastMonth(fiscalYearStart, spread.accounts, spread.monthKeys)
+    const firstMonth = monthKeyOf(fiscalYearStart)
+    if (lastMonth && firstMonth) {
+      const asOfMonth = window.asOfDate.slice(0, 7)
+      const lastDay = lastDayOfMonthKey(lastMonth)
+      if (lastDay <= window.asOfDate || firstMonth > window.horizonEnd.slice(0, 7)) {
+        omissions.push({
+          key: 'budget_spread_out_of_window',
+          message: `Your latest monthly budget runs ${monthLabel(firstMonth)} to ${monthLabel(lastMonth)}, outside this forecast \u2014 so day-to-day operating spend and receipts are missing from it. Import the budget for these months to phase them in.`,
+        })
+      } else {
+        if (firstMonth > asOfMonth) {
+          omissions.push({
+            key: 'budget_spread_starts_late',
+            message: `Budget phasing starts ${monthLabel(firstMonth)} \u2014 before that, day-to-day operating spend and receipts are missing from this forecast.`,
+          })
+        }
+        if (lastDay < window.horizonEnd) {
+          omissions.push({
+            key: 'budget_spread_ends',
+            message: `Budget phasing ends ${monthLabel(lastMonth)} \u2014 after that, day-to-day operating spend and receipts are missing from this forecast. Import next year\u2019s budget to carry them through.`,
+          })
+        }
+      }
+    }
+    return events
   }
 
   /** Annual operating expense — the months-of-cash denominator. Null when unknown. */

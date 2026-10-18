@@ -10,8 +10,11 @@ import {
   type SuppressedStudentAggregate,
 } from './aggregate-suppression.js'
 import {
+  rosterAggregate,
+  students,
   subtractionViolations,
   suppressedCellsCarryNoValue,
+  withBasis,
   type PublishedRoster,
 } from './aggregate-suppression.testkit.js'
 
@@ -27,7 +30,7 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function agg(over: Partial<StudentAggregate['counts']> = {}, kpis?: Partial<StudentAggregate['kpis']>): StudentAggregate {
-  return {
+  return withBasis({
     source: 'roster',
     total: 100,
     filteredTotal: 100,
@@ -42,7 +45,7 @@ function agg(over: Partial<StudentAggregate['counts']> = {}, kpis?: Partial<Stud
       ...over,
     },
     kpis: { enrolled: 90, waitlist: 7, flagged: 20, newThisYear: 15, ...(kpis ?? {}) },
-  }
+  })
 }
 
 describe('gateCount — one count, one rule', () => {
@@ -71,16 +74,21 @@ describe('suppressFlags — support flags suppressed HARD, complement included',
     expect(out.iep).toEqual({ suppressed: true })
     expect(out.plan504).toBe(8)
     expect(out.ell).toBe(0)
-    expect(out.any, 'a visible any beside one hidden component is a subtraction').toEqual({
-      suppressed: true,
-    })
+    // Hidden to PROTECT iep, not because it is small → marked complementary
+    // (surfaces print "withheld", never <5 over a 9).
+    expect(out.any, 'a visible any beside one hidden component is a subtraction').toEqual({ suppressed: true, reason: 'complementary' })
   })
 
-  it('two hidden components protect each other — `any` may stay visible', () => {
+  it('two hidden components: `any` is withheld too — a visible union minus the visible flags bounds the hidden pair, and the twin’s 10-floor bounds each', () => {
+    // The old rule kept any=5 visible here: 5 − 0 = 5 = iep + 504 (disjoint), and
+    // with iep, 504 ∈ 1..4 that is (1,4)…(4,1) — and against the accreditation
+    // twin (which bounds every flag <10) a tight case pins one exactly. The ONE
+    // overlap rule (@finrep/analytics suppressOverlapGroup) hides the union.
     const out = suppressFlags({ iep: 2, plan504: 3, ell: 0, any: 5 })
     expect(out.iep).toEqual({ suppressed: true })
     expect(out.plan504).toEqual({ suppressed: true })
-    expect(out.any).toBe(5)
+    expect(out.ell).toBe(0)
+    expect(out.any).toEqual({ suppressed: true, reason: 'complementary' })
   })
 
   it('all flags at/above the floor pass untouched', () => {
@@ -100,25 +108,25 @@ describe('suppressDimension — attribute cells with complementary handling', ()
     expect(out.waitlist).not.toHaveProperty('value')
     expect(out.withdrawn).toBe(0)
     // enrolled is the only remaining positive cell → suppressed as the complement
-    // (statuses sum to the published filteredTotal).
-    expect(out.enrolled).toEqual({ suppressed: true })
+    // (statuses sum to the published filteredTotal) — marked so, it is not small.
+    expect(out.enrolled).toEqual({ suppressed: true, reason: 'complementary' })
   })
 
-  it('complementary: exactly one hidden cell drags the smallest visible positive cell with it', () => {
+  it('complementary: one hidden cell takes a companion chosen by KEY order, never by size', () => {
     const out = suppressDimension({ a: 50, b: 30, c: 17, d: 3 })
     expect(out.d).toEqual({ suppressed: true })
-    expect(out.c, 'total − a − b re-derives d unless a companion hides too').toEqual({
-      suppressed: true,
-    })
-    expect(out.a).toBe(50)
+    // 'a' sorts first: total − b − c − (the companion) leaves only the pair sum
+    // a + d = 53, which pins nothing. Choosing by name says nothing about values.
+    expect(out.a, 'total − b − c re-derives d unless a companion hides too').toEqual({ suppressed: true, reason: 'complementary' })
     expect(out.b).toBe(30)
+    expect(out.c).toBe(17)
   })
 
-  it('two hidden cells protect each other — no companion taken', () => {
+  it('two hidden cells never protect each other alone (4 + 3 = 7 would bound both): a companion is taken', () => {
     const out = suppressDimension({ a: 50, b: 30, c: 4, d: 3 })
     expect(out.c).toEqual({ suppressed: true })
     expect(out.d).toEqual({ suppressed: true })
-    expect(out.a).toBe(50)
+    expect(out.a).toEqual({ suppressed: true, reason: 'complementary' })
     expect(out.b).toBe(30)
   })
 })
@@ -154,7 +162,7 @@ describe('suppressStudentAggregate — the whole public shape', () => {
     expect(out.counts.gender.nonbinary).toEqual({ suppressed: true })
     expect(out.counts.race.asian).toEqual({ suppressed: true })
     // exactly-one-hidden in race drags the smallest visible cell (complement).
-    expect(out.counts.race.white).toEqual({ suppressed: true })
+    expect(out.counts.race.white).toEqual({ suppressed: true, reason: 'complementary' })
   })
 })
 
@@ -177,13 +185,14 @@ function published(out: SuppressedStudentAggregate): PublishedRoster {
     ageBand: out.counts.ageBand,
     flags: out.counts.flags,
     kpis: out.kpis,
+    breakdownStatus: out.breakdown.status,
   }
 }
 
 /** A raw fixture whose statuses/grades/ageBands genuinely SUM to the totals —
  *  the walker only enforces relations that hold in the raw numbers. */
 function raw48(over: Partial<StudentAggregate> = {}): StudentAggregate {
-  return {
+  return withBasis({
     source: 'roster',
     total: 48,
     filteredTotal: 48,
@@ -200,7 +209,7 @@ function raw48(over: Partial<StudentAggregate> = {}): StudentAggregate {
     kpis: { enrolled: 40, waitlist: 6, flagged: 0, newThisYear: 8, ...(over.kpis ?? {}) },
     ...(over.total !== undefined ? { total: over.total } : {}),
     ...(over.filteredTotal !== undefined ? { filteredTotal: over.filteredTotal } : {}),
-  } as StudentAggregate
+  } as StudentAggregate)
 }
 
 const assertNonDerivable = (out: SuppressedStudentAggregate, raw: StudentAggregate) => {
@@ -210,15 +219,18 @@ const assertNonDerivable = (out: SuppressedStudentAggregate, raw: StudentAggrega
 }
 
 describe('KPI twins follow the dimension twin (the reviewer BLOCKER)', () => {
-  it('★ reviewer fixture 1: enrolled 40 / waitlist 6 / withdrawn 2 — kpis.waitlist may NOT republish the dragged companion', () => {
+  it('★ reviewer fixture 1: enrolled 40 / waitlist 6 / withdrawn 2 — kpis.waitlist may NOT republish the hidden status', () => {
     const raw = raw48()
     const out = suppressStudentAggregate(raw)
-    // withdrawn (2) hides on its own floor; waitlist (6) is dragged as companion…
-    expect(out.counts.status.withdrawn).toEqual({ suppressed: true })
-    expect(out.counts.status.waitlist).toEqual({ suppressed: true })
+    // withdrawn (2) is small and waitlist (6) — the only positive companion —
+    // cannot cover it (2 + 6 = 8 would leave withdrawn ≤ 3), so the statuses
+    // FAIL CLOSED: every un-pinned one is withheld alike, zeros included…
+    expect(out.counts.status.withdrawn).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.graduated).toEqual({ suppressed: true, reason: 'complementary' })
     // …and the KPI twin follows the FINAL decision instead of its own floor —
     // otherwise withdrawn = 48 − 40 − 0 − kpis.waitlist, the reviewer's math.
-    expect(out.kpis.waitlist).toEqual({ suppressed: true })
+    expect(out.kpis.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
     // enrolled stays raw (kpis.enrolled republishes it by product decision, so
     // hiding the status cell would be theater, and dragging it as a companion
     // would protect nothing).
@@ -242,8 +254,8 @@ describe('KPI twins follow the dimension twin (the reviewer BLOCKER)', () => {
     })
     const out = suppressStudentAggregate(raw)
     expect(out.counts.flags.iep).toEqual({ suppressed: true })
-    expect(out.counts.flags.any).toEqual({ suppressed: true })
-    expect(out.kpis.flagged).toEqual({ suppressed: true })
+    expect(out.counts.flags.any).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.kpis.flagged).toEqual({ suppressed: true, reason: 'complementary' })
     expect(out.counts.flags.plan504).toBe(10)
     expect(out.counts.flags.ell).toBe(10)
     assertNonDerivable(out, raw)
@@ -261,9 +273,9 @@ describe('KPI twins follow the dimension twin (the reviewer BLOCKER)', () => {
   })
 
   it('a KPI small on its own floor still hides even when its dimension twin is visible', () => {
-    // waitlist 3 (<floor): both the status cell and the KPI hide on the floor;
-    // the ZERO-companion rule must kick in (enrolled is pinned, nothing else is
-    // positive) so the pair-sum — not the cell — is all that remains derivable.
+    // waitlist 3 (<floor): enrolled is pinned and nothing else is positive, so
+    // the statuses FAIL CLOSED (the old zero-companion was solvable: a
+    // complementary cell is 0 or ≥ 5, so a pair sum of 3 named both).
     const raw = raw48({
       counts: {
         grade: { K: 20, '1': 16, '2': 7 },
@@ -279,16 +291,15 @@ describe('KPI twins follow the dimension twin (the reviewer BLOCKER)', () => {
       filteredTotal: 43,
     })
     const out = suppressStudentAggregate(raw)
-    expect(out.counts.status.waitlist).toEqual({ suppressed: true })
-    expect(out.kpis.waitlist).toEqual({ suppressed: true })
+    expect(out.counts.status.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.kpis.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
     // enrolled is pinned — NOT taken as companion (the old code took it, and
     // kpis.enrolled=40 handed waitlist straight back).
     expect(out.counts.status.enrolled).toBe(40)
-    // A zero cell serves as the companion so the hidden cell is not lone.
-    const zerosHidden = ['withdrawn', 'graduated'].filter(
-      (k) => typeof out.counts.status[k] !== 'number',
-    )
-    expect(zerosHidden.length).toBe(1)
+    // Both zeros are withheld with it, all under one label: nothing says which
+    // of the three holds the 3.
+    expect(out.counts.status.withdrawn).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.graduated).toEqual({ suppressed: true, reason: 'complementary' })
     assertNonDerivable(out, raw)
   })
 
@@ -301,49 +312,35 @@ describe('KPI twins follow the dimension twin (the reviewer BLOCKER)', () => {
   })
 })
 
-describe('attribute-filtered REST reads (the reviewer MAJOR)', () => {
-  const filteredRaw = (filteredTotal: number, over: Partial<StudentAggregate['counts']> = {}): StudentAggregate =>
-    ({
-      source: 'roster',
-      total: 48,
-      filteredTotal,
-      counts: {
-        grade: {},
-        status: { enrolled: filteredTotal, waitlist: 0, withdrawn: 0, graduated: 0 },
-        gender: {},
-        race: {},
-        ethnicity: {},
-        ageBand: {
-          under5: 0,
-          '5to10': filteredTotal,
-          '11to13': 0,
-          '14to18': 0,
-          '19plus': 0,
-          unknown: 0,
-        },
-        flags: { iep: filteredTotal, plan504: 0, ell: 0, any: filteredTotal },
-        ...over,
-      },
-      kpis: { enrolled: 40, waitlist: 6, flagged: 20, newThisYear: 8 },
-    }) as StudentAggregate
+describe('attribute-filtered REST reads (the reviewer MAJOR) — row-level fixtures, real basis', () => {
+  /** 48 students: 40 enrolled, 6 waitlisted, 2 withdrawn; IEP as given. */
+  const roster = (iep: { grade: string; status?: string; n: number }[]) =>
+    students([
+      ...iep.map((g) => ({ ...g, iep: true })),
+      { n: 40 - iep.filter((g) => (g.status ?? 'enrolled') === 'enrolled').reduce((t, g) => t + g.n, 0), grade: 'K' },
+      { n: 6 - iep.filter((g) => g.status === 'waitlist').reduce((t, g) => t + g.n, 0), status: 'waitlist', grade: '1' },
+      { n: 2, status: 'withdrawn', grade: '2' },
+    ])
 
-  it('★ ?flags=iep with 3 matches: filteredTotal leaves as a marker with NO value key', () => {
-    const raw = filteredRaw(3, { grade: { '5': 3 } })
+  it('★ ?flags=iep with 3 matches: the whole read is withheld (ISP is <5 on the roster), no value key anywhere', () => {
+    const raw = rosterAggregate(roster([{ grade: '5', n: 3 }]), { flags: ['iep'] })
     const out = suppressStudentAggregate(raw, { attributeFiltered: true })
-    expect(out.filteredTotal).toEqual({ suppressed: true })
+    expect(out.withheld).toBe('all')
+    expect(out.filteredTotal).toEqual({ suppressed: true, reason: 'complementary' })
     expect(out.filteredTotal).not.toHaveProperty('value')
     expect(out.total).toBe(48) // whole-school total stays raw by decision
+    expect(JSON.stringify(out.counts)).not.toMatch(/:3\b/)
     assertNonDerivable(out, raw)
   })
 
   it('★ grade cells become cross-tabs under an attribute filter and are gated with complement', () => {
-    // 7 IEP students: grade 6 has 2 (hidden), grade 5 has 5 — visible it would
-    // be backed out of the visible filteredTotal, so it goes as companion.
-    const raw = filteredRaw(7, { grade: { '5': 5, '6': 2 } })
+    // 7 IEP students: grade 5 has 5, grade 6 has 2. 2 + 5 = 7 cannot protect the
+    // 2 (it would be ≤ 2), so the grade breakdown fails closed — both withheld.
+    const raw = rosterAggregate(roster([{ grade: '5', n: 5 }, { grade: '6', n: 2 }]), { flags: ['iep'] })
     const out = suppressStudentAggregate(raw, { attributeFiltered: true })
     expect(out.filteredTotal).toBe(7)
-    expect(out.counts.grade['6']).toEqual({ suppressed: true })
-    expect(out.counts.grade['5']).toEqual({ suppressed: true })
+    expect(out.counts.grade['6']).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.grade['5']).toEqual({ suppressed: true, reason: 'complementary' })
     assertNonDerivable(out, raw)
   })
 
@@ -361,17 +358,33 @@ describe('attribute-filtered REST reads (the reviewer MAJOR)', () => {
     assertNonDerivable(out, raw)
   })
 
-  it('a filtered sub-floor status cell takes a companion from the un-pinned cells (kpis speak about a DIFFERENT population)', () => {
-    // ?flags=iep, 7 matches: 6 enrolled, 1 waitlisted. kpis.waitlist (whole
-    // school, 6) is not this population — it must not be treated as a twin.
-    const raw = filteredRaw(7, {
-      grade: { '5': 7 },
-      status: { enrolled: 6, waitlist: 1, withdrawn: 0, graduated: 0 },
-    })
+  it('a filtered read whose NOT-ENROLLED remainder is small withholds filteredTotal (6 enrolled + 1 waitlisted ⇒ 1)', () => {
+    // ?race=asian, 7 matches: 6 enrolled, 1 waitlisted. The breakdowns count the
+    // 6 enrolled (status.enrolled is pinned), so a visible 7 would hand back 1.
+    const rows = students([
+      { n: 6, race: 'asian' },
+      { n: 34, race: 'white' },
+      { n: 1, status: 'waitlist', race: 'asian' },
+      { n: 5, status: 'waitlist', race: 'white' },
+      { n: 2, status: 'withdrawn', race: 'white' },
+    ])
+    const raw = rosterAggregate(rows, { race: ['asian'] })
     const out = suppressStudentAggregate(raw, { attributeFiltered: true })
-    expect(out.counts.status.waitlist).toEqual({ suppressed: true })
-    expect(out.counts.status.enrolled).toEqual({ suppressed: true }) // companion — NOT pinned here
+    expect(out.withheld).toBeNull()
+    expect(out.filteredTotal).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.enrolled).toBe(6)
+    // the lone waitlisted student has no positive companion: fail closed.
+    expect(out.counts.status.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.withdrawn).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(out.counts.status.graduated).toEqual({ suppressed: true, reason: 'complementary' })
     assertNonDerivable(out, raw)
+  })
+
+  it('the same split under ?flags=iep withholds the WHOLE read: ISP is <5 among the not-enrolled', () => {
+    const raw = rosterAggregate(roster([{ grade: '5', n: 6 }, { grade: '1', status: 'waitlist', n: 1 }]), { flags: ['iep'] })
+    const out = suppressStudentAggregate(raw, { attributeFiltered: true })
+    expect(out.withheld).toBe('all')
+    expect(out.filteredTotal).toEqual({ suppressed: true, reason: 'complementary' })
   })
 })
 

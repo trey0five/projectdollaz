@@ -4,6 +4,7 @@ import type { StudentAggregate } from '../enrollment/students/students.service.j
 import {
   subtractionViolations,
   suppressedCellsCarryNoValue,
+  withBasis,
   type PublishedRoster,
 } from '../enrollment/students/aggregate-suppression.testkit.js'
 import { AssistantService } from './assistant.service.js'
@@ -56,7 +57,9 @@ function makeService(
   const arity = AssistantService.length
   const args: unknown[] = Array(arity).fill({} as never)
   const svc = new (AssistantService as unknown as new (...a: unknown[]) => AssistantService)(...args)
-  const aggregate = vi.fn(async () => raw ?? rawAggregate(flags))
+  // The service always attaches the suppression basis; these unit fixtures get
+  // one synthesized (every count on enrolled students — see withBasis).
+  const aggregate = vi.fn(async () => withBasis((raw ?? rawAggregate(flags)) as StudentAggregate))
   // Post-construction stubs by NAME, not position: this spec asserts payload
   // shape only, and must not redden when the constructor gains a dependency.
   Object.assign(svc as unknown as Record<string, unknown>, {
@@ -74,6 +77,8 @@ function publishedFromTool(res: Record<string, unknown>): PublishedRoster {
     status: res.byStatus as PublishedRoster['status'],
     flags: res.supportFlags as PublishedRoster['flags'],
     kpis: res.kpis as PublishedRoster['kpis'],
+    // byGrade counts ENROLLED students (the breakdown group).
+    breakdownStatus: 'enrolled',
   }
 }
 
@@ -100,18 +105,16 @@ describe('get_roster_summary — the flag suppression the egress audit demanded'
   it('small status cells are suppressed on the SAME payload (REST-route parity — one gate, both doors)', async () => {
     const res = await run(makeService({ iep: 12, plan504: 8, ell: 6, any: 20 }).svc)
     const status = res.byStatus as Record<string, unknown>
-    expect(status.waitlist).toEqual({ suppressed: true })
     // enrolled is PINNED raw: kpis.enrolled republishes it by product decision,
-    // so dragging it as a companion would protect nothing — the reviewer's
-    // subtraction (total − kpis.enrolled − visible) proved exactly that. A ZERO
-    // status is taken as the companion instead, so only the pair-sum remains.
+    // so dragging it as a companion would protect nothing. Nothing else is
+    // positive to protect waitlist 2 with, so the statuses FAIL CLOSED — every
+    // un-pinned one withheld alike (the old zero companion was solvable).
     expect(status.enrolled).toBe(40)
-    const zerosHidden = ['withdrawn', 'graduated'].filter(
-      (k) => typeof (status as Record<string, unknown>)[k] !== 'number',
-    )
-    expect(zerosHidden.length).toBe(1)
-    // The KPI twin follows the dimension cell's final decision (lockstep).
-    expect((res.kpis as Record<string, unknown>).waitlist).toEqual({ suppressed: true })
+    for (const k of ['waitlist', 'withdrawn', 'graduated']) {
+      expect(status[k]).toEqual({ suppressed: true, reason: 'complementary' })
+    }
+    // The KPI twin follows the WHOLE-ROSTER decision (lockstep).
+    expect((res.kpis as Record<string, unknown>).waitlist).toEqual({ suppressed: true, reason: 'complementary' })
   })
 
   it('★ the reviewer extraction (enrolled 40 / waitlist 6 / withdrawn 2): nothing in the payload derives the hidden cell', async () => {
@@ -133,10 +136,11 @@ describe('get_roster_summary — the flag suppression the egress audit demanded'
     const res = await run(makeService({ iep: 0, plan504: 0, ell: 0, any: 0 }, null, raw).svc)
     const kpis = res.kpis as Record<string, unknown>
     // The KPI twin must NOT republish the companion: 48 − 40 − 0 − kpis.waitlist
-    // was the reviewer's recovery of the hidden withdrawn=2.
-    expect(kpis.waitlist).toEqual({ suppressed: true })
+    // was the reviewer's recovery of the hidden withdrawn=2. It is hidden to
+    // PROTECT withdrawn (6 is not small), so it says so — Penny says "withheld".
+    expect(kpis.waitlist).toEqual({ suppressed: true, reason: 'complementary' })
     const pub = publishedFromTool(res)
-    expect(subtractionViolations(pub, raw)).toEqual([])
+    expect(subtractionViolations(pub, withBasis(raw))).toEqual([])
     expect(suppressedCellsCarryNoValue(pub)).toEqual([])
   })
 
@@ -160,10 +164,11 @@ describe('get_roster_summary — the flag suppression the egress audit demanded'
     const flags = res.supportFlags as Record<string, unknown>
     const kpis = res.kpis as Record<string, unknown>
     expect(flags.iep).toEqual({ suppressed: true })
-    expect(flags.any).toEqual({ suppressed: true })
-    expect(kpis.flagged).toEqual({ suppressed: true })
+    // 20 is not small — both are withheld only to protect the iep=2 flag.
+    expect(flags.any).toEqual({ suppressed: true, reason: 'complementary' })
+    expect(kpis.flagged).toEqual({ suppressed: true, reason: 'complementary' })
     const pub = publishedFromTool(res)
-    expect(subtractionViolations(pub, raw)).toEqual([])
+    expect(subtractionViolations(pub, withBasis(raw))).toEqual([])
     expect(suppressedCellsCarryNoValue(pub)).toEqual([])
   })
 

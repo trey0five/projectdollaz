@@ -37,7 +37,12 @@ export interface SpreadAccountLike {
 
 export interface SpreadDisbursementInput {
   accounts: readonly SpreadAccountLike[]
-  /** ISO date of the FIRST fiscal month in `months` (e.g. '2026-07-01'). */
+  /**
+   * The FIRST fiscal month in `months`. Either a month key — 'YYYY-MM', which is
+   * what an imported spread stores (`PeriodBudget.lines.spread.fiscalYearStart`,
+   * e.g. '2026-07') — or a full ISO date ('2026-07-01'). Only year and month are
+   * used; anything else yields no events.
+   */
   fiscalYearStart: string
   /**
    * Categories already covered by an explicit commitment. Their spread rows are
@@ -46,6 +51,26 @@ export interface SpreadDisbursementInput {
   excludeCategories?: readonly string[]
   /** Day of month the modelled spend is assumed to clear. Default: month end. */
   dayOfMonth?: number | null
+}
+
+/**
+ * The spread's first fiscal month. Imported spreads store a month KEY
+ * ('2026-07'); parsing that as a full date returned null and every spread
+ * silently produced no events — budget phasing was never in the forecast. Both
+ * shapes are accepted; a malformed value still yields null (no events), never a
+ * guessed month.
+ */
+export function parseFiscalYearStart(value: string | null | undefined): { y: number; m: number } | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  const monthKey = /^(\d{4})-(\d{2})$/.exec(v)
+  if (monthKey) {
+    const y = Number(monthKey[1])
+    const m = Number(monthKey[2])
+    return m >= 1 && m <= 12 ? { y, m } : null
+  }
+  const iso = parseIso(v)
+  return iso ? { y: iso.y, m: iso.m } : null
 }
 
 /**
@@ -58,7 +83,7 @@ export interface SpreadDisbursementInput {
  * that, and the API layer passes every category it already has a commitment for.
  */
 export function spreadDisbursements(input: SpreadDisbursementInput): CashEvent[] {
-  const start = parseIso(input.fiscalYearStart)
+  const start = parseFiscalYearStart(input.fiscalYearStart)
   if (!start) return []
   const excluded = new Set((input.excludeCategories ?? []).map((c) => c.toLowerCase()))
   const out: CashEvent[] = []
@@ -104,7 +129,7 @@ export function spreadDisbursements(input: SpreadDisbursementInput): CashEvent[]
  * receipt twice.
  */
 export function spreadReceipts(input: SpreadDisbursementInput): CashEvent[] {
-  const start = parseIso(input.fiscalYearStart)
+  const start = parseFiscalYearStart(input.fiscalYearStart)
   if (!start) return []
   const excluded = new Set((input.excludeCategories ?? []).map((c) => c.toLowerCase()))
   const out: CashEvent[] = []

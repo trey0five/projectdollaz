@@ -253,9 +253,11 @@ describe('StudentsService — CRUD rules + FERPA-safe audit', () => {
 describe('StudentsService.aggregate — FERPA-safe counts', () => {
   function makeAggService(filtered: ReturnType<typeof studentRow>[], all: ReturnType<typeof studentRow>[]) {
     const base = makeService()
-    // The filtered query selects grade; the unfiltered kpi query does not.
+    // The whole-roster query is the only one that selects enrolledOn (the kpis
+    // need it); every other read — the request and its suppression bases — is
+    // a filtered one.
     base.student.findMany.mockImplementation(async (args?: { select?: Record<string, boolean> }) =>
-      args?.select?.grade ? filtered : all,
+      args?.select?.enrolledOn ? all : filtered,
     )
     return base
   }
@@ -290,6 +292,41 @@ describe('StudentsService.aggregate — FERPA-safe counts', () => {
     // KPIs are UNFILTERED: 3 enrolled, 1 waitlist; flagged counts ENROLLED flags
     // only (the withdrawn ELL student is excluded); newThisYear ≥ FY Jul 1.
     expect(res.kpis).toEqual({ enrolled: 3, waitlist: 1, flagged: 2, newThisYear: 1 })
+    // The suppression basis is ALWAYS attached (the public gate fails closed
+    // without it): the whole roster split by status, the request's own rows.
+    expect(res.suppressionBasis?.roster.enrolled.n).toBe(3)
+    expect(res.suppressionBasis?.roster.withdrawn.flags.ell).toBe(1)
+    expect(res.suppressionBasis?.base.enrolled.n).toBe(2)
+    expect(res.suppressionBasis?.statusSelection).toBeNull()
+    // Round 5: the whole register as the no-name projection the joint tables
+    // cross-tabulate (never published), and no name search on this request.
+    expect(res.suppressionBasis?.rosterRows).toHaveLength(5)
+    expect(Object.keys(res.suppressionBasis!.rosterRows![0]).sort()).toEqual(
+      ['ageBand', 'ell', 'ethnicity', 'gender', 'grade', 'has504', 'hasIep', 'race', 'status'].sort(),
+    )
+    expect(res.suppressionBasis?.nameSearch).toBe(false)
+  })
+
+  it('a name search is flagged on the basis (the gate withholds every figure that follows a name)', async () => {
+    const { svc } = makeAggService([studentRow()], [studentRow(), studentRow()])
+    const res = await svc.aggregate(SCHOOL, { q: 'smi' } as never)
+    expect(res.suppressionBasis?.nameSearch).toBe(true)
+    const blank = await svc.aggregate(SCHOOL, { q: '   ' } as never)
+    expect(blank.suppressionBasis?.nameSearch).toBe(false)
+  })
+
+  it('a filtered request fetches its bases with the SAME where-builder: minus status, minus each filter, minus each extra value', async () => {
+    const { svc, student } = makeAggService([studentRow()], [studentRow()]) as unknown as {
+      svc: StudentsService
+      student: { findMany: { mock: { calls: [{ where: Record<string, unknown> }][] } } }
+    }
+    await svc.aggregate(SCHOOL, { status: ['enrolled'], race: ['white', 'black'], flags: ['iep'] } as never)
+    const wheres = student.findMany.mock.calls.map((c) => JSON.stringify(c[0].where))
+    // request, roster, minus-status, minus-race, minus-flags, race−white, race−black
+    expect(wheres).toHaveLength(7)
+    expect(wheres.filter((w) => w.includes('"status"'))).toHaveLength(1) // only the request keeps status
+    expect(wheres.some((w) => w.includes('"black"') && !w.includes('"white"'))).toBe(true)
+    expect(wheres.some((w) => w.includes('"white"') && !w.includes('"black"'))).toBe(true)
   })
 
   it('never returns a name field anywhere in the payload', async () => {
@@ -618,6 +655,34 @@ describe('EnrollmentService — rosterMode + live-roster switching', () => {
     expect(res.latest!.totalEnrolled).toBe(300)
     // The roster branch never queried students in sis mode.
     expect(prisma.student.findMany).not.toHaveBeenCalled()
+  })
+
+  it('★ demographics: an SIS-connected school WITH a roster counts the roster — one population with students/aggregate (privacy review round 6)', async () => {
+    // The headcount stays the SIS snapshot (summary(), above). Demographics do
+    // not: the roster aggregate publishes the Student rows' race/gender beside
+    // them, and a snapshot that differs by a few students hands a small cell
+    // back by subtraction.
+    const { svc } = makeEnrollmentService({
+      students: [
+        studentRow({ gender: 'female', race: 'white' }),
+        studentRow({ id: 's2', gender: 'male', race: 'asian' }),
+      ],
+      source: { id: 'src-1', provider: 'blackbaud' },
+      snapshot: {
+        id: 'snap-1',
+        observedOn: new Date('2026-03-01'),
+        totalEnrolled: 300,
+        byGrade: { K: 300 },
+        byDemographics: { race: { white: 297, asian: 3 } },
+        provider: 'blackbaud',
+        fiscalPeriodId: null,
+      },
+    })
+    const demo = await svc.demographics(SCHOOL)
+    expect(demo!.source).toBe('roster')
+    expect(demo!.totalEnrolled).toBe(2)
+    expect(demo!.race!.counts).toEqual({ white: 1, asian: 1 })
+    expect((await svc.summary(SCHOOL)).source).toBe('snapshot')
   })
 
   it('demographics: roster mode returns canonical counts+shares over enrolled students', async () => {

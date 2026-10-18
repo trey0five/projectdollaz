@@ -25,9 +25,7 @@ import {
   mergeFeederEnrollment,
   toDriverPriorContext,
   GRADE_KEYS,
-  diversityIndex,
   gradeMixShares,
-  toShares,
   type DriverAssumptions,
   type GradeKey,
   gateAggregates,
@@ -116,7 +114,11 @@ import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.const
 import { ImprovementService } from '../improvement/improvement.service.js'
 import { VisitService } from '../visit/visit.service.js'
 import { StudentsService } from '../enrollment/students/students.service.js'
-import { suppressStudentAggregate } from '../enrollment/students/aggregate-suppression.js'
+import {
+  suppressDemographicCounts,
+  suppressDemographicsView,
+  suppressStudentAggregate,
+} from '../enrollment/students/aggregate-suppression.js'
 import {
   ImprovementPlanDrafterService,
   emptyDraftReason,
@@ -6245,7 +6247,10 @@ export class AssistantService {
       'ENROLLMENT ANALYTICS — get_enrollment_analytics (actual versus plan BY GRADE, ' +
       'year-over-year, the grade ladder, class sizes over time, status and support mix). ' +
       'A cell marked suppressed carries NO value at all: say it is below the reporting floor ' +
-      'and withheld, and never estimate it from a total. ' +
+      'and withheld, and never estimate it from a total. A suppressed cell that ALSO carries ' +
+      'reason "complementary" is NOT small: say it is withheld so a smaller group cannot be ' +
+      'worked out by subtraction — never call it below the floor, and never estimate it ' +
+      '(this applies to every tool: roster, analytics and demographics). ' +
       // Honesty note (privacy F2): redactText masks emails/SSNs + REGISTERED
       // identities, but a name typed free-form by the user is NOT registered and
       // passes through — so the model itself is told never to propagate one.
@@ -6848,8 +6853,19 @@ export class AssistantService {
         // quote, mis-read as a zero, or "helpfully" fill in. A cell that was never
         // filed keeps `value: null` — missing and withheld are different absences
         // and stay distinguishable.
-        const cell = (c: { value: number | null; suppressed: boolean } | null | undefined) =>
-          c == null ? null : c.suppressed ? { suppressed: true } : { value: c.value }
+        // A COMPLEMENTARY cell (hidden only so a smaller one cannot be worked out
+        // by subtraction — e.g. "any support flag" beside a hidden 504) keeps its
+        // reason, so Penny says "withheld", never "fewer than the floor".
+        const cell = (
+          c: { value: number | null; suppressed: boolean; reason?: 'complementary' } | null | undefined,
+        ) =>
+          c == null
+            ? null
+            : c.suppressed
+              ? c.reason === 'complementary'
+                ? { suppressed: true, reason: 'complementary' as const }
+                : { suppressed: true }
+              : { value: c.value }
 
         // ★ THE DIVERGENCE RULE. When the promoted headcount and the reading on
         // the page disagree, the payload carries NO single school-total headcount
@@ -7018,14 +7034,21 @@ export class AssistantService {
                   // non-headcount statuses, the flag cells and the coverage
                   // COMPLETENESS survive; the reconciliation PAIR (published in
                   // summaryPart) remains the only place either figure appears.
+                  // Statuses arrive SUPPRESSED (the overview's own decision —
+                  // a lone small status is the total minus the rest).
                   status: diverged
                     ? {
-                        waitlist: view.mix.status.waitlist,
-                        withdrawn: view.mix.status.withdrawn,
-                        graduated: view.mix.status.graduated,
+                        waitlist: cell(view.mix.status.waitlist),
+                        withdrawn: cell(view.mix.status.withdrawn),
+                        graduated: cell(view.mix.status.graduated),
                         withheld: 'headcount_reconciliation',
                       }
-                    : view.mix.status,
+                    : {
+                        enrolled: cell(view.mix.status.enrolled),
+                        waitlist: cell(view.mix.status.waitlist),
+                        withdrawn: cell(view.mix.status.withdrawn),
+                        graduated: cell(view.mix.status.graduated),
+                      },
                   flags: {
                     iep: cell(view.mix.flags.iep),
                     plan504: cell(view.mix.flags.plan504),
@@ -7556,7 +7579,11 @@ export class AssistantService {
           available: true,
           total: agg.total,
           kpis: agg.kpis,
+          // Breakdowns count ENROLLED students (aggregate-suppression.ts — every
+          // demographic/grade breakdown is over one status group, so it cannot be
+          // subtracted from the enrolled figures other surfaces publish).
           byGrade: agg.counts.grade,
+          byGradeCounts: 'enrolled students',
           byStatus: agg.counts.status,
           supportFlags: agg.counts.flags,
           minCell: agg.minCell,
@@ -8016,23 +8043,50 @@ export class AssistantService {
       }
       case 'get_enrollment_demographics': {
         const periodId = typeof args.periodId === 'string' ? args.periodId : undefined
+        // ONE POPULATION (privacy review round 6): the SAME read the
+        // /enrollment/demographics route and the analytics card make — the live
+        // roster whenever Student rows exist (and the period is current), else
+        // the latest snapshot — through the same public gate. Reading the
+        // snapshot here while the roster aggregate published Student rows was
+        // two populations a few students apart: a race hidden on one surface
+        // and visible on the other is that race's small cell, by subtraction.
+        // (Reached through EnrollmentAnalyticsService, which owns the read for
+        // the analytics card — no new constructor slot: specs index the
+        // optional tail from the end.)
+        if (typeof this.enrollmentAnalytics?.demographicsView === 'function') {
+          const view = suppressDemographicsView(await this.enrollmentAnalytics.demographicsView(ctx.schoolId, periodId))
+          if (!view) return { hasData: false }
+          return {
+            hasData: true,
+            observedOn: view.observedOn,
+            source: view.source,
+            totalEnrolled: view.totalEnrolled,
+            gender: view.gender,
+            ethnicity: view.ethnicity,
+            race: view.race,
+            gradeMix: view.gradeMix,
+          }
+        }
         const latest = await this.prisma.enrollmentSnapshot.findFirst({
           where: { schoolId: ctx.schoolId, ...(periodId ? { fiscalPeriodId: periodId } : {}) },
           orderBy: { observedOn: 'desc' },
         })
         if (!latest) return { hasData: false }
-        // Aggregate counts only (no student PII) — shares/diversity via canonical analytics.
+        // Aggregate counts only (no student PII) — and SUPPRESSED before they can
+        // reach a prompt: `totalEnrolled` rides beside these maps, so a lone small
+        // race is total − the visible races. The ONE partition rule (the same the
+        // analytics cards and the students/aggregate route run) hides companions;
+        // a hidden cell's share is dropped and the diversity index is pooled over
+        // the hidden cells (suppressDemographicCounts).
         const demo = (latest.byDemographics ?? {}) as DemographicBreakdown
         const byGrade = (latest.byGrade ?? {}) as Record<string, number>
         return {
           hasData: true,
           observedOn: latest.observedOn.toISOString().slice(0, 10),
           totalEnrolled: latest.totalEnrolled,
-          gender: demo.gender ? { counts: demo.gender, shares: toShares(demo.gender) } : null,
-          ethnicity: demo.ethnicity ? { counts: demo.ethnicity, shares: toShares(demo.ethnicity) } : null,
-          race: demo.race
-            ? { counts: demo.race, shares: toShares(demo.race), diversityIndex: diversityIndex(demo.race) }
-            : null,
+          gender: demo.gender ? suppressDemographicCounts(demo.gender) : null,
+          ethnicity: demo.ethnicity ? suppressDemographicCounts(demo.ethnicity) : null,
+          race: demo.race ? suppressDemographicCounts(demo.race, { withDiversity: true }) : null,
           gradeMix: { counts: byGrade, shares: gradeMixShares(byGrade) },
         }
       }

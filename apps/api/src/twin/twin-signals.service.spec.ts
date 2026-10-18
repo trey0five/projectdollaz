@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MetricKey, MetricTrend, TrendPoint } from '@finrep/analytics'
+import { suppressOverlapGroup } from '@finrep/analytics'
+import { flagUnionHidden } from '../enrollment/students/aggregate-joint.js'
+import { students } from '../enrollment/students/aggregate-suppression.testkit.js'
 import { TwinSignalsService } from './twin-signals.service.js'
 import { TWIN_SIGNAL_CATALOG } from './twin-signal-catalog.js'
 import { TWIN_SIGNAL_KEYS, type TwinSignal, type TwinSignalKey } from './twin-contract.js'
@@ -700,6 +703,75 @@ describe('TwinSignalsService — FERPA small cells (F11)', () => {
     expect(numbers).not.toContain(4)
   })
 
+  // THE OVERLAP ATTACK. Every flag clears the twin's 10 floor, so pass 1 hides
+  // nothing — but `ISP + 504 + ELL − any` is the number of students on more than
+  // one list, and with two flags in play it IS the "ISP and 504" cross-tab. The
+  // enrollment surfaces withhold `any` when that overlap is under 5
+  // (suppressOverlapGroup); this card must make the same call on the same roster.
+  const supportNeeds = async (flags: { iep: number; plan504: number; ell: number; any: number }) => {
+    const h = harness({
+      roster: { source: 'roster', total: 220, filteredTotal: 220, counts: { flags }, kpis: {} },
+    })
+    return byKey((await h.service.collect('school-A', { now: NOW })).signals).get('svc.support_needs') as TwinSignal
+  }
+
+  it('★ the headline is WITHHELD when every flag is ≥10 but the overlap is small (14 + 12 + 0 − 23 = 3 on two lists)', async () => {
+    const s = await supportNeeds({ iep: 14, plan504: 12, ell: 0, any: 23 })
+    expect(s.availability).toBe('available')
+    // The attacker: every published flag + the headline ⇒ the overlap.
+    const cells = new Map((s.cells ?? []).map((c) => [c.key, c]))
+    const published = ['iep', 'plan504', 'ell'].map((k) => cells.get(k)?.value)
+    expect(published).toEqual([14, 12, 0])
+    expect(s.value).toBeNull()
+    const numbers = (JSON.stringify(s).match(/-?\d+(\.\d+)?/g) ?? []).map(Number)
+    expect(numbers).not.toContain(23)
+  })
+
+  it('★ the overlap rule matches the roster overview on the SAME roster (St. Aurelia-shaped: 27 − 25 = 2)', async () => {
+    // ISP 14 · 504 10 · ELL 13 · any 35 — 2 students on two lists; every flag ≥10.
+    const s = await supportNeeds({ iep: 14, plan504: 10, ell: 13, any: 35 })
+    expect(s.value).toBeNull()
+    const overview = suppressOverlapGroup({ iep: 14, plan504: 10, ell: 13 }, 35)
+    expect(overview.total.suppressed).toBe(true)
+  })
+
+  it('★ the PER-FLAG lattice rule matches the roster overview: |504 ∩ (ISP ∪ ELL)| = 3 withholds the headline', async () => {
+    // ISP 35 · 504 20 · ELL 33 · any 79: total overlap 9, every flag ≥ 10, so
+    // the count-only rules publish 79 — but any − |ISP ∪ ELL| (62, from the
+    // pairwise ?flags=iep read) is the 17 on the 504 list only, so 20 − 17 = 3.
+    const rows = students([
+      { n: 26, iep: true },
+      { n: 27, ell: true },
+      { n: 17, p504: true },
+      { n: 3, iep: true, p504: true },
+      { n: 6, iep: true, ell: true },
+      { n: 120 },
+    ])
+    const h = harness({
+      roster: {
+        source: 'roster',
+        total: rows.length,
+        filteredTotal: rows.length,
+        counts: { flags: { iep: 35, plan504: 20, ell: 33, any: 79 } },
+        kpis: {},
+        suppressionBasis: { rosterRows: rows },
+      },
+    })
+    const s = byKey((await h.service.collect('school-A', { now: NOW })).signals).get('svc.support_needs') as TwinSignal
+    expect(s.value).toBeNull()
+    // The overview makes the same call on the same rows.
+    expect(flagUnionHidden(rows)).toBe(true)
+    // Without the rows (an older producer) the count-only rules still apply.
+    expect((await supportNeeds({ iep: 35, plan504: 20, ell: 33, any: 79 })).value).toBe(79)
+  })
+
+  it('the headline is published when the overlap is zero (a fact about nobody) or at/above the floor', async () => {
+    expect((await supportNeeds({ iep: 14, plan504: 12, ell: 10, any: 36 })).value).toBe(36)
+    expect((await supportNeeds({ iep: 14, plan504: 12, ell: 10, any: 31 })).value).toBe(31)
+    // overlap 4 — still small
+    expect((await supportNeeds({ iep: 14, plan504: 12, ell: 10, any: 32 })).value).toBeNull()
+  })
+
   it('suppresses the headline itself when the whole cohort is small', async () => {
     const h = harness({
       roster: {
@@ -880,6 +952,31 @@ describe('TwinSignalsService — provenance and registers', () => {
     expect(map.get('acc.unscored_standards')?.value).toBe(1)
     // s2 scores 3 with no evidence; s3 scores 4 but is supported.
     expect(map.get('acc.unsupported_score')?.value).toBe(1)
+  })
+
+  it('unscored counts only scorable standards — never domain parents or must-pass gates', async () => {
+    // A domain parent (KC1, holding s1/s2) and a must-pass gate are never given
+    // a 1–4 score; counting them read "21 of 42 unscored" on the demo register.
+    const h = harness({
+      standards: [
+        { id: 'kc1', rubricScore: null, parentId: null, catalogStandardId: 'c-kc1', catalogStandard: { isAssurance: false } },
+        { id: 's1', rubricScore: null, parentId: 'kc1', catalogStandardId: 'c-s1', catalogStandard: { isAssurance: false } },
+        { id: 's2', rubricScore: 3, parentId: 'kc1', catalogStandardId: 'c-s2', catalogStandard: { isAssurance: false } },
+        { id: 'gate', rubricScore: null, parentId: null, catalogStandardId: 'c-gate', catalogStandard: { isAssurance: true } },
+        { id: 'hand', rubricScore: null, parentId: null, catalogStandardId: null, catalogStandard: null },
+      ],
+    })
+    const map = byKey((await h.service.collect('s', { now: NOW })).signals)
+    // s1 and the hand-made leaf; NOT kc1 (parent) or the gate.
+    expect(map.get('acc.unscored_standards')?.value).toBe(2)
+    const select = (h.prisma.accreditationStandard.findMany.mock.calls[0][0] as {
+      select: Record<string, unknown>
+    }).select
+    expect(select).toMatchObject({
+      parentId: true,
+      catalogStandardId: true,
+      catalogStandard: { select: { isAssurance: true } },
+    })
   })
 
   it('reads one query per register GROUP, not one per signal', async () => {

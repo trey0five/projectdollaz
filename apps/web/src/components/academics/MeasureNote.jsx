@@ -239,7 +239,7 @@ function RefChip({ color, name, value, gloss }) {
   )
 }
 
-function refChipsFor(refs, ctx, peerAvg) {
+function refChipsFor(refs, ctx, peerAvg, peerName = null) {
   const u = unitOf(ctx)
   const out = []
 
@@ -268,7 +268,9 @@ function refChipsFor(refs, ctx, peerAvg) {
       <RefChip
         key="network"
         color={INK.network}
-        name="Network"
+        // A view that names the line for what it is ("Peer average (excl. …)")
+        // passes that name so the key and the line read the same words.
+        name={peerName ?? 'Network'}
         value={num(peerAvg, 1)}
         // The peer average deliberately EXCLUDES this school — including
         // yourself in the line you are measured against damps every gap — and a
@@ -291,6 +293,7 @@ export function WhatThisMeasures({
   ctx,
   example = null,
   peerAvg = null,
+  peerName = null,
   refs = [],
   gradeLabel = null,
   note = null,
@@ -300,7 +303,7 @@ export function WhatThisMeasures({
   mode = 'strip',
 }) {
   if (!ctx) return null
-  const chips = refChipsFor(refs, ctx, peerAvg)
+  const chips = refChipsFor(refs, ctx, peerAvg, peerName)
 
   if (mode === 'popover') {
     return (
@@ -341,9 +344,9 @@ export default WhatThisMeasures
  * the series key only ("NATIONAL 50 · NETWORK 57.2"), in each line's own ink.
  * Data, not prose, so a reader never has to open anything to read the chart.
  */
-export function MeasureKey({ ctx, peerAvg = null, refs = [] }) {
+export function MeasureKey({ ctx, peerAvg = null, peerName = null, refs = [] }) {
   if (!ctx) return null
-  const chips = refChipsFor(refs, ctx, peerAvg).map((c) => cloneElement(c, { gloss: null }))
+  const chips = refChipsFor(refs, ctx, peerAvg, peerName).map((c) => cloneElement(c, { gloss: null }))
   if (!chips.length) return null
   return <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1">{chips}</div>
 }

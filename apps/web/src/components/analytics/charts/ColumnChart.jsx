@@ -22,7 +22,8 @@ import '../../../styles/pending/b2-finance.css'
 //                       follows the entity, never the rank)
 //              emphasis — "this school": gradient + glow, bold labels
 //              forthcoming — hatched grey stub + "forthcoming" in the tooltip
-//              suppressed  — amber hatched stub + "<5" (the enrollment
+//              suppressed  — amber hatched stub + "<5" (or `stubLabel`, e.g.
+//                            "withheld" for a complementary cell) (the enrollment
 //                            min-cell convention; NEVER a zero-height column)
 //              formatted — pre-formatted value text (tooltip + cap label)
 //              meta      — extra tooltip rows (rank, score, share…)
@@ -632,7 +633,7 @@ export default function ColumnChart({
                             textAnchor="middle"
                             fill={r.suppressed ? AMBER : T.dim}
                           >
-                            {r.suppressed ? '<5' : 'due'}
+                            {r.suppressed ? (r.stubLabel ?? '<5') : 'due'}
                           </text>
                         ) : null}
                       </g>

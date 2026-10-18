@@ -118,6 +118,10 @@ export const MIN_CELL = 5
 export interface Suppressible<T> {
   value: T | null
   suppressed: boolean
+  /** Set only on a cell hidden to PROTECT another (complementary suppression):
+   *  it is not itself small, so surfaces print "withheld", never `<5`.
+   *  Absent on a cell hidden for its own size. See small-cell-groups.ts. */
+  reason?: 'complementary'
 }
 
 /**

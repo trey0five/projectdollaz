@@ -477,6 +477,7 @@ export {
   bandForRisk,
   bandForFacts,
   deriveTwin,
+  isRubricScorable,
 } from './accreditation-twin.js'
 
 // ─────────────────────────────────────────────────────────────────────────────

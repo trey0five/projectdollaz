@@ -52,14 +52,20 @@ export default function PrivacyPage() {
       </UL>
       <P>
         Student identity is readable through exactly <strong>one door</strong>: the register&rsquo;s own screens,
-        behind the school-scoped, role-gated sign-in. Which of its own staff roles may open that door is the
-        school&rsquo;s configured decision, which KYRO enforces and logs. Every other surface — dashboards, analytics,
+        behind the school-scoped, role-gated sign-in, open to a school&rsquo;s owners and business managers only.
+        Members with view-only access (a board or leadership lens) see the roster as suppressed counts, never as
+        named records. KYRO enforces and logs that line. Every other surface — dashboards, analytics,
         network roll-ups, briefings, the AI assistant — receives <strong>counts only, never a name</strong>, and any
         count small enough to identify a student (fewer than five) is withheld before it leaves our servers, with
         companion cells withheld where subtraction could rebuild it — including headline figures and filtered
         totals that restate a withheld cell. What can still be inferred is only the combined size of a withheld
-        group of cells, never an individual cell — the standard behavior of complementary suppression. This
-        follows the U.S. Department of Education&rsquo;s PTAC disclosure-avoidance guidance.
+        group of cells, never an individual cell — the standard behavior of complementary suppression. On a
+        filtered view every withheld figure carries the same label, whatever its size, so the labels themselves
+        cannot be counted. Age bands are withheld whenever, beside the grade counts, they would let a reader work
+        out how many students are older or younger than their grade. One known limit remains: a reader who already
+        knows that a student recorded as Hispanic or Latino by race is also Hispanic by ethnicity can combine that
+        with the published race and ethnicity counts. This follows the U.S. Department of Education&rsquo;s PTAC
+        disclosure-avoidance guidance.
       </P>
 
       <H2>2. How we use information</H2>

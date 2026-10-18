@@ -20,6 +20,11 @@
 //                                       children would be identifiable
 //   { value: null, suppressed: false }  ABSENT — nobody filed a reading
 //
+// A MASKED cell may also carry `reason: 'complementary'`: it is NOT small — it
+// is hidden so a small neighbour cannot be worked out by subtraction (e.g. "Any
+// support flag" when one flag is under the floor). It prints "withheld", never
+// `<5`: a `<5` over a 25 would be a lie (isComplementary / cellToken below).
+//
 // `value === null` alone therefore does NOT mean suppressed, and neither null
 // state is a zero. A masked grade drawn as a bar of height 0 would be a claim
 // that the grade is empty, about children who are actually there.
@@ -52,15 +57,22 @@ export function cellState(c) {
 /** True only for a real figure — the guard before any geometry uses `.value`. */
 export const hasValue = (c) => cellState(c) === CELL_VALUE
 
+/** A masked cell hidden only to PROTECT another — not itself small. */
+export const isComplementary = (c) => cellState(c) === CELL_MASKED && c.reason === 'complementary'
+
+/** The token a complementary cell prints (never `<5` — it is not small). */
+export const WITHHELD_TOKEN = 'withheld'
+
 /**
  * The token printed where a number cannot go.
  *
- * `<5` for a withheld figure and an em dash for one that was never filed —
- * different marks, because they are different facts. Never `0`.
+ * `<5` for a small withheld figure, "withheld" for one hidden only to protect a
+ * small neighbour, and an em dash for one that was never filed — different
+ * marks, because they are different facts. Never `0`.
  */
 export function cellToken(c) {
   const s = cellState(c)
-  if (s === CELL_MASKED) return '<5'
+  if (s === CELL_MASKED) return isComplementary(c) ? WITHHELD_TOKEN : '<5'
   if (s === CELL_ABSENT) return '—'
   return formatMetricValue(c.value, 'count')
 }
@@ -68,6 +80,8 @@ export function cellToken(c) {
 /** Why the token is there, in the reader's own words (tooltip / title / a11y). */
 export function cellTitle(c, { minCell = 5 } = {}) {
   const s = cellState(c)
+  if (s === CELL_MASKED && isComplementary(c))
+    return `Withheld — not a small group itself, but showing it would let a hidden group of fewer than ${minCell} be worked out by subtraction.`
   if (s === CELL_MASKED)
     return `Hidden — fewer than ${minCell} students, who would be identifiable. The figure is withheld, not zero.`
   if (s === CELL_ABSENT) return 'No reading on file for this grade and year.'

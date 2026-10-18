@@ -14,6 +14,9 @@ import {
   hash01,
   CONFETTI_MS,
   FIDGET_ODDS,
+  turnScale,
+  MIN_TURN_SCALE,
+  MIRROR_MS,
 } from './core/scholarEval.js'
 import { STATES, POSES, MOODS, tr } from './core/scholarTracks.js'
 import { PARTS, transformAttr } from './core/scholarArt.js'
@@ -291,5 +294,77 @@ describe('the live driver', () => {
     expect(r.pose.parts.flip.sx).toBe(1)
     expect(r.pose.confetti).toBeNull()
     expect(r.pose.parts.eyeOpenL.sy).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE TURN NEVER COLLAPSES TO A SLIVER.
+//
+// The mirror was a scaleX tween straight through 0, so landing after a flight
+// LEFT showed one frame of a paper-thin owl (film rig, z2_end frame 49). The
+// turn now narrows to MIN_TURN_SCALE, snaps the mirror at its midpoint and widens
+// back — pinned here on the real animator at every sampling the rig and the app
+// use, including a turn reversed halfway through.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('the turn (mirror) never collapses below ~35% width', () => {
+  const FLOOR = 0.35
+
+  it('turnScale is pure, full width at rest, and never narrower than the floor', () => {
+    expect(MIN_TURN_SCALE).toBeGreaterThanOrEqual(FLOOR)
+    expect(turnScale(1)).toBe(1)
+    expect(turnScale(-1)).toBe(-1)
+    for (let i = 0; i <= 2000; i++) {
+      const m = -1 + i / 1000
+      const v = turnScale(m, 1)
+      expect(Math.abs(v)).toBeGreaterThanOrEqual(MIN_TURN_SCALE - 1e-12)
+      expect(Math.abs(v)).toBeLessThanOrEqual(1)
+      expect(turnScale(m, 1)).toBe(v) // same m → same scale
+    }
+    // the midpoint takes the side it is turning toward
+    expect(turnScale(0, 1)).toBeCloseTo(MIN_TURN_SCALE, 12)
+    expect(turnScale(0, -1)).toBeCloseTo(-MIN_TURN_SCALE, 12)
+  })
+
+  // Fly left, land (the turn to face forward), sampled on a grid of `stepMs`.
+  const landAfterLeft = (stepMs, offsetMs = 0) => {
+    const a = createScholarAnimator({ seed: 11, fidget: 'every' })
+    const land = 1000 + offsetMs
+    const scales = []
+    for (let t = 0; t <= land + MIRROR_MS + 200; t += stepMs) {
+      const air = t < land
+      const r = a.update(t, { phase: air ? 'flying' : 'perched', facing: air ? -1 : 0 })
+      if (t >= land - stepMs) scales.push(r.pose.parts.flip.sx) // the last airborne frame, the turn, and after
+    }
+    return scales
+  }
+
+  it.each([
+    ['the film rig 120 Hz grid', 1000 / 120],
+    ['30 fps', 1000 / 30],
+    ['60 fps', 1000 / 60],
+    ['1 ms', 1],
+  ])('landing after flying left, sampled at %s: |scaleX| ≥ floor on every frame', (_label, step) => {
+    for (const offset of [0, 3, 7, 11, 16, 29]) {
+      const scales = landAfterLeft(step, offset)
+      expect(scales.some((v) => v < 0)).toBe(true) // it really was facing left
+      expect(scales[scales.length - 1]).toBe(1) // and ends facing forward at full width
+      const narrowest = Math.min(...scales.map(Math.abs))
+      expect(narrowest).toBeGreaterThanOrEqual(FLOOR)
+    }
+  })
+
+  it('a turn reversed mid-way (left → right → left) never slivers either', () => {
+    const a = createScholarAnimator({ seed: 5 })
+    let narrowest = 1
+    for (let t = 0; t <= 2000; t += 1) {
+      const facing = t < 600 ? -1 : t < 680 ? 1 : -1 // flips back 80 ms into the turn
+      const r = a.update(t, { phase: 'flying', facing })
+      narrowest = Math.min(narrowest, Math.abs(r.pose.parts.flip.sx))
+    }
+    expect(narrowest).toBeGreaterThanOrEqual(FLOOR)
+  })
+
+  it('stays deterministic: two animators on the same inputs produce identical turns', () => {
+    expect(landAfterLeft(1000 / 120)).toEqual(landAfterLeft(1000 / 120))
   })
 })

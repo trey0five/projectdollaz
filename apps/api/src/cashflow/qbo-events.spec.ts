@@ -228,6 +228,40 @@ describe('seasonal history is modelled honestly', () => {
   })
 })
 
+describe('history: depreciation is not cash, the payroll run is one commitment', () => {
+  // Review findings. The name heuristic files "Depreciation" under fixedOther and
+  // "Payroll Taxes" under nothing (other_expense), so the category rule alone
+  // modelled depreciation as monthly cash and kept employer taxes beside the
+  // school's own payroll calendar.
+  const SIX = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06']
+  const HIST = monthReport(SIX, [
+    { name: 'Property Insurance', group: 'Expenses', values: [1_000, 1_000, 1_000, 1_000, 1_000, 1_000] },
+    { name: 'Depreciation', group: 'Expenses', values: [9_000, 9_000, 9_000, 9_000, 9_000, 9_000] },
+    { name: 'Payroll Taxes', group: 'Expenses', values: [4_000, 4_000, 4_000, 4_000, 4_000, 4_000] },
+    { name: 'Employee Benefits', group: 'Expenses', values: [6_000, 6_000, 6_000, 6_000, 6_000, 6_000] },
+  ])
+  const jan = (r: { events: { date: string; category: string; amount: number }[] }, cat: string) =>
+    r.events.find((e) => e.category === cat && e.date.startsWith('2027-01'))?.amount ?? 0
+
+  it('depreciation never enters the modelled year, whatever it was filed under', async () => {
+    const r = await makeService({ report: HIST }).svc.eventsFor('s1', BASE_OPTS)
+    // fixedOther = insurance only; the 9k of depreciation is gone.
+    expect(jan(r, 'fixedOther')).toBeCloseTo(1_000, 6)
+    // No payroll commitment: taxes and benefits both stay (other_expense).
+    expect(jan(r, 'other_expense')).toBeCloseTo(10_000, 6)
+    expect(r.omissions.map((o) => o.key)).not.toContain('payroll_benefits_overlap')
+  })
+
+  it('a payroll commitment takes the employer taxes; benefits stay and are named', async () => {
+    const r = await makeService({ report: HIST }).svc.eventsFor('s1', {
+      ...BASE_OPTS,
+      excludeCategories: ['payroll', 'instrSal', 'adminSal', 'facilSal'],
+    })
+    expect(jan(r, 'other_expense')).toBeCloseTo(6_000, 6)
+    expect(r.omissions.map((o) => o.key)).toContain('payroll_benefits_overlap')
+  })
+})
+
 describe('never throws, never invents', () => {
   it('no connection → empty result, not an error', async () => {
     const { svc } = makeService({ connection: null })

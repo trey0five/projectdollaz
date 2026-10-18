@@ -19,6 +19,7 @@ import {
 import type { DemographicBreakdown } from '@finrep/db'
 import { parseOneRosterCsv } from '@finrep/ingestion/oneroster'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { EnrollmentPlanService } from '../analytics/enrollment-plan.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { EnrollmentClient } from './enrollment.client.js'
@@ -785,8 +786,16 @@ export class EnrollmentService {
     // Phase 5 — LIVE roster branch (enrolled students only, canonical counts).
     // Same period rule as summary(): live answers only unscoped/current-FY
     // requests; a historical periodId uses the period-filtered snapshot branch.
+    //
+    // ONE POPULATION (privacy review round 6). Demographics are counted from the
+    // Student rows whenever any exist — SIS connected or not — because the
+    // roster aggregate (students/aggregate, KYRO's get_roster_summary) publishes
+    // those rows' demographics too, each surface suppressing its own partition.
+    // Two surfaces counting two populations that differ by a few students give
+    // a small cell back by subtraction (a race visible on one and hidden on the
+    // other). The HEADCOUNT keeps its own rule (summary(): the SIS snapshot wins).
     const rosterRows = (await this.rosterPeriodIsCurrent(schoolId, periodId))
-      ? await this.rosterModeRows(schoolId)
+      ? await this.demographicRosterRows(schoolId)
       : null
     if (rosterRows) {
       const { totalEnrolled, byGrade, byDemographics } = rosterRollup(rosterRows)
@@ -881,6 +890,23 @@ export class EnrollmentService {
   }
 
   /**
+   * The Student rows the PUBLIC demographic surfaces count (demographics(), and
+   * through it the analytics card, KYRO and the org compare profile): every
+   * school with a roster, SIS connected or not — the population the roster
+   * aggregate publishes. Null when there are no Student rows. Rollup fields
+   * only — never names.
+   */
+  async demographicRosterRows(
+    schoolId: string,
+  ): Promise<{ status: string; grade: string; gender: string | null; race: string | null; ethnicity: string | null }[] | null> {
+    const rows = await this.prisma.student.findMany({
+      where: { schoolId },
+      select: { status: true, grade: true, gender: true, race: true, ethnicity: true },
+    })
+    return rows.length > 0 ? rows : null
+  }
+
+  /**
    * Phase 5 — PUBLIC thin wrapper over the existing private promote path for
    * roster-derived snapshots: resolves the FY period from observedOn, promotes
    * with the 'roster' stamp (fill-when-null / overwrite-own-stamp only, so a
@@ -944,35 +970,28 @@ export class EnrollmentService {
   }
 
   /**
-   * The planned enrollment total for a period — LOCAL, no analytics import: prefer a
-   * driver budget's assumptions.enrollmentByGrade, else PeriodOperationalData's
-   * plannedEnrollmentByGrade. Null when neither carries a positive plan.
+   * The planned enrollment total for a period, through the ONE plan resolver
+   * (EnrollmentPlanService — the same ladder analytics and the briefing read:
+   * driver budget `lines.driverModel.assumptions.enrollmentByGrade`, else the
+   * plan form's `plannedEnrollmentByGrade`). This used to be a local copy that
+   * looked for `lines.assumptions` / `lines.enrollmentByGrade` — shapes no
+   * writer produces — so a school with only a driver budget saw "No plan set"
+   * on the overview band while the analytics tab showed its plan.
+   *
+   * The resolver is PrismaService-only by design, so it is constructed here
+   * rather than injected (no DI edge, no change to this service's signature).
+   * A READ FAILURE with no plan found still throws, as before: "no plan" is
+   * only shown when it is a fact, never because a query errored.
    */
   private async planTotalFor(schoolId: string, fiscalPeriodId: string): Promise<number | null> {
-    const [budget, op] = await Promise.all([
-      this.prisma.periodBudget.findUnique({ where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } } }),
-      this.prisma.periodOperationalData.findUnique({
-        where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
-      }),
-    ])
-    const lines = (budget?.lines ?? null) as { assumptions?: { enrollmentByGrade?: unknown }; enrollmentByGrade?: unknown } | null
-    const fromBudget = sumGradeMap(lines?.assumptions?.enrollmentByGrade ?? lines?.enrollmentByGrade)
-    if (fromBudget != null && fromBudget > 0) return fromBudget
-    const fromPlanned = sumGradeMap(op?.plannedEnrollmentByGrade)
-    if (fromPlanned != null && fromPlanned > 0) return fromPlanned
+    const { plan, failed } = await new EnrollmentPlanService(this.prisma).resolveDetailed(
+      schoolId,
+      fiscalPeriodId,
+    )
+    if (plan) return plan.planTotal > 0 ? plan.planTotal : null
+    if (failed) throw new Error('enrollment plan read failed')
     return null
   }
-}
-
-/** Sum the numeric values of a grade→count JSON map; null when it isn't an object. */
-function sumGradeMap(raw: unknown): number | null {
-  if (!raw || typeof raw !== 'object') return null
-  let sum = 0
-  for (const v of Object.values(raw as Record<string, unknown>)) {
-    const n = Number(v)
-    if (Number.isFinite(n)) sum += n
-  }
-  return sum
 }
 
 /** True when the buffer starts with the ZIP local-file-header magic ('PK').

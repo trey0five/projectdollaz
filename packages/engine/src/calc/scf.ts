@@ -49,6 +49,14 @@ const LEGACY_SCF_ACCOUNTS = {
   leaseNonCurr: [260],
 } as const
 
+/**
+ * Accumulated depreciation, read ONLY for the depreciation fallback below — it is
+ * deliberately not one of the switch lists above (account 170 never decided
+ * which path ran, and must not start to).
+ */
+const LEGACY_ACCUM_DEPR_ACCOUNTS: readonly number[] = [170]
+const ACCUM_DEPR_CATEGORIES: readonly SCoaCategory[] = ['accumDepr']
+
 /** Categories each cash-flow line resolves to when the legacy accounts are absent. */
 const SCF_CATEGORIES: Record<keyof typeof LEGACY_SCF_ACCOUNTS, SCoaCategory[]> = {
   cash: ['cash', 'restrictedCash'],
@@ -58,7 +66,13 @@ const SCF_CATEGORIES: Record<keyof typeof LEGACY_SCF_ACCOUNTS, SCoaCategory[]> =
   payables: ['apAccrued'],
   deferred: ['deferredIntl'],
   clubs: ['studentClubs'],
-  ppe: ['ppGross', 'accumDepr'],
+  // GROSS property only, matching the legacy shim (140–165 are gross; 170, the
+  // accumulated depreciation, was never in the legacy list). Depreciation is
+  // already added back in operating activities; also netting the accumulated
+  // depreciation's movement here counted it a SECOND time, so the statement's
+  // net cash change overshot the balance sheet's cash delta by exactly the
+  // year's depreciation.
+  ppe: ['ppGross'],
   rou: ['rouAsset'],
   investments: ['restrictInvst'],
   leaseNonCurr: ['leaseNonCurr'],
@@ -121,7 +135,7 @@ export function calcSCF({
           .reduce((s, r) => s + r.total, 0)
 
   const netChange = soaResults.cy.netChange
-  const depr = sumOf(cyData, 'depreciation')
+  const depr = depreciationAddBack(cyData, beginData, usesLegacyAccounts, chart)
 
   // Working-capital changes.
   const arAdj = -(sumOf(cyData, 'receivables') - sumOf(beginData, 'receivables'))
@@ -161,6 +175,61 @@ export function calcSCF({
   }
 }
 
+/** Rows of the accumulated-depreciation balance, on whichever path ran. */
+function accumDeprRows(data: Dataset, usesLegacyAccounts: boolean, chart: StandardChart): Dataset {
+  return usesLegacyAccounts
+    ? data.filter((r) => LEGACY_ACCUM_DEPR_ACCOUNTS.includes(r.acct))
+    : data.filter((r) => {
+        const c = categoryOfRow(r, chart)
+        return c != null && ACCUM_DEPR_CATEGORIES.includes(c)
+      })
+}
+
+/** Rows of the depreciation EXPENSE, on whichever path ran. */
+function deprExpenseRows(data: Dataset, usesLegacyAccounts: boolean, chart: StandardChart): Dataset {
+  if (usesLegacyAccounts) {
+    const accts = LEGACY_SCF_ACCOUNTS.depreciation as readonly number[]
+    return data.filter((r) => accts.includes(r.acct))
+  }
+  return data.filter((r) => {
+    const c = categoryOfRow(r, chart)
+    return c != null && SCF_CATEGORIES.depreciation.includes(c)
+  })
+}
+
+/**
+ * The depreciation add-back.
+ *
+ * Normally the year's depreciation EXPENSE (865 on the legacy chart, the
+ * deprExpense category elsewhere). But a chart can carry depreciation under a
+ * generic expense — a school that mapped "Depreciation" to fixedOther, or a
+ * QuickBooks sync whose expense accounts land at 60000+id — and then there is
+ * no expense row to find. Investing reads GROSS property only, so without a
+ * fallback that year's depreciation is in net income and nowhere else, and the
+ * statement misses the balance sheet's cash change by exactly that amount.
+ *
+ * The fallback is the movement in accumulated depreciation: −Δ(accumDepr), which
+ * is the year's charge net of any disposals. It runs ONLY when the current year
+ * has no depreciation-expense row at all, so a chart that states its expense —
+ * every audited legacy school with an 865 — computes exactly what it did before.
+ */
+function depreciationAddBack(
+  cyData: Dataset,
+  beginData: Dataset,
+  usesLegacyAccounts: boolean,
+  chart: StandardChart,
+): number {
+  const expense = deprExpenseRows(cyData, usesLegacyAccounts, chart)
+  if (expense.length > 0) return expense.reduce((s, r) => s + r.total, 0)
+  const sum = (d: Dataset) => d.reduce((s, r) => s + r.total, 0)
+  const delta =
+    sum(accumDeprRows(cyData, usesLegacyAccounts, chart)) -
+    sum(accumDeprRows(beginData, usesLegacyAccounts, chart))
+  // Accumulated depreciation is a credit: a year's charge makes it MORE
+  // negative, so the add-back is the negated movement. `|| 0` folds −0.
+  return -delta || 0
+}
+
 /** Build SCF lineage from the SAME selection the values came from. */
 export function buildSCFLineage(
   cyData: Dataset,
@@ -183,7 +252,14 @@ export function buildSCFLineage(
   const add = (line: string, value: number, sources = [] as Dataset) => {
     lineage[line] = { line, scoaCategory: null, statement: 'SCF', sign: 1, value, sources }
   }
-  add('depr', result.depr, rowsOf('depreciation'))
+  // The lineage cites what the add-back was actually read from: the expense
+  // rows, or — on the fallback — the accumulated-depreciation balance.
+  const deprSources = rowsOf('depreciation')
+  add(
+    'depr',
+    result.depr,
+    deprSources.length > 0 ? deprSources : accumDeprRows(cyData, usesLegacyAccounts, chart),
+  )
   add('arAdj', result.arAdj, rowsOf('receivables'))
   add('prepaidAdj', result.prepaidAdj, rowsOf('prepaid'))
   add('apAdj', result.apAdj, rowsOf('payables'))

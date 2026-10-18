@@ -11,6 +11,12 @@ import {
   type QboSummarizedReport,
 } from '../integrations/qbo-company.synth.js'
 import { suggestCategory } from '../integrations/qbo-review.suggest.js'
+import {
+  benefitsLeftBesidePayroll,
+  isCoveredExpense,
+  isNonCashExpense,
+  PAYROLL_BENEFITS_NOTE,
+} from './covered-categories.js'
 import { parseBalanceSheetCash } from '../integrations/qbo-cashflow.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 
@@ -307,7 +313,7 @@ export class QboEventsService {
       }
 
       // Per-category seasonal profile: calendar month (1-12) → net amount.
-      const profile = this.seasonalProfile(raw, monthByIndex, opts)
+      const { profile, benefitsOverlap } = this.seasonalProfile(raw, monthByIndex, opts)
 
       // Project forward: for each month in [asOf, horizonEnd], emit the
       // profile's figure for that CALENDAR month at month-end — seasonality is
@@ -345,7 +351,7 @@ export class QboEventsService {
         if (!next) break
         cursor = next
       }
-      return { events, source, omissions: [] }
+      return { events, source, omissions: benefitsOverlap ? [{ ...PAYROLL_BENEFITS_NOTE }] : [] }
     } catch (e) {
       this.log.warn(`QBO history unavailable for ${schoolId}: ${(e as Error).message}`)
       // Say so. Live-caught: a transient QBO failure here returned an empty
@@ -374,7 +380,7 @@ export class QboEventsService {
     raw: QboSummarizedReport,
     monthByIndex: Map<number, string>,
     opts: { excludeCategories: readonly string[]; tuitionDriverActive: boolean },
-  ): Map<string, Map<number, number>> {
+  ): { profile: Map<string, Map<number, number>>; benefitsOverlap: boolean } {
     const excluded = new Set(opts.excludeCategories.map((c) => c.toLowerCase()))
     if (opts.tuitionDriverActive) excluded.add('tuition')
     // AR/AP categories are never modelled from history — they are observed live.
@@ -382,12 +388,22 @@ export class QboEventsService {
     excluded.add('payables')
 
     const profile = new Map<string, Map<number, number>>()
+    const expenseLines: { label: string; category: string }[] = []
     for (const row of flattenRows(raw)) {
       const section = sectionOfGroups(row.groups)
       if (!section) continue
       const category =
         suggestCategory(row.name, section) ?? (section === 'revenue' ? 'other_income' : 'other_expense')
       if (excluded.has(category.toLowerCase())) continue
+      // Line by line, as the budget-spread source does: the name heuristic files
+      // Depreciation under fixedOther and Payroll Taxes under nothing at all, so
+      // the category rule alone modelled depreciation as monthly cash and paid
+      // employer taxes beside the school's own payroll calendar.
+      if (section === 'expense') {
+        const line = { label: row.name, category }
+        if (isNonCashExpense(line) || isCoveredExpense(line, excluded)) continue
+        expenseLines.push(line)
+      }
       const sign = section === 'revenue' ? 1 : -1
       let byMonth = profile.get(category)
       if (!byMonth) {
@@ -401,7 +417,7 @@ export class QboEventsService {
         byMonth.set(cal, (byMonth.get(cal) ?? 0) + sign * v)
       }
     }
-    return profile
+    return { profile, benefitsOverlap: benefitsLeftBesidePayroll(expenseLines, excluded) }
   }
 }
 

@@ -21,6 +21,7 @@
 import { useId, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, History, Landmark, Minus } from 'lucide-react'
+import { axisEndLabels } from '../../lib/dates.js'
 
 const AMBER = '#F59E0B'
 
@@ -372,9 +373,9 @@ function Chart({ points, breaks, boardMarker, reduce }) {
         </title>
       </circle>
 
-      {/* date axis ends */}
+      {/* date axis ends — with years whenever the span crosses one */}
       <text x={PAD_L} y={VB_H - 6} fontSize={10} fill="#101C3D" fillOpacity={0.4}>
-        {axisDate(rows[0].date)}
+        {axisEndLabels(rows[0].date, last.date)[0]}
       </text>
       <text
         x={VB_W - PAD_R}
@@ -384,7 +385,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
         fill="#101C3D"
         fillOpacity={0.4}
       >
-        {axisDate(last.date)}
+        {axisEndLabels(rows[0].date, last.date)[1]}
       </text>
     </svg>
   )

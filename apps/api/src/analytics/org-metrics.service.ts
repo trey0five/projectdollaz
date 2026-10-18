@@ -6,9 +6,7 @@ import {
   computeOrgMetrics,
   computePeerStats,
   computeShareStats,
-  diversityIndex,
   gradeMixShares,
-  toShares,
   dimMatches,
   formatMetricDelta,
   formatMetricValue,
@@ -35,6 +33,9 @@ import {
   type SizeBandKey,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { suppressDemographicCounts } from '../enrollment/students/aggregate-suppression.js'
+import { fyEndForObservedOn } from '../enrollment/enrollment.service.js'
+import { rosterRollup } from '../enrollment/students/roster-rollup.js'
 import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
 import { EnrollmentPlanService } from './enrollment-plan.js'
@@ -277,7 +278,7 @@ interface EnrollmentMixRaw {
   } | null
 }
 
-function buildCompareProfile(
+export function buildCompareProfile(
   raw: SchoolProfileRaw,
   enrollment: number | null,
   mix?: EnrollmentMixRaw | null,
@@ -296,13 +297,31 @@ function buildCompareProfile(
     sizeBandLabel: sizeBandLabel(band),
     // Distribution mix (never a peer-forming dim). All shares via canonical analytics.
     gradeMix: gradeMixShares((mix?.byGrade ?? {}) as Record<string, number>) as Record<string, number>,
+    // FERPA small-cell rule, the SAME decision the enrollment analytics card and
+    // KYRO make (suppressDemographicCounts → suppressPartition): a share printed
+    // beside `enrollment` multiplies straight back to the count, so every hidden
+    // cell's share is DROPPED, and the diversity index is POOLED over the hidden
+    // cells (the plain index is a second equation that, with the hidden sum,
+    // solves them). Any org member can read this route.
     demographicMix: {
-      gender: toShares(demo?.gender ?? {}),
-      ethnicity: toShares(demo?.ethnicity ?? {}),
-      race: toShares(race),
+      gender: visibleShares(demo?.gender ?? {}),
+      ethnicity: visibleShares(demo?.ethnicity ?? {}),
+      race: visibleShares(race),
     },
-    diversityIndex: demo?.race && Object.keys(demo.race).length ? diversityIndex(demo.race) : null,
+    diversityIndex:
+      demo?.race && Object.keys(demo.race).length
+        ? suppressDemographicCounts(demo.race, { withDiversity: true }).diversityIndex ?? null
+        : null,
   }
+}
+
+/** Shares of the cells the partition rule leaves visible; hidden cells are absent. */
+function visibleShares(counts: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(suppressDemographicCounts(counts).shares)) {
+    if (typeof v === 'number') out[k] = v
+  }
+  return out
 }
 
 function toPeerProfile(schoolId: string, p: CompareSchoolProfile): PeerProfile {
@@ -422,6 +441,20 @@ export class OrgMetricsService {
    * snapshot, so org PoP deltas survive gaps. schoolId-scoped (from the caller's
    * in-org set) → no cross-tenant leak. Null when no prior period has a snapshot.
    */
+  /** The live roster's grade + demographic mix (enrolled students), or null
+   *  when the school has no Student rows. Rollup fields only — never names. */
+  private async rosterMixFor(schoolId: string): Promise<EnrollmentMixRaw | null> {
+    const rows = await this.prisma.student
+      ?.findMany({ where: { schoolId }, select: { status: true, grade: true, gender: true, race: true, ethnicity: true } })
+      .catch(() => null)
+    if (!rows || rows.length === 0) return null
+    const { byGrade, byDemographics } = rosterRollup(rows)
+    return {
+      byGrade: byGrade as Record<string, number>,
+      byDemographics: byDemographics as EnrollmentMixRaw['byDemographics'],
+    }
+  }
+
   private async nearestPriorBundle(
     schoolId: string,
     before: Date,
@@ -714,6 +747,7 @@ export class OrgMetricsService {
     // getMetrics' input assembly, but keeping the raw ReportBundles because
     // computeMetricsForPeriod adapts them itself), run the per-school engine, gate
     // by the SCHOOL's own entitlement, then stamp registry-formatted strings.
+    const currentFyEnd = fyEndForObservedOn(new Date().toISOString().slice(0, 10))
     const schoolResults: CompareSchool[] = await Promise.all(
       reported.map(async (r) => {
         const operational = await this.operational.operationalFor(r.schoolId, r.periodId)
@@ -728,6 +762,12 @@ export class OrgMetricsService {
           orderBy: { observedOn: 'desc' },
           select: { byGrade: true, byDemographics: true },
         })
+        // ONE POPULATION (privacy review round 6): for the CURRENT school year a
+        // school with a roster is profiled from its Student rows — the
+        // population /enrollment/demographics, the analytics card, KYRO and the
+        // roster aggregate all count — not from a snapshot a few students
+        // apart, whose difference would hand a small cell back.
+        const rosterMix = r.periodEndDate === currentFyEnd ? await this.rosterMixFor(r.schoolId) : null
 
         // The per-school engine — same one the single-school dashboard renders.
         const allMetrics = computeMetricsForPeriod({
@@ -766,10 +806,14 @@ export class OrgMetricsService {
 
         // Enrich with the peer-benchmarking profile: stored demographics + the
         // FY's enrollment (from the loaded operational row) → derived size band.
-        const profile = buildCompareProfile(r.profileRaw, operational?.enrollment ?? null, {
-          byGrade: enrollmentSnap?.byGrade as Record<string, number> | null,
-          byDemographics: enrollmentSnap?.byDemographics as EnrollmentMixRaw['byDemographics'],
-        })
+        const profile = buildCompareProfile(
+          r.profileRaw,
+          operational?.enrollment ?? null,
+          rosterMix ?? {
+            byGrade: enrollmentSnap?.byGrade as Record<string, number> | null,
+            byDemographics: enrollmentSnap?.byDemographics as EnrollmentMixRaw['byDemographics'],
+          },
+        )
 
         return {
           schoolId: r.schoolId,

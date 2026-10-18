@@ -3,7 +3,31 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common'
 import { getMetric, type PeriodOperational } from '@finrep/analytics'
 import { EnrollmentAnalyticsService } from './enrollment-analytics.service.js'
 import { EnrollmentAnalyticsQueryDto } from './dto/enrollment-analytics.dto.js'
-import { loneHiddenCellViolations } from '../students/aggregate-suppression.testkit.js'
+import { loneHiddenCellViolations, withBasis } from '../students/aggregate-suppression.testkit.js'
+import type { StudentAggregate } from '../students/students.service.js'
+
+/** A partial aggregate fixture (counts.status/flags + kpis) → the full shape. */
+function fullAggregate(a: Record<string, unknown>): StudentAggregate {
+  const counts = (a.counts ?? {}) as Partial<StudentAggregate['counts']>
+  const status = (counts.status ?? { enrolled: 0, waitlist: 0, withdrawn: 0, graduated: 0 }) as StudentAggregate['counts']['status']
+  const total = Object.values(status).reduce((t, n) => t + n, 0)
+  return {
+    source: 'roster',
+    total,
+    filteredTotal: total,
+    counts: {
+      grade: {},
+      gender: {},
+      race: {},
+      ethnicity: {},
+      ageBand: { under5: 0, '5to10': 0, '11to13': 0, '14to18': 0, '19plus': 0, unknown: 0 },
+      flags: { iep: 0, plan504: 0, ell: 0, any: 0 },
+      ...counts,
+      status,
+    },
+    kpis: { enrolled: 0, waitlist: 0, flagged: 0, newThisYear: 0, ...((a.kpis ?? {}) as object) },
+  } as StudentAggregate
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnrollmentAnalyticsService — asserted against the codebase's own canonical
@@ -119,7 +143,11 @@ function makeService(opts: Opts) {
     })),
     demographics: vi.fn(async () => opts.demographics ?? null),
   }
-  const students = { aggregate: vi.fn(async () => opts.aggregate ?? null) }
+  // The service always attaches the suppression basis; these partial fixtures
+  // get one synthesized (every count on enrolled students — see withBasis).
+  const students = {
+    aggregate: vi.fn(async () => (opts.aggregate ? withBasis(fullAggregate(opts.aggregate)) : null)),
+  }
   const plan = {
     resolveDetailed: vi.fn(async () => {
       if (opts.planThrows) throw new Error('db down')
@@ -483,7 +511,9 @@ describe('cohort size progression', () => {
     )
     const c = res.cohortSize!.cohorts.find((x) => x.endGrade === '12')!
     expect(c.legs.map((l) => l.grade)).toEqual(['11', '12'])
-    expect(c.legs[1].count).toEqual({ value: null, suppressed: true })
+    // A year whose only grade is 4 has no companion to hide with, so that
+    // column is withheld WHOLE (fail closed) — "withheld", never a number.
+    expect(c.legs[1].count).toEqual({ value: null, suppressed: true, reason: 'complementary' })
     expect(c.netChange).toBeNull()
     expect(c.direction).toBe('unknown')
   })
@@ -808,6 +838,8 @@ describe('status & support mix (roster mode only)', () => {
     })
     expect(res.mix!.flags.iep).toEqual({ value: 41, suppressed: false })
     expect(res.mix!.flags.ell).toEqual({ value: null, suppressed: true })
+    // …and the union goes with it: a visible 55 beside 41 + 18 bounds the ELL.
+    expect(res.mix!.flags.any).toEqual({ value: null, suppressed: true, reason: 'complementary' })
   })
 
   it('“new this year” is WITHHELD when start dates are missing, never reported as 0', async () => {
@@ -855,7 +887,22 @@ describe('what this page will not fake', () => {
     expect(cells.find((c) => c.key === 'white')!.count.value).toBe(300)
     expect(cells.find((c) => c.key === 'native')!.count).toEqual({ value: null, suppressed: true })
     expect(cells.find((c) => c.key === 'native')!.share).toEqual({ value: null, suppressed: true })
-    expect(res.demographics!.race!.diversityIndex).toBe(0.51)
+    // COMPLEMENTARY: 436 − 300 − 132 = 4 would hand native back, so the smallest
+    // visible race goes with it — marked complementary (it is not small).
+    expect(cells.find((c) => c.key === 'hispanic')!.count).toEqual({
+      value: null,
+      suppressed: true,
+      reason: 'complementary',
+    })
+    // …and its share carries the same reason (never a bare `<5` over a 132).
+    expect(cells.find((c) => c.key === 'hispanic')!.share).toEqual({
+      value: null,
+      suppressed: true,
+      reason: 'complementary',
+    })
+    // The index is POOLED over the hidden pair (never the plain one copied
+    // through: with the hidden sum it is a second equation that solves them).
+    expect(res.demographics!.race!.diversityIndex).toBeCloseTo(1 - (300 ** 2 + 136 ** 2) / 436 ** 2, 12)
   })
 })
 
@@ -955,13 +1002,16 @@ describe('grade × year grid — complementary suppression per column', () => {
   const totalOf = (res: Awaited<ReturnType<typeof leaky>>, year: number) =>
     res.gradeByYear!.observedByYear.find((o) => o.schoolYear === year)!.total
 
-  it('a lone <5 grade takes a COMPANION with it (the smallest visible grade)', async () => {
+  it('a lone <5 grade takes a COMPANION with it (chosen by KEY order, never by size)', async () => {
     const res = await leaky()
     const col = column(res, 2026)
     expect(col['12']).toEqual({ value: null, suppressed: true })
-    expect(col['11']).toEqual({ value: null, suppressed: true }) // 108 — smallest visible
+    // '10' sorts first by code unit; hidden to PROTECT grade 12, so it says so
+    // (the grid prints "withheld" over it, never <5). A size-ordered choice
+    // would itself tell a reader about the hidden values.
+    expect(col['10']).toEqual({ value: null, suppressed: true, reason: 'complementary' })
     expect(col['9']).toBe(118)
-    expect(col['10']).toBe(112)
+    expect(col['11']).toBe(108)
   })
 
   it('that column publishes NO school total; the clean column keeps its total', async () => {

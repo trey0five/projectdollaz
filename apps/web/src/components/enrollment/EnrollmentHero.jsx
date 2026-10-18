@@ -122,11 +122,14 @@ const PROVIDER_LABELS = {
 /**
  * One roster figure for a glass card. `value` null ⇒ null (the card prints the
  * honest em-dash — it needs the student roster), a server-suppressed small cell
- * ⇒ the same '<5' vocabulary the roster charts use. Never a zero we didn't count.
+ * ⇒ the same '<5' vocabulary the roster charts use, and a COMPLEMENTARY one
+ * (e.g. "Support flags" while one flag is under the floor — the figure is not
+ * small, it is hidden so the small flag cannot be subtracted out) ⇒ "withheld".
+ * Never a zero we didn't count, never '<5' over a figure that is not small.
  */
 function rosterFigure(value) {
   if (value == null) return null
-  if (typeof value === 'object' && value.suppressed) return `<${MIN_CELL}`
+  if (typeof value === 'object' && value.suppressed) return value.reason === 'complementary' ? 'withheld' : `<${MIN_CELL}`
   return Number(value).toLocaleString('en-US')
 }
 
@@ -329,7 +332,16 @@ export default function EnrollmentHero({
   if (kpis) {
     for (const f of ROSTER_FIGURES) {
       const raw = f.key === 'withdrawn' ? withdrawn : kpis[f.key]
-      bandKpis.push({ key: f.key, icon: f.icon, label: f.label, value: rosterFigure(raw), caption: 'From the student list' })
+      // A complementary figure says WHY it is withheld, in the caption where the
+      // source line would sit (it is not small — a small flag sits behind it).
+      const complementary = !!raw && typeof raw === 'object' && raw.suppressed && raw.reason === 'complementary'
+      bandKpis.push({
+        key: f.key,
+        icon: f.icon,
+        label: f.label,
+        value: rosterFigure(raw),
+        caption: complementary ? 'Withheld to protect a small group' : 'From the student list',
+      })
     }
   }
 

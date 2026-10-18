@@ -9,7 +9,10 @@ import {
   getMetric,
   gradeKeyOfRank,
   gradeRankOf,
+  pooledDiversityIndex,
+  suppressPartition,
   suppressSmallCell,
+  type GroupCell,
   type GradeKey,
   type MetricKey,
   type MetricResult,
@@ -26,9 +29,9 @@ import {
   type EnrollmentPlanResolution,
 } from '../../analytics/enrollment-plan.js'
 import { entitledModulesForSchool, filterMetricsByEntitlement } from '../../analytics/metric-gating.js'
-import { EnrollmentService, fyEndForObservedOn } from '../enrollment.service.js'
+import { EnrollmentService, fyEndForObservedOn, type EnrollmentDemographicsView } from '../enrollment.service.js'
 import { StudentsService } from '../students/students.service.js'
-import { suppressDimension } from '../students/aggregate-suppression.js'
+import { suppressDimension, suppressStudentAggregate, type PublicCell } from '../students/aggregate-suppression.js'
 import type { EnrollmentAnalyticsQueryDto } from './dto/enrollment-analytics.dto.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,7 +345,14 @@ export interface EnrollmentDemographics {
 }
 
 export interface EnrollmentMix {
-  status: { enrolled: number; waitlist: number; withdrawn: number; graduated: number }
+  /** The register's statuses — the SAME decision the overview publishes
+   *  (suppressStudentAggregate): a partition of the whole-school total. */
+  status: {
+    enrolled: Suppressible<number>
+    waitlist: Suppressible<number>
+    withdrawn: Suppressible<number>
+    graduated: Suppressible<number>
+  }
   /** Support flags are suppressed HARD: one ELL child in a 40-pupil school is a name. */
   flags: { iep: Suppressible<number>; plan504: Suppressible<number>; ell: Suppressible<number>; any: Suppressible<number> }
   /**
@@ -442,26 +452,64 @@ function cell(count: number | null): Suppressible<number> {
   return count === null ? { value: null, suppressed: false } : suppressSmallCell(count, count)
 }
 
-/** A dimension of counts → suppressed cells whose share DROPS with the count. */
+/** A group decision (@finrep/analytics small-cell-groups) → this payload's
+ *  Suppressible shape. A companion keeps `reason: 'complementary'` so the web
+ *  prints "withheld" over it, never `<5` (it is not small). */
+function fromGroup(c: GroupCell): Suppressible<number> {
+  if (!c.suppressed) return { value: c.value, suppressed: false }
+  return c.reason === 'complementary'
+    ? { value: null, suppressed: true, reason: 'complementary' }
+    : { value: null, suppressed: true }
+}
+
+/** A public-gate cell (aggregate-suppression.ts) → this payload's shape. A
+ *  missing cell (a withheld read) is withheld, never a zero. */
+function fromPublic(c: PublicCell | undefined): Suppressible<number> {
+  if (typeof c === 'number') return { value: c, suppressed: false }
+  if (c && c.reason !== 'complementary') return { value: null, suppressed: true }
+  return { value: null, suppressed: true, reason: 'complementary' }
+}
+
+/**
+ * A dimension of counts → suppressed cells whose share DROPS with the count.
+ *
+ * COMPLEMENTARY, not cell-by-cell: the card prints `totalEnrolled` beside these
+ * cells, and a roster records race/gender/ethnicity for (nearly) everyone, so a
+ * lone `<5` race was exactly total − the visible races (the demo found MENA = 204
+ * − 201 = 3 on camera). The ONE canonical partition rule (`suppressPartition`)
+ * hides companions until the hidden SUM pins nobody — the same rule the
+ * students/aggregate route runs, so the two surfaces hide the same cells for the
+ * same counts.
+ *
+ * The diversity index is POOLED over the hidden cells (`pooledDiversityIndex`):
+ * the plain 1 − Σp² beside the visible counts and the total is a second equation
+ * that, with their sum, solves the hidden cells exactly.
+ */
 function dimensionOf(
   counts: Record<string, number> | null | undefined,
   total: number,
-  diversityIndex?: number,
+  opts: { withDiversity?: boolean } = {},
 ): DemographicDimension | null {
   if (!counts || Object.keys(counts).length === 0) return null
+  const decided = suppressPartition(counts)
   const cells: DemographicCell[] = Object.entries(counts)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([key, n]) => {
-      const c = cell(n)
+      const c = decided[key] ? fromGroup(decided[key]) : cell(n)
       return {
         key,
         count: c,
+        // The share goes with the count AND keeps its reason: a complementary
+        // cell's share labelled bare-suppressed would print `<5` over a cell
+        // that is not small.
         share: c.suppressed
-          ? { value: null, suppressed: true }
+          ? c.reason === 'complementary'
+            ? { value: null, suppressed: true, reason: 'complementary' }
+            : { value: null, suppressed: true }
           : { value: total > 0 ? n / total : null, suppressed: false },
       }
     })
-  return diversityIndex === undefined ? { cells } : { cells, diversityIndex }
+  return opts.withDiversity ? { cells, diversityIndex: pooledDiversityIndex(counts, decided) } : { cells }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -776,6 +824,17 @@ export class EnrollmentAnalyticsService {
 
   // ── E5 demographics ────────────────────────────────────────────────────────
 
+  /**
+   * The RAW demographics view the card is built from (EnrollmentService.
+   * demographics: the live roster whenever Student rows exist, else the latest
+   * snapshot). For KYRO's get_enrollment_demographics, which must count the
+   * SAME population as every other demographic surface (privacy review round
+   * 6) — the caller passes it through suppressDemographicsView.
+   */
+  demographicsView(schoolId: string, periodId?: string): Promise<EnrollmentDemographicsView | null> {
+    return this.enrollment.demographics(schoolId, periodId)
+  }
+
   private async buildDemographics(
     schoolId: string,
     periodId?: string,
@@ -792,7 +851,11 @@ export class EnrollmentAnalyticsService {
       totalEnrolled: total,
       gender: dimensionOf(view.gender?.counts, total),
       ethnicity: dimensionOf(view.ethnicity?.counts, total),
-      race: dimensionOf(view.race?.counts, total, view.race?.diversityIndex),
+      // The index is re-taken POOLED over the withheld cells (dimensionOf), not
+      // copied from the register-gated view, whose plain index would solve them.
+      race: dimensionOf(view.race?.counts, total, {
+        withDiversity: view.race?.diversityIndex !== undefined,
+      }),
     }
   }
 
@@ -815,25 +878,37 @@ export class EnrollmentAnalyticsService {
     // take the headcount, the trend and the plan down with it.
     if (!agg?.counts) return null
     const complete = total > 0 && withStartDate === total
+    // THE ONE PUBLIC GATE (suppressStudentAggregate), the very call the overview
+    // chips, the register analytics and KYRO's get_roster_summary make on the
+    // same unfiltered aggregate — so this card cannot disagree with them about a
+    // single cell:
+    //   · flags: the union is withheld with any hidden flag — "Any 25 · ISP 14 ·
+    //     ELL 9 · 504 <5" was 25 − 14 − 9 = 2 on camera; it now prints "withheld"
+    //     (reason 'complementary' — it is not small).
+    //   · status: the register's statuses are a partition of the whole-school
+    //     total with `enrolled` raw beside it, so a lone small status was total −
+    //     the rest. This card used to print them RAW while the overview hid them
+    //     (privacy review round 4) — it now prints the overview's decision.
+    const pub = suppressStudentAggregate(agg)
     return {
       status: {
-        enrolled: agg.counts.status.enrolled ?? 0,
-        waitlist: agg.counts.status.waitlist ?? 0,
-        withdrawn: agg.counts.status.withdrawn ?? 0,
-        graduated: agg.counts.status.graduated ?? 0,
+        enrolled: fromPublic(pub.counts.status.enrolled),
+        waitlist: fromPublic(pub.counts.status.waitlist),
+        withdrawn: fromPublic(pub.counts.status.withdrawn),
+        graduated: fromPublic(pub.counts.status.graduated),
       },
       flags: {
-        iep: cell(agg.counts.flags.iep),
-        plan504: cell(agg.counts.flags.plan504),
-        ell: cell(agg.counts.flags.ell),
-        any: cell(agg.counts.flags.any),
+        iep: fromPublic(pub.counts.flags.iep),
+        plan504: fromPublic(pub.counts.flags.plan504),
+        ell: fromPublic(pub.counts.flags.ell),
+        any: fromPublic(pub.counts.flags.any),
       },
       datedCoverage: { withStartDate, total, complete },
       // WITHHELD, not zeroed, when start dates are incomplete. The OneRoster
       // importer stores enrolledOn: null, so on those registers a "new this year"
       // count would be a confident 0 — the most damaging kind of wrong number,
       // because it looks like an answer.
-      newThisYear: complete ? cell(agg.kpis.newThisYear) : { value: null, suppressed: true },
+      newThisYear: complete ? fromPublic(pub.kpis.newThisYear) : { value: null, suppressed: true },
     }
   }
 
@@ -933,7 +1008,11 @@ export class EnrollmentAnalyticsService {
       notes.push(
         `${suppressed} figure${suppressed === 1 ? '' : 's'} on this page ${
           suppressed === 1 ? 'is' : 'are'
-        } hidden because fewer than ${MIN_CELL} students would be identifiable. Hidden cells are blank, never zero, and their shares are dropped too.`,
+        } hidden because fewer than ${MIN_CELL} students would be identifiable. Hidden cells are blank, never zero, and their shares are dropped too.${
+          countComplementary(ctx) > 0
+            ? ' Figures marked “withheld” are not small themselves: showing them would let a hidden one be worked out by subtraction.'
+            : ''
+        }`,
       )
     }
 
@@ -1046,7 +1125,9 @@ function buildGradeByYear(
     // COMPLEMENTARY suppression per column (the roster aggregate's own gate):
     // a lone <5 grade beside a published year total is exactly total − the
     // visible grades, so suppressDimension hides a companion with it. The
-    // hidden cell keeps this payload's `{value:null, suppressed:true}` shape.
+    // hidden cell keeps this payload's `{value:null, suppressed:true}` shape;
+    // a companion adds `reason: 'complementary'` (it is not small — the grid
+    // prints "withheld" over it, never `<5`).
     const gated = suppressDimension(present)
     for (const grade of grades) {
       if (present[grade] === undefined) continue
@@ -1055,7 +1136,14 @@ function buildGradeByYear(
         cells.push({ grade, schoolYear, count: cell(g) })
       } else {
         withheldTotals.add(schoolYear)
-        cells.push({ grade, schoolYear, count: { value: null, suppressed: true } })
+        cells.push({
+          grade,
+          schoolYear,
+          count:
+            g.reason === 'complementary'
+              ? { value: null, suppressed: true, reason: 'complementary' }
+              : { value: null, suppressed: true },
+        })
       }
     }
   }
@@ -1407,6 +1495,15 @@ function buildVsPlan(
   }
 }
 
+/** How many masked figures are hidden only to protect another (complementary). */
+function countComplementary(ctx: { gradeByYear: GradeByYear | null; mix: EnrollmentMix | null }): number {
+  let n = 0
+  for (const c of ctx.gradeByYear?.cells ?? []) if (c.count.reason === 'complementary') n++
+  if (ctx.mix) for (const f of Object.values(ctx.mix.flags)) if (f.reason === 'complementary') n++
+  if (ctx.mix) for (const st of Object.values(ctx.mix.status)) if (st.reason === 'complementary') n++
+  return n
+}
+
 /** How many figures the page is masking — for the honesty note, not for display. */
 function countSuppressed(ctx: {
   gradeByYear: GradeByYear | null
@@ -1419,6 +1516,7 @@ function countSuppressed(ctx: {
   for (const r of ctx.ladder?.rows ?? []) if (r.count.suppressed) n++
   for (const r of ctx.vsPlan?.rows ?? []) if (r.actual.suppressed) n++
   if (ctx.mix) for (const f of Object.values(ctx.mix.flags)) if (f.suppressed) n++
+  if (ctx.mix) for (const st of Object.values(ctx.mix.status)) if (st.suppressed) n++
   return n
 }
 

@@ -35,11 +35,11 @@ import {
   ENROLL_HUE,
   fmtCount,
   fmtDate,
-  fmtDateShort,
   providerLabel,
   separateLabels,
   zeroBasedDomain,
 } from './enrollmentAnalyticsKit.jsx'
+import { axisEndLabels } from '../../lib/dates.js'
 
 // A plan is a reference line, not a status: ink-2 (EnrollmentTrend's AXIS_INK),
 // never the kit's PLAN_INK amber, which is the semantic WATCH colour.
@@ -100,6 +100,7 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
 
   const t0 = series[0].t
   const t1 = latest.t
+  const axisEnds = axisEndLabels(series[0].observedOn, latest.observedOn)
   const plotBottom = VB.h - PAD.b
   const X = (t) => PAD.l + ((t - t0) / Math.max(1, t1 - t0)) * (VB.w - PAD.l - PAD.r)
   const Y = (v) => PAD.t + (1 - v / yHi) * (plotBottom - PAD.t)
@@ -349,12 +350,13 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
           </text>
         ))}
 
-        {/* Date axis — the ends always, so the span is readable at a glance. */}
+        {/* Date axis — the ends always, so the span is readable at a glance; the
+            years print whenever the span crosses one (lib/dates axisEndLabels). */}
         <text x={X(t0)} y={VB.h - 10} textAnchor="start" fontSize="10" fill="#64748B">
-          {fmtDateShort(series[0].observedOn)}
+          {axisEnds[0]}
         </text>
         <text x={X(t1)} y={VB.h - 10} textAnchor="end" fontSize="10" fill="#64748B">
-          {fmtDateShort(latest.observedOn)}
+          {axisEnds[1]}
         </text>
 
         {/* Hit areas — hover reveals the detail, the values above carry the read. */}

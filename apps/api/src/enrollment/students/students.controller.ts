@@ -64,19 +64,26 @@ export class StudentsController {
 
   /** FERPA-safe aggregation — same filter params as the register, counts only.
    *
-   *  SUPPRESSED AT THE DOOR (privacy F1): the raw service aggregate is true
-   *  counts for its self-gating internal consumers; THIS route is viewer-readable
-   *  JSON, so every attribute-coupled small cell (status, demographics, support
-   *  flags, small KPIs) leaves as `{ suppressed: true }` with no value key.
-   *  Grade-level headcounts stay raw — directory-style info the enrollment page
-   *  (grade ring, facet pickers) depends on; see aggregate-suppression.ts.
+   *  SUPPRESSED AT THE DOOR (aggregate-suppression.ts): every attribute-coupled
+   *  small cell leaves as `{ suppressed: true }` with no value key; breakdowns
+   *  count ONE status group (enrolled unless a single status is chosen), so this
+   *  route and the enrolled-population surfaces (analytics card, KYRO,
+   *  /demographics) cannot be subtracted from each other; and a filtered read
+   *  that would narrow to a value a wider read hides is withheld whole.
    *
-   *  FILTERS ARE PART OF THE ATTACK SURFACE (reviewer's MAJOR): `?flags=iep`
-   *  makes `filteredTotal` the exact IEP headcount — even 1 — and `?grade=5`
-   *  on top cross-tabs it. So when the query carries any ATTRIBUTE filter
-   *  (status/demographics/flags/ageBand, or the name search `q` — grade alone
-   *  does not count, the documented raw-grade line), `filteredTotal` and the
-   *  grade cells go through the same floor as every other cell. */
+   *  ACROSS REQUESTS (round 5, aggregate-joint.ts): only one filter dimension
+   *  is ever broken down (one grade / demographic / support flag, optionally
+   *  with one status); combinations, several flags and name searches are
+   *  withheld whole. Every two-way table those reads print from is hidden by
+   *  ONE whole-roster decision, so two different requests sharing a cell
+   *  (?grade=K and ?race=black share K × Black) agree about it and cannot be
+   *  combined.
+   *
+   *  ACCESS (privacy review round 6): the aggregates are the viewer's ONLY
+   *  door to the roster. The register list and record reads below are
+   *  owner/accountant — the same line academics draws for named results — so
+   *  for the Board/Leadership lens this suppression is an access control, not
+   *  just a display and LLM-egress one. */
   @Get('aggregate')
   @Roles('owner', 'accountant', 'viewer')
   async aggregate(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: StudentFilterQueryDto) {
@@ -163,8 +170,14 @@ export class StudentsController {
 
   // ── Register list + CRUD ─────────────────────────────────────────────────────
 
+  // OWNER/ACCOUNTANT ONLY (privacy review round 6). Rows carry a student's name
+  // beside hasIep/has504/ell, and `total` is the exact count for any filter
+  // (?flags=plan504 → the 504 list, by name). A viewer — the Board/Leadership
+  // lens — reads the roster only through the suppressed aggregate above, the
+  // same line academics draws for named results (assessments/results,
+  // gradebook/records). students.controller.spec.ts pins it.
   @Get()
-  @Roles('owner', 'accountant', 'viewer')
+  @Roles('owner', 'accountant')
   list(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: ListStudentsQueryDto) {
     return this.students.list(schoolId, query)
   }
@@ -198,8 +211,9 @@ export class StudentsController {
     return this.students.create(user, schoolId, dto)
   }
 
+  // One named record, flags included: owner/accountant only, like the list.
   @Get(':id')
-  @Roles('owner', 'accountant', 'viewer')
+  @Roles('owner', 'accountant')
   get(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.students.get(schoolId, id)
   }

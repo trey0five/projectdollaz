@@ -23,7 +23,7 @@ export const STUDIO_TILES = [
     id: 'catch-up',
     Icon: Clock3,
     title: 'Catch me up',
-    blurb: 'A prioritized briefing across all 8 areas of the school.',
+    blurb: 'A prioritized briefing across all nine areas of the school.',
     cta: 'Brief me',
     mode: 'send',
     prompt: 'Brief me on what needs my attention across every area of the school today.',

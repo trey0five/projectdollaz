@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common'
 import type { ModuleKey } from '@finrep/db'
 import { MODULE_META } from '@finrep/db'
 import type { MetricKey, MetricTrend } from '@finrep/analytics'
+import { isSmallCount } from '@finrep/analytics'
 import {
   computeReviewStatus,
   computeTrendSignal,
   daysFromCivil,
+  isRubricScorable,
   suppressSmallCellSet,
   suppressSmallCells,
   toCivil,
@@ -16,7 +18,10 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { AnalyticsService } from '../analytics/analytics.service.js'
 import { AccreditationEvidenceReadinessService } from '../accreditation/evidence-readiness.service.js'
+import { isAssuranceLeaf, leavesOf } from '../accreditation/leaf-scope.js'
 import { StudentsService } from '../enrollment/students/students.service.js'
+import { flagUnionHidden } from '../enrollment/students/aggregate-joint.js'
+import type { TallyRow } from '../enrollment/students/aggregate-tally.js'
 import { entitledModulesForSchool } from '../analytics/metric-gating.js'
 import {
   TWIN_SIGNAL_CATALOG,
@@ -892,6 +897,15 @@ export class TwinSignalsService {
    * bound on the hidden cell. Withholding it removes the subtraction entirely and
    * leaves exactly the primary-suppression guarantee: 1..9, nothing narrower. Same
    * discipline as enr.feeder_grades, which publishes no scalar at all.
+   *
+   * THE OVERLAP RULE (the enrollment surfaces' `suppressOverlapGroup`, the
+   * same floor, so this card and the roster overview hide `any` on the same
+   * rosters). Even with every flag published, `ISP + 504 + ELL − any` counts the
+   * students on more than one list — with two flags in play it IS the cross-tab
+   * "students with an ISP AND a 504 plan". The seeded roster has ISP 14, 504 4,
+   * ELL 9, any 25: 27 − 25 = 2 students carry two flags. So the headline is
+   * withheld whenever that overlap is a small cell (0 < overlap < 5). Zero
+   * overlap is a fact about nobody and leaves the headline published.
    */
   private async collectSupportNeeds(ctx: CollectContext): Promise<Collected | null> {
     const agg = await ctx.rosterAggregate()
@@ -903,7 +917,15 @@ export class TwinSignalsService {
       { key: 'ell', value: flags.ell },
     ])
     const headline = suppressSmallCells(flags.any)
-    const headlineValue = suppressedSet.suppressedCount > 0 ? null : headline.value
+    const overlap = (flags.iep ?? 0) + (flags.plan504 ?? 0) + (flags.ell ?? 0) - (flags.any ?? 0)
+    // And its per-flag form (aggregate-joint.ts flagUnionHidden), on the same
+    // roster rows the overview gate reads: the overview withholds `any` then,
+    // so this card must too, or it hands the overview's hidden figure back.
+    const rows = agg.suppressionBasis?.rosterRows
+    const headlineValue =
+      suppressedSet.suppressedCount > 0 || isSmallCount(overlap) || (rows ? flagUnionHidden(rows) : false)
+        ? null
+        : headline.value
     // The roster has no as-of date of its own; it is a live register, not an
     // observation with a date attached.
     return { value: headlineValue, observedOn: null, cells: suppressedSet.cells }
@@ -934,7 +956,30 @@ export class TwinSignalsService {
   private async collectUnscoredStandards(ctx: CollectContext): Promise<Collected | null> {
     const standards = await ctx.standards()
     if (standards.length === 0) return null
-    return { value: standards.filter((s) => s.rubricScore === null).length, observedOn: null }
+    // Only standards a rubric score can be given to: domain parents (headings
+    // over children) and must-pass assurance gates (binary) are never scored, so
+    // counting them inflated the signal and the finding built on it.
+    // The leaf and assurance definitions are the ONE shared copy
+    // (accreditation/leaf-scope.ts) the readiness services use, so this count
+    // and the readiness math can never disagree about which rows count.
+    const rows = standards.map((s) => ({
+      ...s,
+      parentId: s.parentId ?? null,
+      catalogStandardId: s.catalogStandardId ?? null,
+    }))
+    const assuranceCatalogIds = new Set(
+      rows
+        .filter((r) => r.catalogStandard?.isAssurance === true && r.catalogStandardId != null)
+        .map((r) => r.catalogStandardId as string),
+    )
+    const leafIds = new Set(leavesOf(rows, rows).map((r) => r.id))
+    const scorable = rows.filter((r) =>
+      isRubricScorable({
+        isLeaf: leafIds.has(r.id),
+        isAssurance: isAssuranceLeaf(r, assuranceCatalogIds),
+      }),
+    )
+    return { value: scorable.filter((s) => s.rubricScore === null).length, observedOn: null }
   }
 
   private async collectUnsupportedScore(ctx: CollectContext): Promise<Collected | null> {
@@ -1175,7 +1220,13 @@ export class TwinSignalsService {
       standards: once(() =>
         prisma.accreditationStandard.findMany({
           where: { schoolId },
-          select: { id: true, rubricScore: true },
+          select: {
+            id: true,
+            rubricScore: true,
+            parentId: true,
+            catalogStandardId: true,
+            catalogStandard: { select: { isAssurance: true } },
+          },
         }),
       ),
 
@@ -1296,10 +1347,20 @@ interface CollectContext {
   rosterAggregate(): Promise<{
     total: number
     counts: { flags: { iep: number; plan504: number; ell: number; any: number } }
+    /** Present on StudentsService.aggregate's result; never published here. */
+    suppressionBasis?: { rosterRows?: TallyRow[] }
   }>
   evidenceCurrency(): Promise<{ byStandard: Record<string, { state: string }[]> } | null>
   readiness(): Promise<{ snapshotDate: string; readinessPct: number; isDemo: boolean } | null>
-  standards(): Promise<{ id: string; rubricScore: number | null }[]>
+  standards(): Promise<
+    {
+      id: string
+      rubricScore: number | null
+      parentId?: string | null
+      catalogStandardId?: string | null
+      catalogStandard?: { isAssurance: boolean } | null
+    }[]
+  >
   evidenceCounts(): Promise<Map<string, number>>
   priorValues(): Promise<Map<string, unknown>>
 }

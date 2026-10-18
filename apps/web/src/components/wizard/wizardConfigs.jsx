@@ -252,7 +252,7 @@ export const wizardConfigs = {
         Icon: Plug,
         label: 'Connect your SIS',
         blurb:
-          'Connect a student information system (Blackbaud, FACTS, Veracross, OneRoster) to pull enrollment on demand.',
+          'Connect Blackbaud SKY to pull enrollment on demand. More SIS connections are coming soon; a roster file works today.',
         cta: 'Connect a system',
         renderEmbed: (ctx) => (
           <EnrollmentConnectEmbed schoolId={ctx.schoolId} canEdit={ctx.canEdit} onSaved={ctx.onSaved} />

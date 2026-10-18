@@ -179,7 +179,9 @@ export function AcademicsBand({ schoolName, level, status, dashboard, loading, t
             icon: Gauge,
             label: avg.label ?? 'Average score',
             value: fmt(avg.value),
-            caption: avg.peer != null ? `Network ${fmt(avg.peer)}${avg.variance != null ? ` · ${signed(avg.variance)}` : ''}` : null,
+            // avg.peer EXCLUDES this school — "Network" read as a figure that
+            // contains it, beside a Network view whose line names the exclusion.
+            caption: avg.peer != null ? `Peer avg ${fmt(avg.peer)}${avg.variance != null ? ` · ${signed(avg.variance)}` : ''}` : null,
             verdict: STANDING_VERDICT[standing] ?? null,
             verdictLabel: standing === 'strong' ? 'Ahead' : standing === 'below' ? 'Behind' : null,
           },
@@ -197,12 +199,15 @@ export function AcademicsBand({ schoolName, level, status, dashboard, loading, t
             // The subject furthest behind — or, when every subject is ahead, the
             // smallest lead (never call a lead a "gap").
             label: weakest && weakest.variance >= 0 ? 'Smallest lead' : 'Widest gap',
-            value: weakest ? signed(weakest.variance, 0) : null,
+            // At the precision the average beside it is printed at (fmt → one
+            // decimal): "+1" for a +0.58 lead overstated it by nearly double.
+            value: weakest ? signed(weakest.variance) : null,
             caption: weakest ? subjectLabelOf(weakest.subject) : 'No subject comparison yet',
             // The SIGN of a gap is a word, not a judgement: the pill stays
             // neutral unless the server itself rated that subject's standing.
             verdict: weakest ? (STANDING_VERDICT[weakest.standing] ?? null) : null,
-            verdictLabel: weakest ? (weakest.variance < 0 ? 'Behind' : 'Ahead') : null,
+            // A gap that PRINTS as 0 is level — no "Ahead"/"Behind" beside it.
+            verdictLabel: weakest && signed(weakest.variance) !== '0' ? (weakest.variance < 0 ? 'Behind' : 'Ahead') : null,
           },
           {
             key: 'trend',
@@ -356,8 +361,9 @@ function ViewTiles({ dashboard, onOpen, networkTo }) {
       hue: 'var(--au-h3)',
       title: 'Are we moving?',
       body: 'The trend, and growth against achievement.',
-      stat: yoy != null ? `${signed(yoy, 0)} on last year` : null,
-      tone: yoy != null && yoy !== 0 ? (yoy > 0 ? 'good' : 'risk') : null,
+      // The same precision as the band's "+0.7 on last year" — never "+1" here.
+      stat: yoy != null ? `${signed(yoy)} on last year` : null,
+      tone: yoy != null && signed(yoy) !== '0' ? (yoy > 0 ? 'good' : 'risk') : null,
     },
     {
       key: 'cohorts',

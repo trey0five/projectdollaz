@@ -60,6 +60,22 @@ describe('no "FERPA-compliant" / "COPPA-compliant" claim anywhere in the web app
     expect(offenders).toEqual([])
   })
 
+  it('no user-facing string uses the unapproved "No student logins" wording', () => {
+    // The approved phrasing is "no student-facing surfaces" (FERPA overview §3).
+    // Comments are stripped: this guards copy, not history notes.
+    const UNAPPROVED = /\bno student log-?ins?\b/i
+    expect(UNAPPROVED.test('Built to FERPA standards. No student logins.')).toBe(true)
+    expect(UNAPPROVED.test('No student-facing surfaces')).toBe(false)
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
+    const offenders = []
+    for (const file of [...walk(SRC), INDEX_HTML]) {
+      if (/\.spec\./.test(file)) continue
+      const text = strip(readFileSync(file, 'utf8')).replace(/\s+/g, ' ')
+      if (UNAPPROVED.test(text)) offenders.push(relative(process.cwd(), file))
+    }
+    expect(offenders).toEqual([])
+  })
+
   it('the landing TRUST block and the privacy page carry the approved statement', async () => {
     const { TRUST, HERO } = await import('./pages/landing/landingContent.js')
     expect(TRUST.sub).toMatch(/Built to FERPA standards/)
@@ -72,6 +88,10 @@ describe('no "FERPA-compliant" / "COPPA-compliant" claim anywhere in the web app
       'AI: no training · zero retention',
     ])
     expect(HERO.trustLine).toMatch(/Built to FERPA standards/)
+    // The hero footnote is filmed (c0_promise): it must use the approved
+    // "no student-facing surfaces" wording, never the unapproved "No student logins".
+    expect(HERO.trustLine).toMatch(/No student-facing surfaces/)
+    expect(HERO.trustLine).not.toMatch(/student logins?/i)
     // The hero no longer counts to a hundred.
     expect(HERO.h1Line1).toBe('Many moving parts.')
     const privacy = readFileSync(resolve(SRC, 'pages/legal/PrivacyPage.jsx'), 'utf8').replace(/\s+/g, ' ')

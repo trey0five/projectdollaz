@@ -45,6 +45,7 @@ import {
   bandForFacts,
   bandForRisk,
   deriveTwin,
+  isRubricScorable,
   type PriorFact,
   type TwinEvidenceGroupView,
   type TwinFinding,
@@ -1440,7 +1441,7 @@ describe('§4 ACC-UNSCORED', () => {
     expect(f.standardTags.length).toBeLessThanOrEqual(12)
     const codes = f.evidence.find((e) => e.key === 'unscoredCodes')
     expect(codes?.display.split(', ')).toHaveLength(14)
-    expect(f.rationale).toBe('14 of 18 standards carry no rubric score at all.')
+    expect(f.rationale).toBe('14 of 18 scorable standards carry no rubric score at all.')
     assertWellFormed(f)
   })
 
@@ -1449,6 +1450,57 @@ describe('§4 ACC-UNSCORED', () => {
     const f = singleRule('ACC-UNSCORED', { 'acc.unscored_standards': available(2, null) }, mkRegister({ standards }))
       .findings[0]
     expect(f.severity).toBe('warn')
+  })
+
+  // The live miss (Bayview demo, r6/r7): a Cognia register of 42 rows read
+  // "21 of 42 standards carry no rubric…" because the 5 domain parents
+  // (COG-KC1–4, COG-ASR) and the 6 must-pass gates — none of which EVER takes a
+  // 1–4 score — were counted as unscored standards.
+  it('counts only rubric-scorable standards: domain parents and must-pass gates are excluded', () => {
+    const parents = ['COG-KC1', 'COG-KC2', 'COG-KC3', 'COG-KC4', 'COG-ASR'].map((c) =>
+      mkStandard(c, { rubricScore: null, isLeaf: false }),
+    )
+    const gates = ['COG-A1', 'COG-A2', 'COG-A3', 'COG-A4', 'COG-A5', 'COG-A6'].map((c) =>
+      mkStandard(c, { rubricScore: null, isAssurance: true, assuranceSatisfied: true }),
+    )
+    // 31 scorable leaves, 10 of them unscored.
+    const leaves = Array.from({ length: 31 }, (_, i) =>
+      mkStandard(`COG-${i + 1}`, { rubricScore: i < 10 ? null : 3 }),
+    )
+    const standards = [...parents, ...gates, ...leaves]
+    expect(standards).toHaveLength(42)
+    const f = singleRule(
+      'ACC-UNSCORED',
+      { 'acc.unscored_standards': available(10, null) },
+      mkRegister({ standards }),
+    ).findings[0]
+    expect(f.rationale).toBe('10 of 31 scorable standards carry no rubric score at all.')
+    expect(f.evidence.find((e) => e.key === 'unscoredCount')?.value).toBe(10)
+    expect(f.evidence.find((e) => e.key === 'totalStandards')?.value).toBe(31)
+    const codes = String(f.evidence.find((e) => e.key === 'unscoredCodes')?.value).split(', ')
+    for (const excluded of ['COG-KC1', 'COG-ASR', 'COG-A1', 'COG-A6']) expect(codes).not.toContain(excluded)
+    // 10/31 is under a third — a gap list, not an unstarted self-study. The
+    // headings and gates alone used to push this to 21/42 = critical.
+    expect(f.severity).toBe('warn')
+    assertWellFormed(f)
+  })
+
+  it('a register whose only unscored rows are headings and gates raises nothing', () => {
+    const standards = [
+      mkStandard('COG-KC1', { rubricScore: null, isLeaf: false }),
+      mkStandard('COG-A1', { rubricScore: null, isAssurance: true }),
+      mkStandard('COG-1', { rubricScore: 3 }),
+      mkStandard('COG-2', { rubricScore: 2 }),
+    ]
+    const r = singleRule('ACC-UNSCORED', { 'acc.unscored_standards': available(2, null) }, mkRegister({ standards }))
+    expect(r.findings).toHaveLength(0)
+  })
+
+  it('isRubricScorable: a leaf that is not a gate; absent isLeaf reads as a leaf', () => {
+    expect(isRubricScorable({ isAssurance: false })).toBe(true)
+    expect(isRubricScorable({ isAssurance: false, isLeaf: true })).toBe(true)
+    expect(isRubricScorable({ isAssurance: false, isLeaf: false })).toBe(false)
+    expect(isRubricScorable({ isAssurance: true, isLeaf: true })).toBe(false)
   })
 })
 

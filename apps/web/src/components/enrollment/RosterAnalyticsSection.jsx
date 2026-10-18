@@ -12,9 +12,13 @@
 // grade grid; flags are a stat strip, not a chart; the headcount trend is the
 // The '<5' min-cell rule (formatMinCell) masks every CATEGORICAL cell —
 // masked cells also drop their % gutter so the pair can't be re-derived at a
-// glance. The whole-roster headline total stays a true count (frozen spec);
-// the FILTERED total is server-suppressed under attribute filters and renders
-// '<5' like any other cell.
+// glance. The whole-roster headline total stays a true count (frozen spec).
+// On the UNFILTERED view a small cell reads '<5' and a companion 'withheld'; on
+// every FILTERED view the server labels each hidden figure 'withheld',
+// whatever its size (privacy review round 6: per-grade '<5' labels could be
+// counted against the school-wide total). The filtered total is often
+// withheld too (it counts every status), so the headline pill falls back to
+// the published ENROLLED count of the filtered group.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -34,6 +38,7 @@ import {
   AGE_BAND_LABELS,
   STUDENT_FLAG_LABELS,
   formatMinCell,
+  isComplementaryCell,
   isSuppressedCell,
 } from '../../lib/demographicVocab.js'
 import { moduleHue } from '../module/moduleAnatomy.js'
@@ -42,9 +47,18 @@ import StudentFilterBar, {
   EMPTY_STUDENT_FILTERS,
   GRADE_LABELS,
   buildStudentParams,
+  facetsFromAggregate,
 } from './studentFilters.jsx'
 
 const ENROLL_HUE = moduleHue('enrollment')
+
+// The status group a breakdown counts, in the sentence above the charts.
+const STUDENT_STATUS_PLURAL = {
+  enrolled: 'enrolled students',
+  waitlist: 'waitlisted students',
+  withdrawn: 'withdrawn students',
+  graduated: 'graduated students',
+}
 
 // counts map + FIXED key order → BarList rows. value = true count (bar length);
 // formatted = the min-cell-masked count; % gutter only on unmasked cells.
@@ -72,6 +86,7 @@ function toRows(counts, keys, labels, colorFor) {
         share: !masked && total > 0 ? `${Math.round((100 * count) / total)}%` : undefined,
         raw: count,
         suppressed,
+        complementary: isComplementaryCell(n),
         // A masked cell (<5, or server-suppressed) draws as a hatched stub,
         // never as a column whose height would print the withheld count.
         masked,
@@ -102,6 +117,8 @@ function MixCard({ title, rows, sortDesc = true }) {
             color: r.color,
             suppressed: r.masked,
             formatted: r.formatted,
+            // A complementary cell is not small — its stub says "withheld", not <5.
+            ...(r.complementary ? { stubLabel: 'withheld' } : {}),
             meta: r.share ? [{ label: 'Share', value: r.share }] : [],
           }))}
           formatter={(v) => formatMinCell(v)}
@@ -147,7 +164,7 @@ export default function RosterAnalyticsSection({ schoolId }) {
       enrollmentApi.students
         .aggregate(schoolId)
         .then((res) => {
-          if (!cancelled) setFacets((res.data ?? res)?.counts ?? null)
+          if (!cancelled) setFacets(facetsFromAggregate(res.data ?? res))
         })
         .catch(() => {
           if (!cancelled) setFacets(null)
@@ -221,6 +238,24 @@ export default function RosterAnalyticsSection({ schoolId }) {
   const filteredSuppressed = isSuppressedCell(agg?.filteredTotal)
   const filtered = filteredSuppressed ? null : agg?.filteredTotal ?? null
   const total = agg?.total ?? null
+  // When the all-status total is withheld but the group's ENROLLED count is
+  // published (the breakdowns count exactly those students), the pill says
+  // that instead of "withheld of 233" on every grade filter.
+  // The unfiltered view (its "filtered" total IS the whole roster): the only
+  // view whose labels tell a small cell ('<5') from a companion ('withheld').
+  const wholeRoster = typeof agg?.filteredTotal === 'number' && agg.filteredTotal === agg?.total
+  const enrolledHere = agg?.counts?.status?.enrolled
+  const enrolledFallback =
+    filteredSuppressed && agg?.withheld !== 'all' && typeof enrolledHere === 'number' ? enrolledHere : null
+  // The server can withhold a filtered read WHOLE (`withheld: 'all'` — the
+  // filters would narrow to a group a wider view hides) or just its breakdowns
+  // (`'breakdown'` — several statuses chosen; each breakdown counts one status
+  // group). Say so in words rather than drawing empty charts that read as
+  // "nobody".
+  const withheldAll = agg?.withheld === 'all'
+  const withheldBreakdown = agg?.withheld === 'breakdown'
+  const breakdownGroup = agg?.breakdown?.status ?? null
+  const groupLabel = breakdownGroup ? STUDENT_STATUS_PLURAL[breakdownGroup] ?? `${breakdownGroup} students` : null
 
   return (
     <motion.section
@@ -232,14 +267,20 @@ export default function RosterAnalyticsSection({ schoolId }) {
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <p className="text-small text-ink2">
           <BarChart3 size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-          Aggregate counts only — cells under 5 show as &lt;5.
+          Aggregate counts only — on the whole roster, cells under 5 show as &lt;5 and a figure that would give
+          one away by subtraction shows as withheld. With a filter on, every hidden figure shows as withheld,
+          whatever its size.{groupLabel ? ` The breakdowns below count ${groupLabel}.` : ''}
         </p>
-        {(filtered != null || filteredSuppressed) && total != null && (
+        {enrolledFallback != null ? (
+          <span className="pill pill-count" title="The total across every status is withheld for this view">
+            {enrolledFallback.toLocaleString('en-US')} enrolled
+          </span>
+        ) : (filtered != null || filteredSuppressed) && total != null ? (
           <span className="pill pill-count">
             {filteredSuppressed ? formatMinCell(agg.filteredTotal) : filtered.toLocaleString('en-US')} of{' '}
             {total.toLocaleString('en-US')} students
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className="toolbar mb-2">
@@ -252,9 +293,23 @@ export default function RosterAnalyticsSection({ schoolId }) {
         <p className="py-6 text-center text-body text-risk">{error}</p>
       ) : loading && !agg ? (
         <div className="h-44 animate-pulse rounded-lg bg-ink/[.04]" />
+      ) : withheldAll ? (
+        <p className="border-y border-hair px-6 py-10 text-center text-small italic text-ink2">
+          {/* The server says WHY (`withheldReason`): counts are only ever broken
+              down for one filter at a time, never for a name search. */}
+          {agg?.withheldReason === 'nameSearch'
+            ? 'Counts never follow a name search: figures about the students whose names match would describe those students. Clear the search to see the breakdown.'
+            : agg?.withheldReason === 'combination'
+              ? 'Counts are broken down for one filter at a time (one grade, one demographic or one support flag, with a status if you like). A combination is withheld so that no two views can be put together to single out a student. Remove a filter to see the breakdown.'
+              : 'These filters narrow to a group too small to show without identifying students, so this view is withheld. Widen the filters to see the breakdown.'}
+        </p>
       ) : !filteredSuppressed && (filtered ?? 0) === 0 ? (
         <p className="border-y border-hair px-6 py-10 text-center text-small italic text-ink2">
           No students match these filters.
+        </p>
+      ) : withheldBreakdown ? (
+        <p className="border-y border-hair px-6 py-10 text-center text-small italic text-ink2">
+          Breakdowns count one status group at a time. Choose a single status to see that group’s breakdown.
         </p>
       ) : (
         <div className="space-y-4">
@@ -274,9 +329,14 @@ export default function RosterAnalyticsSection({ schoolId }) {
           <div className="stats stats-wrap mt-6 grid-cols-2 sm:grid-cols-4" role="list">
             {flagStrip.map(([k, label]) => {
               const n = flags[k] ?? 0
-              // A server-suppressed flag (`{ suppressed: true }`) is a present-
-              // but-small group: lit, shown as '<5' by formatMinCell.
-              const lit = isSuppressedCell(n) || Number(n) > 0
+              // A bare server-suppressed flag (`{ suppressed: true }`, the
+              // unfiltered view only) is a present-but-small group: lit, shown
+              // as '<5'. A COMPLEMENTARY one prints "withheld": on the whole
+              // roster that is a companion (not small, so present and lit); on
+              // a filtered view it says nothing about its size — it may be
+              // zero — so it is not lit.
+              const lit =
+                Number(n) > 0 || (isSuppressedCell(n) && (!isComplementaryCell(n) || wholeRoster))
               return (
                 <div key={k} className="stat">
                   <p className="stat-label">{label}</p>

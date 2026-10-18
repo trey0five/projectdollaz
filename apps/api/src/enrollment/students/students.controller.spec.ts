@@ -17,6 +17,7 @@
 import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import type { User } from '@finrep/db'
+import { ROLES_KEY } from '../../common/decorators/roles.decorator.js'
 import { StudentsController } from './students.controller.js'
 import type { StudentsService } from './students.service.js'
 
@@ -73,5 +74,36 @@ describe('StudentsController.importCommit — parity with the one-step upload', 
     const rows = [{ firstName: 'Ada', lastName: 'Lovelace', grade: '3' }]
     await controller.importCommit(SCHOOL, { mode: 'replace', rows } as never, USER)
     expect(importCommit.mock.calls[0]!.slice(0, 4)).toEqual([USER, SCHOOL, 'replace', rows])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHO MAY READ NAMED STUDENT ROWS (privacy review round 6). The register list
+// returns each student's name beside their ISP / 504 / ELL flags, and its
+// `total` is exact for any filter — ?flags=plan504 is the 504 list, by name.
+// A viewer (the Board/Leadership lens the aggregate gate is designed around)
+// therefore reads the roster ONLY through the suppressed aggregate; the list
+// and the record read are owner/accountant, the line academics already draws
+// for named results. Pinned on the route metadata the RolesGuard enforces.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('StudentsController — the register is not a viewer door', () => {
+  const rolesOf = (method: keyof StudentsController) =>
+    Reflect.getMetadata(ROLES_KEY, StudentsController.prototype[method] as object) as string[] | undefined
+
+  it('★ the register list and a single record are owner/accountant only', () => {
+    expect(rolesOf('list')).toEqual(['owner', 'accountant'])
+    expect(rolesOf('get')).toEqual(['owner', 'accountant'])
+  })
+
+  it('the suppressed aggregate stays viewer-readable — it is the viewer’s roster view', () => {
+    expect(rolesOf('aggregate')).toEqual(['owner', 'accountant', 'viewer'])
+  })
+
+  it('no route that returns or changes a named record admits a viewer', () => {
+    const named: (keyof StudentsController)[] = ['list', 'get', 'create', 'update', 'remove', 'batch', 'clear', 'importPreview', 'importCommit']
+    for (const m of named) {
+      if (typeof StudentsController.prototype[m] !== 'function') continue
+      expect(rolesOf(m), String(m)).not.toContain('viewer')
+    }
   })
 })

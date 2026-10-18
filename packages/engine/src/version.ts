@@ -1,5 +1,10 @@
 // Engine + chart/mapping versions surfaced in ReportMeta.
-export const ENGINE_VERSION = '0.1.0'
+// 0.1.0 → 0.2.0: the Statement of Cash Flows changed. Investing reads GROSS
+// property on a non-legacy chart (net property double-counted depreciation), and
+// the depreciation add-back falls back to the accumulated-depreciation movement
+// when a chart carries no depreciation-expense row (QuickBooks-shaped and
+// mis-mapped charts). Snapshots stamped 0.1.0 were computed the old way.
+export const ENGINE_VERSION = '0.2.0'
 export const MAPPING_VERSION = 'map-v1'
 // scoa-v2 — the chart gained a BALANCE-SHEET vocabulary and the two legacy
 // description splits (accounts 120 and 200) became chart data. Bumped because

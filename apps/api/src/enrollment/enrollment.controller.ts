@@ -24,6 +24,7 @@ import { EnrollmentService, type UploadedRosterFile } from './enrollment.service
 import { RosterUploadService } from './roster-upload.service.js'
 import { EnrollmentAnalyticsService } from './analytics/enrollment-analytics.service.js'
 import { EnrollmentAnalyticsQueryDto } from './analytics/dto/enrollment-analytics.dto.js'
+import { suppressDemographicsView } from './students/aggregate-suppression.js'
 import {
   EnrollmentCallbackDto,
   EnrollmentConnectKeyDto,
@@ -227,14 +228,21 @@ export class EnrollmentController {
     return this.enrollmentAnalytics.analytics(schoolId, query)
   }
 
-  /** Latest-snapshot demographic + grade mix (shares + diversity). Read-open. */
+  /**
+   * Latest demographic + grade mix. Read-open (viewer included), so it leaves
+   * SUPPRESSED (privacy review round 4): the service's view is raw counts, plain
+   * shares and the plain diversity index for its internal consumer, and the
+   * route used to return it as-is — MENA 3 and its share beside totalEnrolled,
+   * the very cells the analytics card and KYRO hide. It now makes the same
+   * enrolled-population decision they make (suppressDemographicsView).
+   */
   @Get('demographics')
   @Roles('owner', 'accountant', 'viewer')
-  demographics(
+  async demographics(
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @Query('periodId') periodId?: string,
   ) {
-    return this.enrollment.demographics(schoolId, periodId)
+    return suppressDemographicsView(await this.enrollment.demographics(schoolId, periodId))
   }
 
   /** Revert a manual-supersede: restore the backed-up hand-entered enrollment. */

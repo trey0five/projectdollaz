@@ -87,11 +87,21 @@ export function isSuppressedCell(n) {
   return !!n && typeof n === 'object' && n.suppressed === true
 }
 
+/** True when the server hid this cell only to PROTECT a small neighbour
+ *  (`{ suppressed: true, reason: 'complementary' }`) — it is not small itself,
+ *  e.g. "Any support flag" when one flag is under the floor. */
+export function isComplementaryCell(n) {
+  return isSuppressedCell(n) && n.reason === 'complementary'
+}
+
 /** FERPA min-cell display rule. The students/aggregate API now suppresses small
  *  attribute cells SERVER-side (they arrive as `{ suppressed: true }`, no value)
- *  — those render '<5'. The numeric branch stays as the client display rule for
- *  surfaces still receiving true counts. Never applied to headline KPI totals. */
+ *  — those render '<5'. A COMPLEMENTARY cell renders 'withheld', never '<5'
+ *  (printing '<5' over a 25 would be a lie). The numeric branch stays as the
+ *  client display rule for surfaces still receiving true counts. Never applied
+ *  to headline KPI totals. */
 export function formatMinCell(n) {
+  if (isComplementaryCell(n)) return 'withheld'
   if (isSuppressedCell(n)) return '<5'
   const v = Number(n) || 0
   return v > 0 && v < 5 ? '<5' : String(v)

@@ -628,7 +628,7 @@ export default function EnrollmentAnalytics({
             <WhatThisMeasures
               scope={sourceScope}
               reduce={reduce}
-              note={`Support flags are hidden hard: with fewer than ${minCell} students a flag identifies a child by name to anyone who knows the school.`}
+              note={`Support flags are hidden hard: with fewer than ${minCell} students a flag identifies a child by name to anyone who knows the school. When one flag is hidden, “Any support flag” is withheld too — otherwise subtracting the other flags from it would give the hidden one away.`}
             >
               Counts of students carrying each support flag on{' '}
               <strong className="font-semibold text-navy">your own register</strong>, and how that register breaks down

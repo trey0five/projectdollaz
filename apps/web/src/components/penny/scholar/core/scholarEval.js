@@ -347,7 +347,34 @@ export function confettiAt(t, seed = 1) {
 // ── the live driver ────────────────────────────────────────────────────────
 
 const LANDING_MS = STATES.landing.dur
-const MIRROR_MS = 160
+export const MIRROR_MS = 160
+
+/**
+ * The narrowest the owl ever gets mid-turn, as a share of its full width.
+ *
+ * The turn used to be a plain scaleX tween from −1 to 1, which passes through
+ * 0: for a frame the owl was a paper-thin sliver (seen in the film rig, z2_end
+ * frame 49, landing after a flight left). Now the turn narrows only to a
+ * three-quarter-ish pose, SNAPS the mirror at the midpoint, and widens back out
+ * the other way — at no moment narrower than this.
+ */
+export const MIN_TURN_SCALE = 0.38
+
+/**
+ * Horizontal scale of the `flip` group for a mirror tween value m ∈ [−1, 1]
+ * (−1 = facing left, 1 = facing right). Pure: the same m always gives the same
+ * scale, so the film rig's frame-exact seeks stay deterministic.
+ *
+ * |scale| = MIN_TURN_SCALE + (1 − MIN_TURN_SCALE)·|m| — continuous in width,
+ * full width at rest — and the sign snaps where m crosses 0. At m = 0 exactly
+ * the owl takes the side it is turning TOWARD (`toward`), so a turn never
+ * shows the old side for its narrowest frame.
+ */
+export function turnScale(m, toward = 1) {
+  const mag = Math.min(1, Math.abs(m))
+  const sign = m < 0 ? -1 : m > 0 ? 1 : toward < 0 ? -1 : 1
+  return sign * (MIN_TURN_SCALE + (1 - MIN_TURN_SCALE) * mag)
+}
 const GAZE_MS = 380
 const MAX_EVENTS = 6
 const HELD_LANDING_MS = 240
@@ -460,7 +487,7 @@ export function createScholarAnimator({ seed = 1, fidget = 'some' } = {}) {
     retarget(s.gaze, now, GAZE_MS, airborne ? 0 : facing)
     const m = inp.reduced ? 1 : tween(s.mirror, now, MIRROR_MS)
     const g = inp.reduced ? 0 : tween(s.gaze, now, GAZE_MS)
-    pose.parts.flip.sx = Math.abs(m) < 0.02 ? (m < 0 ? -0.02 : 0.02) : m
+    pose.parts.flip.sx = turnScale(m, s.mirror.to)
     if (g) {
       pose.parts.pupilL.x += 4.5 * g
       pose.parts.pupilR.x += 4.5 * g
