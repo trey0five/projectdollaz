@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KYRO v4 — c0_rivals</title>
+<link rel="stylesheet" href="rig.css">
+<style>
+  .tile { position: absolute; left: 0; top: 0; width: 420px; height: 140px; margin: -70px 0 0 -210px; border-radius: 26px;
+          display: grid; place-items: center; font: 600 50px/1 var(--font-body); letter-spacing: -0.005em; color: #fff; white-space: nowrap;
+          background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06));
+          border: 1.5px solid rgba(255,255,255,0.24);
+          box-shadow: 0 24px 60px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.28);
+          backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); will-change: transform, opacity; }
+  .tile .rim { position: absolute; inset: -1.5px; border-radius: 26px; border: 2px solid rgba(124,232,245,0.95); box-shadow: 0 0 40px rgba(86,222,236,0.45); opacity: 0; }
+  .tile .g { position: absolute; width: 34px; height: 34px; opacity: 0; }
+  .tile .lock { right: 18px; top: 14px; }
+  .tile .bars { right: 18px; bottom: 14px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" class="full" width="1920" height="1080"></canvas>
+  <div id="tiles" class="layer"></div>
+  <canvas id="fx" class="full" width="1920" height="1080"></canvas>
+  <div class="tm" id="tm">Product names are trademarks of their respective owners. KYRO is not affiliated with or endorsed by them.</div>
+</div>
+<script type="module">
+import { boot } from './lib/stage.js'
+import { loadVO } from './lib/timing.js'
+import { paintNavy, paintMotes, drawRibbon, spineThrough } from './lib/ribbons.js'
+import { ramp, lin, lerp, clamp, easeOut, easeInOut, backOut, hash, smooth } from './lib/util.js'
+
+// Names only (no captions, no logos). Spoken order = Version A of the line.
+const NAMES = [
+  ['Blackbaud', 'blackbaud', 1, [560, 330]],
+  ['FACTS', 'facts', 1, [1370, 320]],
+  ['Veracross', 'veracross', 1, [380, 600]],
+  ['PowerSchool', 'powerschool', 1, [1540, 590]],
+  ['Sage Intacct', 'sage', 1, [640, 830]],
+  ['BoardEffect', 'board', 1, [1290, 840]],
+]
+const LOCK = '<svg class="g lock" viewBox="0 0 34 34" fill="none" stroke="rgba(214,246,255,0.95)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="15" width="20" height="14" rx="3.5"/><path d="M11.5 15v-3.5a5.5 5.5 0 0 1 11 0V15"/></svg>'
+const bars = (i) => {
+  const h = [0, 1, 2].map((k) => 7 + Math.round(hash(77, i, k) * 18))
+  return `<svg class="g bars" viewBox="0 0 34 34" fill="rgba(124,232,245,0.95)">${h.map((v, k) => `<rect x="${4 + k * 10}" y="${30 - v}" width="7" height="${v}" rx="2"/>`).join('')}</svg>`
+}
+
+boot(async ({ alpha }) => {
+  const vo = await loadVO('c0_rivals', { minSec: 14 })
+  const $ = (id) => document.getElementById(id)
+  const bg = $('bg').getContext('2d')
+  const fx = $('fx').getContext('2d')
+  const B = {
+    each: vo.beat('each'),
+    possibly: vo.beat('possibly'),
+    but: vo.beat('but'),
+    juggle: vo.beat('juggle'),
+    logins: vo.beat('logins'),
+    versions: vo.beat('versions'),
+    truth: vo.beat('truth'),
+    nobody: vo.beat('nobody'),
+    read: vo.beat('read'),
+    all: vo.beat('all'),
+    voEnd: vo.words[vo.words.length - 1].te,
+  }
+  const STACK = [960, 560]
+  const PILE = [[-175, -75, -9], [160, -100, 7], [-55, 18, 4], [195, 42, -6], [-185, 100, 6], [70, 128, -4]]
+  const tiles = NAMES.map(([label, word, occ, slot], i) => {
+    const el = document.createElement('div')
+    el.className = 'tile'
+    el.innerHTML = `<div class="rim"></div>${label}${LOCK}${bars(i)}`
+    $('tiles').appendChild(el)
+    return {
+      el,
+      rim: el.querySelector('.rim'),
+      lock: el.querySelector('.lock'),
+      bars: el.querySelector('.bars'),
+      at: vo.beat(word, occ) - 0.08,
+      slot,
+      // where it lands in the messy stack
+      pile: [STACK[0] + PILE[i][0], STACK[1] + PILE[i][1], PILE[i][2]],
+      // where it drifts when nobody reads it
+      loose: [lerp(330, 1590, hash(9, i, 1)), lerp(250, 880, hash(9, i, 2)), (hash(9, i, 3) - 0.5) * 34],
+    }
+  })
+  // When nobody reads them they drift apart onto two lines: the paths of the
+  // two ribbons they become (each tile waits at its spot on a ribbon's spine).
+  const RA = spineThrough([[-260, 720], [300, 470], [760, 600], [1180, 430], [1600, 330], [2180, 200]])
+  const RB = spineThrough([[-260, 1010], [380, 860], [860, 900], [1320, 760], [1720, 650], [2180, 560]])
+  const ON = [[RA, 0.27], [RB, 0.33], [RA, 0.5], [RB, 0.56], [RA, 0.72], [RB, 0.78]]
+  tiles.forEach((T, i) => {
+    const [sp, u] = ON[i]
+    const [x, y] = sp(u)
+    const [x2, y2] = sp(u + 0.01)
+    T.loose = [x, y, (Math.atan2(y2 - y, x2 - x) * 180) / Math.PI * 0.6]
+    T.on = ON[i]
+  })
+
+  // juggling: a cascade above the stack, slowing to a stop as "nobody … reads them all"
+  const J0 = B.juggle - 0.1
+  const JSLOW = B.nobody - 0.2
+  const JSTOP = B.read
+  const PERIOD = 2.3
+  const jPhase = (t) => {
+    if (t <= J0) return 0
+    const a = Math.min(t, JSLOW) - J0
+    let p = a / PERIOD
+    if (t > JSLOW) {
+      const d = Math.min(t, JSTOP) - JSLOW
+      const L = JSTOP - JSLOW
+      p += (d - (d * d) / (2 * L)) / PERIOD
+    }
+    return p
+  }
+  const cascade = (p, i) => {
+    const q0 = (((p + i / 6) % 1) + 1) % 1
+    const left = q0 < 0.5
+    const q = left ? q0 / 0.5 : (q0 - 0.5) / 0.5
+    const xa = left ? 960 - 430 : 960 + 430
+    const xb = left ? 960 + 430 : 960 - 430
+    const x = lerp(xa, xb, q)
+    const y = 830 - 4 * (left ? 520 : 430) * q * (1 - q)
+    const r = (left ? 1 : -1) * Math.sin(q * Math.PI) * 16
+    return [x, y, r]
+  }
+
+  const FAN = B.all - 0.25
+  const headA = (t) => 1.15 * easeOut(lin(t, FAN, FAN + 1.25), 1.6)
+  const headB = (t) => 1.15 * easeOut(lin(t, FAN + 0.2, FAN + 1.4), 1.6)
+  function render(t) {
+    // backdrop: the monitor's navy, a slow push in, drifting motes
+    bg.clearRect(0, 0, 1920, 1080)
+    if (!alpha) {
+      paintNavy(bg, 1920, 1080)
+      bg.save()
+      const z = 1 + 0.05 * easeOut(lin(t, 0, 2.2))
+      bg.translate(960, 540)
+      bg.scale(z, z)
+      bg.translate(-960, -540)
+      paintMotes(bg, t, { n: 80, seed: 2, alpha: 0.9, drift: 10 })
+      bg.restore()
+    }
+    const jp = jPhase(t)
+    tiles.forEach((T, i) => {
+      // 1. pops up in its own spot as it is named
+      const inK = lin(t, T.at, T.at + 0.42)
+      if (inK <= 0) {
+        T.el.style.opacity = '0'
+        return
+      }
+      let [x, y] = T.slot
+      let r = 0
+      let s = 0.86 + 0.14 * backOut(inK, 2)
+      let o = easeOut(inK, 2)
+      let bright = 1
+      // 2. dims and slides into the messy stack
+      const toPile = easeInOut(lin(t, T.at + 0.55, T.at + 1.25))
+      x = lerp(x, T.pile[0], toPile)
+      y = lerp(y, T.pile[1], toPile)
+      r = lerp(0, T.pile[2], toPile)
+      bright = lerp(1, 0.86, toPile)
+      o *= lerp(1, 0.86, toPile)
+      // 3. "each may do its own job well": each lifts in turn
+      const lt = B.each + 0.1 + i * 0.42
+      const lift = Math.sin(Math.PI * clamp((t - lt) / 0.7)) * (t > lt && t < lt + 0.7 ? 1 : 0)
+      y -= lift * 22
+      bright += lift * 0.25
+      // 4. "but juggle several tools": a cascade
+      const jIn = easeInOut(lin(t, J0 + i * 0.07, J0 + i * 0.07 + 0.65))
+      if (jIn > 0) {
+        const [cx, cy, cr] = cascade(jp, i)
+        x = lerp(x, cx, jIn)
+        y = lerp(y, cy, jIn)
+        r = lerp(r, cr, jIn)
+        s *= lerp(1, 0.74, jIn)
+        bright = lerp(bright, 1, jIn)
+        o = lerp(o, easeOut(inK, 2), jIn)
+      }
+      // 5. "nobody whose job is to read them all": they drift apart and fade
+      const lo = easeInOut(lin(t, JSLOW + i * 0.06, JSTOP + 0.2 + i * 0.06))
+      if (lo > 0) {
+        x = lerp(x, T.loose[0], lo)
+        y = lerp(y, T.loose[1], lo)
+        r = lerp(r, T.loose[2], lo)
+        s = lerp(s, 0.7, lo)
+        bright = lerp(bright, 0.8, lo)
+        o *= lerp(1, 0.55, lo)
+      }
+      // 6. as each ribbon's head passes a tile, the tile stretches into it and is gone
+      const [sp, u] = T.on
+      const hd = sp === RA ? headA(t) : headB(t)
+      const fan = easeInOut(clamp((hd - (u - 0.06)) / 0.14))
+      let sx = 1
+      let sy = 1
+      if (fan > 0) {
+        const [x2, y2] = sp(Math.min(1, u + 0.08))
+        x = lerp(x, x2, fan)
+        y = lerp(y, y2, fan)
+        sx = 1 + 2.6 * fan
+        sy = 1 - 0.85 * fan
+        o *= 1 - fan
+      }
+      T.el.style.opacity = o.toFixed(3)
+      T.el.style.filter = `brightness(${bright.toFixed(3)})${fan > 0 ? ` blur(${(fan * 10).toFixed(1)}px)` : ''}`
+      T.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${r.toFixed(2)}deg) scale(${(s * sx).toFixed(4)}, ${(s * sy).toFixed(4)})`
+      T.el.style.zIndex = String(jIn > 0 ? Math.round(100 + cascade(jp, i)[1] / -10) : i)
+      // naming flash
+      T.rim.style.opacity = String(Math.max(0, 1 - lin(t, T.at + 0.15, T.at + 0.8)) * (inK > 0 ? 1 : 0))
+      // "several logins", "several versions of the truth"
+      const lk = lin(t, B.logins - 0.25 + i * 0.06, B.logins + 0.1 + i * 0.06)
+      T.lock.style.opacity = String(backOut(lk) * (1 - fan))
+      T.lock.style.transform = `scale(${(0.5 + 0.5 * backOut(lk, 2.4)).toFixed(3)})`
+      const vk = lin(t, B.versions - 0.2 + i * 0.07, B.versions + 0.15 + i * 0.07)
+      T.bars.style.opacity = String(backOut(vk) * (1 - fan))
+      T.bars.style.transform = `scale(${(0.5 + 0.5 * backOut(vk, 2.4)).toFixed(3)})`
+    })
+    // the ribbons the tiles stream into
+    fx.clearRect(0, 0, 1920, 1080)
+    const ha = headA(t)
+    if (ha > 0) drawRibbon(fx, RA, Math.max(0, ha - 0.8), Math.min(1, ha), t, { seed: 11, strands: 7, spread: 26, alpha: 1, particles: 140, width: 2.8 })
+    const hb = headB(t)
+    if (hb > 0) drawRibbon(fx, RB, Math.max(0, hb - 0.8), Math.min(1, hb), t, { seed: 12, strands: 6, spread: 22, alpha: 0.9, particles: 100, width: 2.6 })
+    // trademark line while any name is on screen
+    $('tm').style.opacity = String(Math.min(ramp(t, tiles[0].at, tiles[0].at + 0.5), 1 - ramp(t, FAN, FAN + 0.6)))
+  }
+  return {
+    sec: vo.sceneSec,
+    render,
+    dbg: () => null,
+    meta: { scene: 'c0_rivals', voSource: vo.source, voFingerprint: vo.fingerprint, voDuration: vo.dur, estimated: vo.estimated, names: tiles.map((t) => +t.at.toFixed(3)), beats: Object.fromEntries(Object.entries(B).map(([k, v]) => [k, +v.toFixed(3)])) },
+  }
+})
+</script>
+</body>
+</html>

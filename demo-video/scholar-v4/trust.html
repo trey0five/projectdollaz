@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KYRO v4 — z1_trust</title>
+<link rel="stylesheet" href="rig.css">
+<style>
+  .blob { position: absolute; border-radius: 50%; filter: blur(110px); }
+  #kicker { position: absolute; left: 0; right: 0; top: 300px; text-align: center; font: 600 24px/1 var(--font-body); letter-spacing: 0.3em; text-transform: uppercase; color: rgba(200,230,255,0.8); }
+  #grid { position: absolute; display: grid; grid-template-columns: 700px 700px; gap: 28px; }
+  .claim { position: relative; height: 190px; border-radius: 26px; padding: 0 36px 0 30px; display: flex; align-items: center; gap: 28px;
+           background: linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.035)); border: 1.5px solid rgba(255,255,255,0.14);
+           box-shadow: 0 20px 60px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12); }
+  .claim .glow { position: absolute; inset: -1.5px; border-radius: 26px; border: 1.5px solid rgba(124,214,255,0.85); box-shadow: 0 0 36px rgba(86,222,236,0.28), inset 0 0 30px rgba(86,222,236,0.08); opacity: 0; }
+  .ic { flex: none; width: 104px; height: 104px; border-radius: 28px; display: grid; place-items: center;
+        background: linear-gradient(145deg, #2f6bff, #1b3fae); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 30px rgba(20,60,180,0.35); }
+  .ic svg { width: 56px; height: 56px; }
+  .tx h3 { font: 600 41px/1.08 var(--font-display); color: #fff; letter-spacing: 0; }
+  .tx p { margin-top: 10px; font: 500 25px/1.2 var(--font-body); color: rgba(214,234,255,0.82); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" class="full" width="1920" height="1080"></canvas>
+  <div class="blob" id="b1" style="width:900px;height:700px;background:rgba(37,99,235,0.42)"></div>
+  <div class="blob" id="b2" style="width:800px;height:600px;background:rgba(14,165,233,0.26)"></div>
+  <div id="kicker">Privacy &amp; security</div>
+  <div id="grid"></div>
+  <div id="owls" class="layer"></div>
+</div>
+<script type="module">
+import { boot } from './lib/stage.js'
+import { loadVO } from './lib/timing.js'
+import { createFilmOwl } from './lib/owl.js'
+import { paintNavy, paintMotes } from './lib/ribbons.js'
+import { ramp, easeOut, lin } from './lib/util.js'
+
+const I = {
+  shield: '<path d="M28 6 46 13v14c0 11.5-7.6 20.6-18 24-10.4-3.4-18-12.5-18-24V13Z"/><path d="m20 28 6 6 11-12"/>',
+  noperson: '<circle cx="28" cy="20" r="8"/><path d="M13 47c1.6-8.2 7.6-13 15-13s13.4 4.8 15 13"/><path d="M9 9l38 38"/>',
+  lock: '<rect x="12" y="24" width="32" height="24" rx="5"/><path d="M19 24v-6a9 9 0 0 1 18 0v6"/><circle cx="28" cy="36" r="3"/>',
+  server: '<rect x="10" y="9" width="36" height="15" rx="4"/><rect x="10" y="32" width="36" height="15" rx="4"/><circle cx="18" cy="16.5" r="1.8"/><circle cx="18" cy="39.5" r="1.8"/><path d="M26 16.5h13M26 39.5h13"/>',
+}
+// The four approved claims (landingContent.js / PrivacyPage.jsx wording).
+const CLAIMS = [
+  { icon: 'shield', title: 'Built to FERPA standards', sub: 'FERPA-aligned by contract', at: ['built', 1], subAt: ['ferpaaligned', 1] },
+  { icon: 'noperson', title: 'No student-facing surfaces', sub: 'So COPPA does not apply', at: ['no', 1], subAt: ['so', 1] },
+  { icon: 'lock', title: 'Encrypted', sub: 'In transit and at rest', at: ['encrypted', 1], subAt: ['in', 1] },
+  { icon: 'server', title: 'Hosted on AWS', sub: 'In the United States', at: ['hosted', 1], subAt: ['in', 2] },
+]
+
+boot(async ({ alpha }) => {
+  const vo = await loadVO('z1_trust', { minSec: 9 })
+  const $ = (id) => document.getElementById(id)
+  const bg = $('bg').getContext('2d')
+  const grid = $('grid')
+  const GW = 700 * 2 + 28
+  const OWL = 168
+  const OWLW = OWL * 0.727
+  const left = Math.round((1920 - (GW + 64 + OWLW)) / 2)
+  Object.assign(grid.style, { left: left + 'px', top: '374px' })
+  const cards = CLAIMS.map((c) => {
+    const el = document.createElement('div')
+    el.className = 'claim'
+    el.innerHTML = `<div class="glow"></div><div class="ic"><svg viewBox="0 0 56 56" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">${I[c.icon]}</svg></div><div class="tx"><h3>${c.title}</h3><p>${c.sub}</p></div>`
+    grid.appendChild(el)
+    return { el, glow: el.querySelector('.glow'), p: el.querySelector('p'), at: vo.beat(...c.at) - 0.1, subAt: vo.beat(...c.subAt) - 0.1 }
+  })
+  await new Promise((r) => requestAnimationFrame(r))
+  const gr = grid.getBoundingClientRect()
+  const PERCH = { x: gr.right + 64 + OWLW / 2, y: gr.bottom + 2 }
+  const owl = createFilmOwl($('owls'), {
+    uid: 'z1',
+    baseSize: OWL,
+    seed: 5,
+    script: (t) => {
+      // eyes follow the claim being read: up-left for the top row, left for the bottom
+      return { x: PERCH.x, y: PERCH.y, size: OWL, phase: 'perched', facing: t > cards[0].at ? -1 : 0 }
+    },
+  })
+
+  function render(t) {
+    bg.clearRect(0, 0, 1920, 1080)
+    if (!alpha) {
+      paintNavy(bg, 1920, 1080)
+      paintMotes(bg, t, { n: 70, seed: 21, alpha: 0.7, drift: 12 })
+    }
+    $('b1').style.transform = `translate(${-160 + Math.sin(t * 0.3) * 60}px, ${-120 + Math.sin(t * 0.25) * 40}px)`
+    $('b2').style.transform = `translate(${1260 + Math.sin(t * 0.27) * 70}px, ${560 + Math.sin(t * 0.33) * 50}px)`
+    const kk = ramp(t, 0.0, 0.6)
+    $('kicker').style.opacity = String(kk)
+    for (const c of cards) {
+      const k = lin(t, c.at, c.at + 0.5)
+      const e = easeOut(k, 3)
+      c.el.style.opacity = String(0.22 + 0.78 * e)
+      c.el.style.transform = `translateY(${(1 - e) * 16}px) scale(${0.985 + 0.015 * e})`
+      // the glow marks the claim being spoken, then settles to a faint edge
+      const live = Math.min(ramp(t, c.at, c.at + 0.4), 1 - 0.7 * ramp(t, c.at + 2.2, c.at + 3.0))
+      c.glow.style.opacity = String(live)
+      c.p.style.opacity = String(ramp(t, c.subAt - 0.05, c.subAt + 0.4))
+    }
+    owl.seek(t)
+  }
+  return {
+    sec: vo.sceneSec,
+    render,
+    dbg: () => ({ owl: owl.state }),
+    meta: { scene: 'z1_trust', voSource: vo.source, voFingerprint: vo.fingerprint, voDuration: vo.dur, estimated: vo.estimated, beats: cards.map((c) => [+c.at.toFixed(3), +c.subAt.toFixed(3)]) },
+  }
+})
+</script>
+</body>
+</html>

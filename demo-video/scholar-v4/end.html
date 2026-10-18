@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KYRO v4 — z2_end</title>
+<link rel="stylesheet" href="rig.css">
+<style>
+  #lockup { position: absolute; left: 715px; top: 64px; width: 490px; height: 454px; overflow: hidden; }
+  #lockup img { position: absolute; width: 551.6px; height: 551.6px; left: -30.8px; top: -26.4px; } /* kyro-logo.png ×0.44, cropped to mark + wordmark */
+  #tagline { position: absolute; left: 0; right: 0; top: 548px; text-align: center; font: 500 30px/1 var(--font-body); letter-spacing: 0.05em; color: #d4e8ff; }
+  .chips { position: absolute; left: 0; right: 0; display: flex; justify-content: center; gap: 22px; }
+  .chip { position: relative; height: 66px; padding: 0 34px 0 30px; border-radius: 33px; display: flex; align-items: center; gap: 14px;
+          font: 600 27px/1 var(--font-body); letter-spacing: 0.01em; white-space: nowrap;
+          border: 1.5px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.035); color: rgba(255,255,255,0.36); }
+  .chip i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.22); flex: none; }
+  .chip .lit { position: absolute; inset: -1.5px; border-radius: 33px; opacity: 0; }
+  .chip span, .chip i { position: relative; }
+  #url { position: absolute; left: 0; right: 0; top: 858px; text-align: center; font: 600 54px/1 var(--font-body); letter-spacing: 0.015em; color: #fff; }
+  #url b { font-weight: 600; background: linear-gradient(90deg, #7cc8ff, #ffb86b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" class="full" width="1920" height="1080"></canvas>
+  <canvas id="fx" class="full" width="1920" height="1080"></canvas>
+  <div id="lockup"><img src="/apps/web/public/kyro-logo.png" alt=""></div>
+  <div id="tagline">The operating platform for independent schools</div>
+  <div class="chips" id="row1" style="top:628px"></div>
+  <div class="chips" id="row2" style="top:716px"></div>
+  <div id="url">our<b>kyro</b>.com</div>
+  <div id="owls" class="layer"></div>
+</div>
+<script type="module">
+import { boot } from './lib/stage.js'
+import { loadVO } from './lib/timing.js'
+import { createFilmOwl, flightPhase, moodAt } from './lib/owl.js'
+import { paintNavy, paintMotes, drawRibbon, sineSpine } from './lib/ribbons.js'
+import { keyPath, ramp, lin, clamp, backOut, rgba, mix, easeOut, window01 } from './lib/util.js'
+
+// The nine modules, in the order they are spoken, in their locked home-tile hues.
+const MODULES = [
+  ['finance', 'Finance', '#2563EB', 'Finance'],
+  ['enrollment', 'Enrollment', '#0EA5E9', 'Enrollment'],
+  ['academics', 'Academics', '#0D9488', 'Academics'],
+  ['accreditation', 'Accreditation', '#F59E0B', 'Accreditation'],
+  ['governance', 'Governance', '#7C3AED', 'Governance'],
+  ['facilities', 'Facilities', '#EA580C', 'facilities'],
+  ['advancement', 'Advancement', '#E11D48', 'advancement'],
+  ['hr', 'HR', '#059669', 'H'],
+  ['strategy', 'Strategic planning', '#4F46E5', 'strategic'],
+]
+
+boot(async ({ alpha }) => {
+  const vo = await loadVO('z2_end', { minSec: 14 })
+  const $ = (id) => document.getElementById(id)
+  const bg = $('bg').getContext('2d')
+  const fx = $('fx').getContext('2d')
+
+  // chips
+  const chips = MODULES.map(([key, label, hue, word], i) => {
+    const el = document.createElement('div')
+    el.className = 'chip'
+    el.innerHTML = `<div class="lit"></div><i></i><span>${label}</span>`
+    $(i < 4 ? 'row1' : 'row2').appendChild(el)
+    const lit = el.querySelector('.lit')
+    lit.style.background = `linear-gradient(135deg, ${hue}, ${mix(hue, '#ffffff', 0.18)})`
+    lit.style.boxShadow = `0 0 46px ${rgba(hue, 0.55)}, inset 0 1px 0 rgba(255,255,255,0.35)`
+    return { el, lit, dot: el.querySelector('i'), span: el.querySelector('span'), hue, at: vo.beat(word) }
+  })
+  await new Promise((r) => requestAnimationFrame(r))
+  for (const c of chips) {
+    const r = c.el.getBoundingClientRect()
+    c.cx = r.left + r.width / 2
+    c.top = r.top
+  }
+
+  const T = {
+    reads: vo.beat('reads'),
+    today: vo.beatEnd('today'),
+    whether: vo.beat('whether'),
+    toss: vo.beat('this') - 0.12, // the cap leaves on "…platform for you"
+    platform2: vo.beat('platform', 2),
+    cairo: vo.beat('cairo', 1),
+    our: vo.beat('our'),
+  }
+  const SPINE = { x: 960, y: 64 + (833 - 60) * (490 / 1114) } // the book's spine in the lockup
+  const PERCH = { x: 1398, y: 513 }
+  const path = keyPath(
+    [
+      { t: 0.0, x: 2140, y: 150, size: 196 },
+      { t: 0.75, x: 1730, y: 250, size: 226 },
+      { t: 1.55, x: PERCH.x, y: PERCH.y, size: 248 },
+    ],
+    (u) => u,
+  )
+  const fly = flightPhase(path, 0, 1.55, 0.3)
+  const moods = [
+    { t: T.toss, name: 'celebrate' },
+    { t: T.toss + 2.65, name: 'wink' },
+  ]
+  const owl = createFilmOwl($('owls'), {
+    uid: 'z2',
+    baseSize: 248,
+    seed: 23,
+    script: (t) => {
+      const f = fly(t)
+      if (f) return { ...f, mood: null, opacity: 1 }
+      return {
+        x: PERCH.x,
+        y: PERCH.y,
+        size: 248,
+        phase: 'perched',
+        facing: t < T.whether ? -1 : 0,
+        talking: vo.talkingAt(t),
+        mood: moodAt(t, moods),
+      }
+    },
+  })
+
+  function render(t) {
+    // backdrop
+    bg.clearRect(0, 0, 1920, 1080)
+    if (!alpha) {
+      paintNavy(bg, 1920, 1080)
+      paintMotes(bg, t, { n: 60, seed: 9, alpha: 0.8 })
+      drawRibbon(bg, sineSpine(-200, 2120, 985, 34, 1.1, t * 0.35, -60), 0, 1, t, { seed: 4, strands: 6, spread: 18, alpha: 0.55, particles: 80, width: 2.2 })
+    }
+    // chips light as they are spoken
+    for (const c of chips) {
+      const k = lin(t, c.at - 0.05, c.at + 0.3)
+      const pop = k > 0 && k < 1 ? backOut(k, 2.4) : k
+      const s = 1 + 0.07 * Math.sin(Math.PI * clamp(k)) * (k < 1 ? 1 : 0)
+      c.lit.style.opacity = String(k)
+      c.el.style.transform = `scale(${s.toFixed(4)})`
+      c.el.style.color = k > 0.3 ? '#fff' : ''
+      c.el.style.borderColor = k > 0 ? 'transparent' : ''
+      c.dot.style.background = k > 0 ? '#fff' : ''
+      c.span.style.opacity = String(0.999)
+      void pop
+    }
+    // "reads all of it": light runs from every chip to the book
+    fx.clearRect(0, 0, 1920, 1080)
+    const thread = window01(t, T.reads - 0.2, T.today + 0.9, 0.35, 0.8)
+    if (thread > 0) {
+      fx.save()
+      fx.globalCompositeOperation = 'lighter'
+      chips.forEach((c, i) => {
+        const x0 = c.cx
+        const y0 = c.top - 4
+        const cx = (x0 + SPINE.x) / 2 + (x0 - SPINE.x) * 0.15
+        const cy = 560
+        const draw = (a, b) => {
+          fx.beginPath()
+          const N = 40
+          for (let j = 0; j <= N; j++) {
+            const u = a + (b - a) * (j / N)
+            const x = (1 - u) * (1 - u) * x0 + 2 * (1 - u) * u * cx + u * u * SPINE.x
+            const y = (1 - u) * (1 - u) * y0 + 2 * (1 - u) * u * cy + u * u * SPINE.y
+            j ? fx.lineTo(x, y) : fx.moveTo(x, y)
+          }
+        }
+        draw(0, 1)
+        fx.strokeStyle = rgba(c.hue, 0.22 * thread)
+        fx.lineWidth = 2
+        fx.stroke()
+        // a pulse of light travelling up each thread
+        const ph = ((t - T.reads) * 0.9 + i * 0.11) % 1
+        if (t > T.reads - 0.2) {
+          const a = Math.max(0, ph - 0.12)
+          draw(a, ph)
+          fx.strokeStyle = rgba(mix(c.hue, '#ffffff', 0.45), 0.85 * thread)
+          fx.lineWidth = 3.2
+          fx.stroke()
+        }
+      })
+      fx.restore()
+    }
+    // lockup: a soft shimmer on "Cairo."
+    const sh = window01(t, T.cairo - 0.1, T.cairo + 1.3, 0.25, 0.9)
+    const lk = $('lockup').firstElementChild
+    lk.style.filter = sh > 0 ? `brightness(${(1 + 0.22 * sh).toFixed(3)}) drop-shadow(0 0 ${(26 * sh).toFixed(1)}px rgba(124,200,255,${(0.55 * sh).toFixed(3)}))` : ''
+    // tagline with the cap toss; URL on "our"
+    const tg = ramp(t, T.platform2 - 0.2, T.platform2 + 0.5)
+    $('tagline').style.opacity = String(tg)
+    $('tagline').style.transform = `translateY(${(1 - tg) * 14}px)`
+    const ur = ramp(t, T.our - 0.15, T.our + 0.45)
+    $('url').style.opacity = String(ur)
+    $('url').style.transform = `translateY(${(1 - easeOut(ur)) * 18}px)`
+    // the owl
+    owl.seek(t)
+  }
+
+  return {
+    sec: vo.sceneSec,
+    render,
+    dbg: () => ({ owl: owl.state }),
+    meta: { scene: 'z2_end', voSource: vo.source, voFingerprint: vo.fingerprint, voDuration: vo.dur, estimated: vo.estimated, beats: Object.fromEntries(Object.entries(T).map(([k, v]) => [k, +v.toFixed(3)])), chips: chips.map((c) => +c.at.toFixed(3)) },
+  }
+})
+</script>
+</body>
+</html>

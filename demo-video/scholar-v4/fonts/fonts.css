@@ -1,0 +1,4 @@
+/* Local copies of the app's Google fonts (variable latin subsets), so renders never depend on the network. */
+@font-face{font-family:'Montserrat';src:url('Montserrat-latin.woff2') format('woff2');font-weight:100 900;font-style:normal;}
+@font-face{font-family:'EB Garamond';src:url('EBGaramond-latin.woff2') format('woff2');font-weight:400 800;font-style:normal;}
+@font-face{font-family:'EB Garamond';src:url('EBGaramond-italic-latin.woff2') format('woff2');font-weight:400 800;font-style:italic;}

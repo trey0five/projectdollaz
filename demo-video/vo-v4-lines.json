@@ -1,0 +1,397 @@
+{
+ "source": "~/.cache/kyro-demo-v4/rev/vo_v4_rev.json (approved 2026-10-17; rivals Version A, altB dropped; f10 Florida IN)",
+ "lines": [
+  {
+   "id": "c0_open",
+   "chapter": "cold",
+   "storyboardSec": 8.7,
+   "mainCut": true,
+   "text": "Every school runs on a small team doing nine jobs at once — and staying late to make the spreadsheets agree.",
+   "minSec": 8.7
+  },
+  {
+   "id": "c0_rivals",
+   "chapter": "cold",
+   "storyboardSec": 23.0,
+   "mainCut": true,
+   "text": "Maybe your school runs on Blackbaud, FACTS, Veracross or PowerSchool, with Sage Intacct or BoardEffect alongside. Each may do its own job well — and possibly a bit more. But juggle several tools, and you can end up with several logins, several versions of the truth — and nobody whose job is to read them all.",
+   "minSec": 14
+  },
+  {
+   "id": "c0_meet",
+   "chapter": "cold",
+   "storyboardSec": 7,
+   "mainCut": true,
+   "text": "Until now. Meet Cairo.",
+   "minSec": 7
+  },
+  {
+   "id": "c0_promise",
+   "chapter": "cold",
+   "storyboardSec": 18,
+   "mainCut": true,
+   "text": "Cairo doesn't replace your accounting system or your S I S. It sits above them, reads what they produce, and tells you in plain English what needs you today. If you can drop a file and read a sentence, you can run Cairo.",
+   "minSec": 18
+  },
+  {
+   "id": "card1",
+   "chapter": "ch1",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "s1_home",
+   "chapter": "ch1",
+   "storyboardSec": 14.6,
+   "mainCut": true,
+   "text": "Every morning starts here. Your whole school on one screen, each area with a plain verdict: all clear, or what needs attention. Cairo has already read the books, the roster and the standards.",
+   "minSec": 10
+  },
+  {
+   "id": "s2_brief",
+   "chapter": "ch1",
+   "storyboardSec": 10,
+   "mainCut": true,
+   "text": "Press play, and Cairo reads you the morning brief: the few things that need a decision today, most urgent first.",
+   "minSec": 10
+  },
+  {
+   "id": "s3_showme",
+   "chapter": "ch1",
+   "storyboardSec": 12,
+   "mainCut": true,
+   "text": "Can't find something? Just ask. Cairo flies you to it — the exact button, the exact number — and tells you what it means. No manual. No training day.",
+   "minSec": 12
+  },
+  {
+   "id": "card2",
+   "chapter": "ch2",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "f1_drop",
+   "chapter": "ch2",
+   "storyboardSec": 16.1,
+   "mainCut": true,
+   "text": "Finance starts with the files you already have. Export your Profit and Loss and your Balance Sheet from QuickBooks, and drop them in together. Cairo sorts out which is which, and files every account it's sure of.",
+   "minSec": 12
+  },
+  {
+   "id": "f2_messy",
+   "chapter": "ch2",
+   "storyboardSec": 10.9,
+   "mainCut": true,
+   "text": "A file from another system that won't read cleanly? Cairo says so, shows you the top of your own file, and asks once where the numbers are.",
+   "minSec": 9
+  },
+  {
+   "id": "f3_review",
+   "chapter": "ch2",
+   "storyboardSec": 15.1,
+   "mainCut": true,
+   "text": "Anything it isn't sure about, it asks — once. A suggestion is already filled in; you just check it. Approve, press done, and watch your numbers light up, each with a door to everywhere it now lives.",
+   "minSec": 14
+  },
+  {
+   "id": "f4_verdict",
+   "chapter": "ch2",
+   "storyboardSec": 12.6,
+   "mainCut": true,
+   "text": "Every finance page opens with the answer, in a sentence, and every number is marked good, watch or at risk. When something is missing, Cairo says so. Never a zero.",
+   "minSec": 12
+  },
+  {
+   "id": "f5_statements",
+   "chapter": "ch2",
+   "storyboardSec": 14.0,
+   "mainCut": true,
+   "text": "Your four statements build themselves, with last year and the audit side by side. Click any line to see the accounts behind it, proof they tie out, the source file, and every change.",
+   "minSec": 13
+  },
+  {
+   "id": "f6_budget",
+   "chapter": "ch2",
+   "storyboardSec": 14,
+   "mainCut": true,
+   "text": "Budget against actual reads as one picture: the plan, what moved it, and where you landed. No budget yet? Answer five plain questions, and Cairo drafts one as you type.",
+   "minSec": 14
+  },
+  {
+   "id": "f7_cash",
+   "chapter": "ch2",
+   "storyboardSec": 18.0,
+   "mainCut": true,
+   "text": "Then the question that keeps business offices up at night: when does cash run low? Enter the cash you can spend today, and Cairo builds the forecast from your budget and your commitments. The answer comes back as a sentence and a date. Add an expected gift, and every figure recounts.",
+   "minSec": 16
+  },
+  {
+   "id": "f8_analytics",
+   "chapter": "ch2",
+   "storyboardSec": 14,
+   "mainCut": true,
+   "text": "Analytics tells the story three ways: in plain English, in charts, and on a scorecard. Then see where you rank among comparable schools, or every campus on one scale.",
+   "minSec": 14
+  },
+  {
+   "id": "f9_board",
+   "chapter": "ch2",
+   "storyboardSec": 16,
+   "mainCut": true,
+   "text": "When the finance committee meets, the packet assembles itself. Add a note where a line moved, and Cairo drafts the management discussion from the variances. Nothing is retyped.",
+   "minSec": 16
+  },
+  {
+   "id": "f10_readiness",
+   "chapter": "ch2",
+   "storyboardSec": 12.6,
+   "mainCut": true,
+   "text": "Florida schools can run the scholarship audit self-check months early: what triggers the C P A review, what to reconcile, and what to fix before the report is due.",
+   "minSec": 10
+  },
+  {
+   "id": "card3",
+   "chapter": "ch3",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "e1_overview",
+   "chapter": "ch3",
+   "storyboardSec": 13,
+   "mainCut": true,
+   "text": "Enrollment starts with the count that matters: students enrolled against your plan, grade by grade — and what needs a look, before you open a single chart.",
+   "minSec": 13
+  },
+  {
+   "id": "e2_in",
+   "chapter": "ch3",
+   "storyboardSec": 15.7,
+   "mainCut": true,
+   "text": "Connect your student information system or drop a roster file, and Cairo counts each grade once and tells you exactly what it saved. Several schools? One file fills them all in, and you approve every match.",
+   "minSec": 14
+  },
+  {
+   "id": "e3_trend",
+   "chapter": "ch3",
+   "storyboardSec": 10.6,
+   "mainCut": true,
+   "text": "Analytics asks four questions. First, how did it move — on an axis that starts at zero, so a small wobble never looks like a mountain.",
+   "minSec": 10
+  },
+  {
+   "id": "e4_grades",
+   "chapter": "ch3",
+   "storyboardSec": 13,
+   "mainCut": true,
+   "text": "Then, where is the miss? Ask Cairo which grades are short, and it flies you straight there: every grade against its plan, counted in solid, planned in dashed.",
+   "minSec": 13
+  },
+  {
+   "id": "e5_cohorts",
+   "chapter": "ch3",
+   "storyboardSec": 14.5,
+   "mainCut": true,
+   "text": "Cohorts follow one class up the grades, every panel on the same scale. And Cairo is careful with words: this is class size, not retention, because the data can't tell which children stayed.",
+   "minSec": 13
+  },
+  {
+   "id": "e6_who",
+   "chapter": "ch3",
+   "storyboardSec": 12.9,
+   "mainCut": true,
+   "text": "Who's here shows the mix behind the counts — counts first, then shares. Any group smaller than five students is listed but never drawn, so no child can be singled out.",
+   "minSec": 11
+  },
+  {
+   "id": "e7_budget",
+   "chapter": "ch3",
+   "storyboardSec": 15.0,
+   "mainCut": true,
+   "text": "And because Cairo reads the books too, the morning brief turns a missed plan into tuition and cash. Then plan ahead: roll the roster up a grade, add the families you expect, and see where the year ends against the budget.",
+   "minSec": 15
+  },
+  {
+   "id": "card4",
+   "chapter": "ch4",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "a1_upload",
+   "chapter": "ch4",
+   "storyboardSec": 13.9,
+   "mainCut": true,
+   "text": "Academics brings A C T, S A T and TerraNova into one place. Drop one results file for the whole network. Cairo matches every school, and waits for your yes before anything is saved.",
+   "minSec": 12
+  },
+  {
+   "id": "a2_overview",
+   "chapter": "ch4",
+   "storyboardSec": 13.2,
+   "mainCut": true,
+   "text": "Every school gets its standing in plain words: its rank, its average against the network, its widest gap and its trend — each average weighted by how many students tested.",
+   "minSec": 12
+  },
+  {
+   "id": "a3_standing",
+   "chapter": "ch4",
+   "storyboardSec": 14.3,
+   "mainCut": true,
+   "text": "Standing shows where the gap actually is — subject by subject, then grade by grade, against the same grade at peer schools. One switch hides the peer names, so only your school is named.",
+   "minSec": 13
+  },
+  {
+   "id": "a4_classroom",
+   "chapter": "ch4",
+   "storyboardSec": 13,
+   "mainCut": true,
+   "text": "Inside the classroom: where students actually sit, who the average is hiding, and — from the test's own objectives — where to put the next hour.",
+   "minSec": 13
+  },
+  {
+   "id": "a5_time",
+   "chapter": "ch4",
+   "storyboardSec": 13.5,
+   "mainCut": true,
+   "text": "Over time answers the board's first question: are we moving? Growth against achievement places every school in one of four corners, from ahead and rising to behind and falling.",
+   "minSec": 12
+  },
+  {
+   "id": "a6_cohorts",
+   "chapter": "ch4",
+   "storyboardSec": 11.5,
+   "mainCut": true,
+   "text": "Here, cohorts follow the same children's scores — not just the size of a class — so you can see whether a group is really growing, year after year.",
+   "minSec": 11
+  },
+  {
+   "id": "a7_network",
+   "chapter": "ch4",
+   "storyboardSec": 12.3,
+   "mainCut": true,
+   "text": "For the board: every school, both years, in one table you can sort for the packet — with a fairness check that flags any school where too few students tested.",
+   "minSec": 12
+  },
+  {
+   "id": "card5",
+   "chapter": "ch5",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "r1_overview",
+   "chapter": "ch5",
+   "storyboardSec": 14,
+   "mainCut": true,
+   "text": "Accreditation runs as a plan, not a binder. Enter the date of your last visit, and Cairo maps your six year accreditation cycle: how far you are from accredited, and what's due next.",
+   "minSec": 14
+  },
+  {
+   "id": "r2_frameworks",
+   "chapter": "ch5",
+   "storyboardSec": 13.4,
+   "mainCut": true,
+   "text": "Pick your accreditor: Cognia with your S A C S CASI division, the Florida Catholic Conference with its Accreditrac portal, NIPSA, M S A, A C S I and more. Hold two? Adopt both.",
+   "minSec": 11
+  },
+  {
+   "id": "r3_wins",
+   "chapter": "ch5",
+   "storyboardSec": 12.7,
+   "mainCut": true,
+   "text": "Then the shortest path. Quickest wins lists the standards that move your score the most. Must-pass checks block accreditation until they're met, so they never hide.",
+   "minSec": 12
+  },
+  {
+   "id": "r4_standard",
+   "chapter": "ch5",
+   "storyboardSec": 16.0,
+   "mainCut": true,
+   "text": "Open any standard, and it tells you what raises it. Score it against the rubric. Attach the proof — straight from the policies, minutes and board reports already in Cairo. And give the work an owner and a date.",
+   "minSec": 15
+  },
+  {
+   "id": "r5_warnings",
+   "chapter": "ch5",
+   "storyboardSec": 14.8,
+   "mainCut": true,
+   "text": "Warnings look two years ahead: evidence about to go stale, policies past review, and your live finance numbers, read right alongside the standards. When Cairo can't check something, it says so.",
+   "minSec": 13
+  },
+  {
+   "id": "r6_visit",
+   "chapter": "ch5",
+   "storyboardSec": 18.9,
+   "mainCut": true,
+   "text": "And before the team arrives, run the mock visit. Cairo lists what the reviewers will ask for, what you have, and what you still owe, and it can read it all to you. Readiness becomes something you see months out, not something you discover in the room.",
+   "minSec": 18
+  },
+  {
+   "id": "r7_board",
+   "chapter": "ch5",
+   "storyboardSec": 9,
+   "mainCut": true,
+   "text": "Then hand the board a one-page readiness summary, and turn every gap into owned, dated work.",
+   "minSec": 9
+  },
+  {
+   "id": "card6",
+   "chapter": "ch6",
+   "storyboardSec": 2.5,
+   "mainCut": true,
+   "text": "",
+   "minSec": 2.5
+  },
+  {
+   "id": "x1_sweep",
+   "chapter": "ch6",
+   "storyboardSec": 14,
+   "mainCut": true,
+   "text": "The rest of the school reads the same way: governance, facilities, advancement, H R, and a strategic plan that measures itself against the live numbers.",
+   "minSec": 11.5
+  },
+  {
+   "id": "o1_org",
+   "chapter": "ch6",
+   "storyboardSec": 13.0,
+   "mainCut": true,
+   "text": "Running a network or a diocese? One login, every school. The numbers roll up, the briefing reads the whole system, and every figure drills back to the campus behind it.",
+   "minSec": 10
+  },
+  {
+   "id": "o2_studio",
+   "chapter": "ch6",
+   "storyboardSec": 15,
+   "mainCut": true,
+   "text": "And every module answers to Cairo. Say or type a question, and get the chart. Ask for a change, and Cairo proposes it, waits for your yes, and keeps a log you can undo.",
+   "minSec": 15
+  },
+  {
+   "id": "z1_trust",
+   "chapter": "close",
+   "storyboardSec": 13.7,
+   "mainCut": true,
+   "text": "Built to FERPA standards, FERPA-aligned by contract. No student-facing surfaces, so COPPA does not apply. Encrypted in transit and at rest. Hosted on A W S, in the United States.",
+   "minSec": 9
+  },
+  {
+   "id": "z2_end",
+   "chapter": "close",
+   "storyboardSec": 22.7,
+   "mainCut": true,
+   "text": "Finance. Enrollment. Academics. Accreditation. Governance, facilities, advancement, H R, and strategic planning. One platform that reads all of it, and tells you what needs you today. Whether you run one school or many, this is the platform for you. Cairo. See it on your own books, at our Cairo dot com.",
+   "minSec": 14
+  }
+ ]
+}

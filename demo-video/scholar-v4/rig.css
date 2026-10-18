@@ -1,0 +1,17 @@
+@import url('fonts/fonts.css');
+:root {
+  --navy: #091a2e;
+  --ink: #ffffff;
+  --muted: rgba(226, 240, 255, 0.72);
+  --cyan: #56deec;
+  --font-display: 'EB Garamond', Georgia, serif;
+  --font-body: 'Montserrat', system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--navy); }
+html.alpha, html.alpha body { background: transparent; }
+body { font-family: var(--font-body); color: var(--ink); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+#stage { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+canvas.full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.layer { position: absolute; inset: 0; }
+.tm { position: absolute; left: 56px; bottom: 40px; font: 500 17px/1.4 var(--font-body); letter-spacing: 0.01em; color: rgba(214, 232, 250, 0.55); }

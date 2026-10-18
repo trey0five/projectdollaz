@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KYRO v4 — chapter card</title>
+<link rel="stylesheet" href="rig.css">
+<style>
+  #band { position: absolute; inset: 0; }
+  #band .blob { position: absolute; border-radius: 50%; filter: blur(90px); }
+  #grain { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(3,8,20,0.55)); }
+  #block { position: absolute; top: 0; left: 0; }
+  #kicker { position: absolute; left: 0; top: 400px; white-space: nowrap; font: 600 25px/1 var(--font-body); letter-spacing: 0.28em; text-transform: uppercase; color: rgba(255,255,255,0.78); }
+  #title { position: absolute; left: -4px; top: 446px; white-space: nowrap; font: 600 132px/1.06 var(--font-display); letter-spacing: -0.005em; color: #fff; text-shadow: 0 6px 40px rgba(0,0,0,0.25); }
+  #rule { position: absolute; left: 0; height: 3px; border-radius: 2px; background: linear-gradient(90deg, rgba(255,255,255,0.0), rgba(255,255,255,0.75) 12%, rgba(190,240,255,0.9)); transform-origin: 0 50%; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="band"><div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div><div id="grain"></div></div>
+  <div id="block"><div id="kicker"></div><div id="title"></div><div id="rule"></div></div>
+  <canvas id="fx" class="full" width="1920" height="1080"></canvas>
+  <div id="owls" class="layer"></div>
+</div>
+<script type="module">
+import { boot } from './lib/stage.js'
+import { createFilmOwl, flightPhase } from './lib/owl.js'
+import { drawRibbon, spineThrough, paintMotes } from './lib/ribbons.js'
+import { keyPath, ramp, lin, easeInOut, easeOut, lerp, hexHsl, hsla } from './lib/util.js'
+
+// Chapter cards (storyboard §B): title, kicker, colour. Module chapters use the
+// module's locked home-tile hue; the two non-module chapters get their own.
+const CARDS = {
+  1: { title: 'Monday morning', kicker: 'Chapter 1', hue: '#E07A5F' },
+  2: { title: 'Finance', kicker: 'Chapter 2', hue: '#2563EB' },
+  3: { title: 'Enrollment', kicker: 'Chapter 3', hue: '#0EA5E9' },
+  4: { title: 'Academics', kicker: 'Chapter 4', hue: '#0D9488' },
+  5: { title: 'Visit-ready', kicker: 'Chapter 5 · Accreditation', hue: '#F59E0B' },
+  6: { title: 'One school or many', kicker: 'Chapter 6', hue: '#6366F1' },
+}
+
+boot(async ({ alpha, q }) => {
+  const n = +(q.n || 1)
+  const C = CARDS[n]
+  const $ = (id) => document.getElementById(id)
+  const fx = $('fx').getContext('2d')
+  const [hh] = hexHsl(C.hue)
+  const warm = hh >= 0 && hh <= 70
+  // The app's band rule (moduleAnatomy auroraVarsFromHue): the hue deepened
+  // (warm hues toward brown, never toward navy grey) so white text holds AA,
+  // plus companion glows turned round the wheel (cool +28°/−22°, warm −12°/−24°).
+  const [ta, tb] = warm ? [-12, -24] : [28, -22]
+  $('band').style.background = `linear-gradient(120deg, ${hsla(C.hue, warm ? 0.17 : 0.17, 1)} 0%, ${hsla(C.hue, warm ? 0.27 : 0.3, 1)} 52%, ${hsla(C.hue, 0.2, 1, ta)} 100%)`
+  const blobs = [
+    [$('b1'), 760, 620, hsla(C.hue, warm ? 0.42 : 0.5, 0.6)],
+    [$('b2'), 680, 560, hsla(C.hue, warm ? 0.38 : 0.46, 0.5, ta)],
+    [$('b3'), 900, 640, hsla(C.hue, warm ? 0.34 : 0.42, 0.55, tb)],
+  ]
+  for (const [el, w, h, c] of blobs) Object.assign(el.style, { width: w + 'px', height: h + 'px', background: c })
+  if (alpha) $('band').style.background += ', transparent'
+
+  $('kicker').textContent = C.kicker
+  $('title').textContent = C.title
+  await new Promise((r) => requestAnimationFrame(r))
+  const tw = $('title').getBoundingClientRect().width
+  const OWL = 264
+  const owlW = OWL * 0.727
+  const GAP = 84
+  const blockW = tw + GAP + owlW
+  const left = Math.round((1920 - blockW) / 2)
+  const baseline = 600 // the rule the title sits over and the owl stands on
+  $('block').style.left = left + 'px'
+  Object.assign($('rule').style, { top: baseline + 'px', width: blockW + 30 + 'px' })
+  const PERCH = { x: left + tw + GAP + owlW * 0.5, y: baseline + 1 }
+
+  const path = keyPath([
+    { t: 0.3, x: 2100, y: 140, size: 190 },
+    { t: 0.85, x: PERCH.x + 260, y: PERCH.y - 230, size: 236 },
+    { t: 1.32, x: PERCH.x, y: PERCH.y, size: OWL },
+  ])
+  const fly = flightPhase(path, 0.3, 1.32, 0.28)
+  const owl = createFilmOwl($('owls'), {
+    uid: 'card' + n,
+    baseSize: OWL,
+    seed: 40 + n,
+    script: (t) => fly(t) || (t < 0.3 ? { ...path.at(0.3), size: 190, phase: 'flying', facing: -1 } : { x: PERCH.x, y: PERCH.y, size: OWL, phase: 'perched', facing: -1 }),
+  })
+
+  const WIPE0 = 0.0
+  const WIPE1 = 0.72
+  function render(t) {
+    // the wipe edge (slanted), left of it the band is revealed
+    const u = easeInOut(lin(t, WIPE0, WIPE1))
+    const xw = lerp(-260, 2180, u)
+    $('band').style.clipPath = u >= 1 ? '' : `polygon(0 0, ${xw + 140}px 0, ${xw - 140}px 1080px, 0 1080px)`
+    // blobs drift slowly
+    const dr = (a, b, s) => a + Math.sin(t * s) * b
+    $('b1').style.transform = `translate(${dr(-120, 40, 0.7)}px, ${dr(-140, 30, 0.5)}px)`
+    $('b2').style.transform = `translate(${dr(1180, 50, 0.6)}px, ${dr(420, 40, 0.8)}px)`
+    $('b3').style.transform = `translate(${dr(560, 60, 0.45)}px, ${dr(600, 30, 0.6)}px)`
+    // text
+    const k = ramp(t, 0.42, 0.85)
+    $('kicker').style.opacity = String(k)
+    $('kicker').style.transform = `translateX(${(1 - easeOut(k)) * -24}px)`
+    const ti = lin(t, 0.5, 1.05)
+    $('title').style.clipPath = `inset(-20px ${(1 - easeOut(ti, 3)) * 100}% -40px -20px)`
+    $('title').style.transform = `translateY(${(1 - easeOut(ti)) * 18}px)`
+    $('rule').style.transform = `scaleX(${easeOut(lin(t, 0.55, 1.35), 3).toFixed(4)})`
+    $('rule').style.opacity = String(ramp(t, 0.55, 0.8) * 0.9)
+    // the ribbon riding the wipe edge, then streaking off
+    fx.clearRect(0, 0, 1920, 1080)
+    const ra = 1 - ramp(t, WIPE1 - 0.05, WIPE1 + 0.35)
+    if (ra > 0) {
+      const sp = spineThrough([
+        [xw + 230, -120],
+        [xw + 60, 260],
+        [xw - 10, 560],
+        [xw - 90, 820],
+        [xw - 210, 1200],
+      ])
+      drawRibbon(fx, sp, 0, 1, t, { seed: 7 + n, strands: 7, spread: 30, twist: 2.4, alpha: ra, particles: 110, width: 3 })
+    }
+    paintMotes(fx, t, { n: 26, seed: 30 + n, alpha: 0.6 * ramp(t, 0.4, 1.0), drift: 30 })
+    owl.seek(t)
+  }
+  return { sec: 2.5, render, dbg: () => ({ owl: owl.state, n }), meta: { scene: 'card' + n, title: C.title, kicker: C.kicker, hue: C.hue } }
+})
+</script>
+</body>
+</html>

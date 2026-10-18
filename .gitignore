@@ -36,3 +36,21 @@ demo-video/assets/auth-state.json
 
 # UI audit output (apps/web/scripts/ui-audit.mjs) — screenshots + census, regenerated per run
 apps/web/.ui-audit/
+
+# Demo film working files (v3+): renders, captures, voice, rigs, masters, seed output
+demo-video/out-v*/
+demo-video/captures-v*/
+demo-video/vo-v*/
+demo-video/coldopen-v*/
+demo-video/scholar-v*/out/
+demo-video/seed-v*/out/
+demo-video/assets/hero-v3-master.mp4
+demo-video/assets/*-upscaled*.mp4
+demo-video/dove-candidates/
+demo-video/owl-candidates/
+demo-video/__pycache__/
+kyronewvideo.mp4
+# v4 hero upscale + its audio, and downloaded Mixkit cues (licence: no redistribution on their own)
+demo-video/assets/hero-v3-1080.mp4
+demo-video/assets/hero-v3-audio.wav
+demo-video/assets/music/*.mp3
