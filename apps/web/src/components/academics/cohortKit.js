@@ -31,6 +31,27 @@ export function signed(v, digits = 1) {
   return `${r > 0 ? '+' : ''}${r}`
 }
 
+/**
+ * The net change AS PRINTED: the difference of the two endpoints at the
+ * precision they are shown at.
+ *
+ * The server's netChange is the exact difference of the unrounded averages, so
+ * a cohort drawn "56 → 62" can carry a netChange of 6.8 and print "+7" beside
+ * two numbers that subtract to 6 (review-caught on the demo film). A reader
+ * checks the chip against the endpoints, so the chip must be their difference.
+ * This is formatting, not analysis: `direction` (and therefore tone) still
+ * comes from the server's exact figure. Falls back to netChange when either
+ * endpoint is missing.
+ */
+export function printedChange(netChange, startValue, endValue, digits = 0) {
+  if (netChange === null || netChange === undefined) return netChange
+  const s = Number(startValue)
+  const e = Number(endValue)
+  if (startValue === null || startValue === undefined || endValue === null || endValue === undefined) return netChange
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return netChange
+  return Number((Number(e.toFixed(digits)) - Number(s.toFixed(digits))).toFixed(digits))
+}
+
 /** A score, at the number of decimals the family deserves. */
 export function fmtScore(v, digits = 0) {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'

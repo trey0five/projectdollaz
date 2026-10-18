@@ -275,7 +275,15 @@ function refChipsFor(refs, ctx, peerAvg, peerName = null) {
         // The peer average deliberately EXCLUDES this school — including
         // yourself in the line you are measured against damps every gap — and a
         // reader comparing the column to the line is owed that.
-        gloss={n ? `the average of the other ${n} school${n === 1 ? '' : 's'}, this one excluded` : 'the network average, this school excluded'}
+        // …unless the selected school has no score here, in which case nothing
+        // was excluded and the view names the line "Network average".
+        gloss={
+          peerName === 'Network average'
+            ? 'the average of every school with a score here — this one has none to exclude'
+            : n
+              ? `the average of the other ${n} school${n === 1 ? '' : 's'}, this one excluded`
+              : 'the network average, this school excluded'
+        }
       />,
     )
   }

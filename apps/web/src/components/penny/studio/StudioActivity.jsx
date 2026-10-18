@@ -43,6 +43,8 @@ const UNDO_REFRESH_KEYS = {
   create_task: ['tasks'],
   file_document: ['knowledge', 'facilities'],
   import_trial_balance: ['dataStatus', 'metrics'],
+  create_cash_commitment: ['cashflow'],
+  save_cash_line_adjustment: ['cashflow'],
 }
 
 function relTime(ts) {

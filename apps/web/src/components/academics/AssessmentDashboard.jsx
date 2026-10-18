@@ -81,6 +81,8 @@ const scoreDp = (scoreType) => (scoreType === 'scale' ? 1 : 0)
 
 /** True when `v` PRINTS as zero at `dp` — nothing to point an arrow at. */
 const showsAsZero = (v, dp) => signed(v, dp) === '0'
+/** The ink of a move that prints as 0 — the same slate the Network chart uses. */
+const FLAT_INK = '#64748b'
 
 /**
  * What kpis.average.peer IS, named: the average of every OTHER school —
@@ -137,7 +139,7 @@ const STANDING_TONE = {
  * values present rather than pinned to the theoretical 1–99, because on the
  * theoretical scale a fifteen-point gap renders as a shrug.
  */
-function RankedSchools({ schools, focusId, national, peerAvg, range, anonymous, unit }) {
+function RankedSchools({ schools, focusId, national, peerAvg, peerName = 'Network', range, anonymous, unit }) {
   const rows = anonymous
     ? anonymous.map((p, i) => ({ id: `${p.label}-${i}`, label: p.label, value: p.value, emphasis: !!p.isFocus }))
     : schools.map((s) => ({
@@ -152,7 +154,7 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, anonymous, 
 
   const refs = [
     national !== null && national !== undefined ? { value: national, label: `National ${fmt(national, 0)}`, color: INK.national } : null,
-    peerAvg !== null && peerAvg !== undefined ? { value: peerAvg, label: `Network ${fmt(peerAvg)}`, color: INK.network } : null,
+    peerAvg !== null && peerAvg !== undefined ? { value: peerAvg, label: `${peerName} ${fmt(peerAvg)}`, color: INK.network } : null,
   ].filter(Boolean)
 
   // THE AXIS, DISCLOSED. The chart zooms to the values present (fitScale's
@@ -535,7 +537,7 @@ function CohortPanel({ cohort, national, range, reduce }) {
  * else: a trend chart earns its space by answering "are we moving, and are we
  * moving differently from everyone around us" — anything more is decoration.
  */
-function TrendChart({ points, national, range, reduce }) {
+export function TrendChart({ points, national, range, reduce, dp = 0 }) {
   const usable = points.filter((p) => p.school !== null || p.peer !== null)
   if (usable.length < 2) {
     return (
@@ -605,7 +607,7 @@ function TrendChart({ points, national, range, reduce }) {
             opacity="0.8"
           />
           <text x={W - PAD.r + 4} y={y(national) + 3} fontSize="9" fontWeight="700" fill={INK.national}>
-            Nat {national}
+            Nat {fmt(national, dp)}
           </text>
         </>
       ) : null}
@@ -684,7 +686,7 @@ function TrendChart({ points, national, range, reduce }) {
               textAnchor="middle"
               fill="#0f766e"
             >
-              {fmt(p.v, 0)}
+              {fmt(p.v, dp)}
             </text>
           </motion.g>
         )
@@ -953,6 +955,30 @@ export default function AssessmentDashboard({
   // explainer below, so the page cannot call the same figure two things.
   const unit = axisUnitOf(ctx)
 
+  // OVER TIME speaks the Network view's language: changes at the precision the
+  // scores are printed at, and the dashed line named for what it is — the
+  // per-year trend peer and kpis.average.peer both EXCLUDE the selected school
+  // whenever it has a score to exclude, and are the network's average otherwise.
+  const timeDp = scoreDp(ctx?.scoreType)
+  const trendPeerName = peerLineLabel(
+    data?.school?.name,
+    (data?.trend ?? []).some((p) => p.school !== null && p.school !== undefined),
+  )
+  // STANDING names its line the same way: kpis.average.peer excludes the
+  // selected school, so "Network 60" beside an org-scope "network average 60.9"
+  // was two figures under one name (review-caught on the demo film, a1 vs a3).
+  const standPeerName = peerLineLabel(
+    data?.school?.name,
+    focusScored(
+      [...(data?.table ?? []), ...(data?.schools ?? []).map((r) => ({ schoolId: r.schoolId, current: r.value }))],
+      data?.school?.id,
+    ),
+  )
+  const quadPeerName = peerLineLabel(
+    data?.school?.name,
+    focusScored([...(data?.table ?? []), ...(data?.movements ?? [])], data?.school?.id),
+  )
+
   const objectives = data?.objectives ?? { strengths: [], opportunities: [] }
   const hasObjectives = objectives.strengths.length > 0 || objectives.opportunities.length > 0
 
@@ -1042,17 +1068,19 @@ export default function AssessmentDashboard({
             ctx={ctx}
             example={kpis?.average?.value}
             peerAvg={peerAvg}
+            peerName={standPeerName}
             refs={['national', 'network']}
           />
         }
       >
-        <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['national', 'network']} />
+        <MeasureKey ctx={ctx} peerAvg={peerAvg} peerName={standPeerName} refs={['national', 'network']} />
         <RankedSchools
           schools={data?.schools ?? []}
           anonymous={anonymous ? data?.peersAnonymous : null}
           focusId={data?.school?.id}
           national={ctx?.nationalReference}
           peerAvg={peerAvg}
+          peerName={standPeerName}
           range={ctx?.scoreRange}
           unit={unit}
         />
@@ -1087,9 +1115,21 @@ export default function AssessmentDashboard({
       {data?.insights?.top ? (
         <Section eyebrow="The network" title="Top, bottom and the spread between" icon={Network} reduce={reduce}>
           <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
-            <Stat label="Highest" value={fmt(data.insights.top?.value)} status="good" note={data.insights.top?.schoolName ?? '—'} />
-            <Stat label="Lowest" value={fmt(data.insights.bottom?.value)} status="risk" note={data.insights.bottom?.schoolName ?? '—'} />
-            <Stat label="Spread" value={fmt(data.insights.spread)} note="top to bottom" />
+            {/* At the precision the scores are printed at (scoreDp): the chart
+                above prints whole percentiles, so "67.1" here read as a
+                different number from the "67" on its column. The spread is
+                the difference of the two printed figures, so they subtract. */}
+            <Stat label="Highest" value={fmt(data.insights.top?.value, timeDp)} status="good" note={data.insights.top?.schoolName ?? '—'} />
+            <Stat label="Lowest" value={fmt(data.insights.bottom?.value, timeDp)} status="risk" note={data.insights.bottom?.schoolName ?? '—'} />
+            <Stat
+              label="Spread"
+              value={
+                data.insights.top?.value != null && data.insights.bottom?.value != null
+                  ? fmt(Number(fmt(data.insights.top.value, timeDp)) - Number(fmt(data.insights.bottom.value, timeDp)), timeDp)
+                  : fmt(data.insights.spread, timeDp)
+              }
+              note="top to bottom"
+            />
           </StatStrip>
         </Section>
       ) : null}
@@ -1152,13 +1192,14 @@ export default function AssessmentDashboard({
             national={ctx?.nationalReference}
             range={ctx?.scoreRange}
             reduce={reduce}
+            dp={timeDp}
           />
           <p className="mt-1 flex items-center gap-3 text-[11px] text-muted">
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-0.5 w-4" style={{ background: HUE }} /> This school
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[#2563EB]" /> Network
+              <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[#2563EB]" /> {trendPeerName}
             </span>
           </p>
         </Section>
@@ -1175,14 +1216,18 @@ export default function AssessmentDashboard({
           icon={Crosshair}
           reduce={reduce}
           delay={0.05}
-          info={<WhatThisMeasures mode="popover" chart="quadrant" ctx={ctx} peerAvg={peerAvg} refs={['network']} />}
+          info={
+            <WhatThisMeasures mode="popover" chart="quadrant" ctx={ctx} peerAvg={peerAvg} peerName={quadPeerName} refs={['network']} />
+          }
         >
-          <MeasureKey ctx={ctx} peerAvg={peerAvg} refs={['network']} />
+          <MeasureKey ctx={ctx} peerAvg={peerAvg} peerName={quadPeerName} refs={['network']} />
           <GrowthQuadrant
             movements={(data?.movements ?? []).map((m) => ({ ...m, isFocus: m.schoolId === data?.school?.id }))}
             peerAvg={peerAvg}
+            peerName={quadPeerName}
             range={ctx?.scoreRange}
             reduce={reduce}
+            dp={timeDp}
           />
         </Section>
       </div>
@@ -1190,40 +1235,13 @@ export default function AssessmentDashboard({
       {/* ── Movement ── */}
       {(data?.movements ?? []).length > 0 ? (
         <Section eyebrow="Trends & movement" title="What a board asks first" icon={Activity} reduce={reduce}>
-          <MovementHighlights movements={data.movements} national={ctx?.nationalReference} />
+          <MovementHighlights movements={data.movements} national={ctx?.nationalReference} dp={timeDp} />
         </Section>
       ) : null}
 
       {(data?.movements ?? []).length > 0 ? (
         <Section eyebrow="Year over year" title="Every school, ranked by movement" icon={ArrowUpDown} reduce={reduce}>
-          <div className="space-y-1.5">
-            {data.movements.map((m, i) => {
-              const tone = m.direction === 'improved' ? '#059669' : m.direction === 'declined' ? '#e11d48' : '#94a3b8'
-              return (
-                <motion.div
-                  key={m.schoolId}
-                  initial={reduce ? false : { opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: reduce ? 0 : i * 0.04, duration: 0.35 }}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-navy/[0.03]"
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
-                  <span className="flex-1 truncate text-[12.5px] text-navy">{m.schoolName}</span>
-                  <span className="text-[11px] tabular-nums text-muted">
-                    {fmt(m.prior, 0)} → {fmt(m.current, 0)}
-                  </span>
-                  <span className="w-10 text-right text-[12px] font-bold tabular-nums" style={{ color: tone }}>
-                    {signed(m.change, 0)}
-                  </span>
-                  {m.belowNational ? (
-                    <Flag size={12} className="text-rose-600" title="Below the national midpoint" />
-                  ) : (
-                    <span className="w-3" />
-                  )}
-                </motion.div>
-              )
-            })}
-          </div>
+          <MovementRanking movements={data.movements} dp={timeDp} reduce={reduce} />
         </Section>
       ) : null}
 
@@ -1335,7 +1353,7 @@ export default function AssessmentDashboard({
 // "who is falling", and neither answers the intersection — which is the one that
 // decides where the next visit goes. Achievement on x, one-year change on y,
 // quadrant lines at the network average and at zero change.
-function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
+export function GrowthQuadrant({ movements, peerAvg, peerName = 'Network average', range, reduce, dp = 0 }) {
   const pts = (movements ?? []).filter((m) => m.current !== null && m.change !== null)
   if (pts.length < 2) {
     return <p className="text-[12.5px] text-muted">Two years across at least two schools lights this up.</p>
@@ -1351,7 +1369,15 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
 
   const xs = pts.map((p) => p.current)
   const { lo: xLo, hi: xHi } = fitScale([...xs, peerAvg], range, { pad: 0.16 })
-  const yMag = Math.max(3, ...pts.map((p) => Math.abs(p.change))) * 1.35
+  // The floor is in the score's own units: three whole points on a scale read
+  // to a tenth would flatten a real ±0.7 against the zero line.
+  const yMag = Math.max(dp > 0 ? 1 : 3, ...pts.map((p) => Math.abs(p.change))) * 1.35
+  // A move that prints as 0 is drawn neutral — neither ahead nor behind ink.
+  const moveInk = (v) => (showsAsZero(v, dp) ? FLAT_INK : v >= 0 ? INK.ahead : INK.behind)
+  // The reference line's label, at the key's precision and in the key's words,
+  // kept inside the canvas however far left or right the average sits.
+  const midLabel = peerAvg === null || peerAvg === undefined ? '' : `${peerName} ${fmt(peerAvg, 1)}`
+  const midHalf = (midLabel.length * 5.2) / 2 + 4
   const x = (v) => PAD.l + ((v - xLo) / (xHi - xLo || 1)) * (W - PAD.l - PAD.r)
   const y = (v) => PAD.t + (1 - (v + yMag) / (2 * yMag)) * (H - PAD.t - PAD.b)
   const midX = peerAvg === null || peerAvg === undefined ? null : x(peerAvg)
@@ -1443,8 +1469,15 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
         {midX !== null ? (
           <>
             <line x1={midX} x2={midX} y1={PAD.t} y2={H - PAD.b} stroke={INK.network} strokeWidth="1.4" strokeDasharray="5 4" opacity="0.75" />
-            <text x={midX} y={PAD.t - 10} fontSize="9" fontWeight="700" fill={INK.network} textAnchor="middle">
-              Network {fmt(peerAvg, 0)}
+            <text
+              x={Math.max(midHalf, Math.min(W - midHalf, midX))}
+              y={PAD.t - 10}
+              fontSize="9"
+              fontWeight="700"
+              fill={INK.network}
+              textAnchor="middle"
+            >
+              {midLabel}
             </text>
           </>
         ) : null}
@@ -1454,7 +1487,7 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
             the shape of the network still comes from all of them. */}
         {quiet.map((p, i) => {
           const cy = y(p.change)
-          const c = p.change >= 0 ? INK.ahead : INK.behind
+          const c = moveInk(p.change)
           return (
             <motion.g
               key={`q-${p.schoolId ?? p.schoolName ?? i}`}
@@ -1463,15 +1496,14 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
               transition={{ delay: reduce ? 0 : 0.15 + i * 0.05, duration: 0.45, ease: EASE }}
               style={{ transformOrigin: `${p.px}px ${cy}px` }}
             >
-              <title>{`${p.schoolName}: ${fmt(p.current, 0)}, ${signed(p.change, 0)}${p.tested ? ` · ${p.tested} tested` : ''}`}</title>
+              <title>{`${p.schoolName}: ${fmt(p.current, dp)}, ${signed(p.change, dp)}${p.tested ? ` · ${p.tested} tested` : ''}`}</title>
               <circle cx={p.px} cy={cy} r={radius(p.tested)} fill={c} fillOpacity="0.4" stroke="#fff" strokeWidth="1.5" />
             </motion.g>
           )
         })}
 
         {placed.map((p, i) => {
-          const up = p.change >= 0
-          const c = up ? INK.ahead : INK.behind
+          const c = moveInk(p.change)
           const cy = y(p.change)
           // SIZE CARRIES THE COHORT. A flat dot said only "a school is here";
           // scaling it by how many children sat the exam adds the dimension the
@@ -1547,7 +1579,7 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
                   paintOrder="stroke"
                   strokeLinejoin="round"
                 >
-                  {signed(p.change, 0)}
+                  {signed(p.change, dp)}
                   <tspan fill="#94A3B8" fontWeight="400">
                     {p.tested ? ` · ${p.tested} tested` : ''}
                   </tspan>
@@ -1558,10 +1590,10 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
         })}
 
         <text x={PAD.l - 6} y={PAD.t + 4} fontSize="10" textAnchor="end" fill="#64748b">
-          +{Math.round(yMag)}
+          +{fmt(yMag, dp)}
         </text>
         <text x={PAD.l - 6} y={H - PAD.b} fontSize="10" textAnchor="end" fill="#64748b">
-          −{Math.round(yMag)}
+          −{fmt(yMag, dp)}
         </text>
         <text x={(PAD.l + W - PAD.r) / 2} y={H - 8} fontSize="9.5" textAnchor="middle" fill="#64748b">
           Score this year →
@@ -1760,7 +1792,7 @@ export function BoardReportBars({ rows, national, peerAvg, range, focusId, focus
  * three answers were buried in a list the reader had to scan and rank
  * themselves. Surfacing them costs nothing: the numbers are already here.
  */
-function MovementHighlights({ movements, national }) {
+export function MovementHighlights({ movements, national, dp = 0 }) {
   const rows = (movements ?? []).filter((m) => m.change !== null && m.change !== undefined)
   if (rows.length === 0) return null
 
@@ -1770,11 +1802,12 @@ function MovementHighlights({ movements, national }) {
   const below = rows.filter((m) => national !== null && national !== undefined && (m.current ?? 0) < national)
 
   const cards = [
-    best && best.change > 0
-      ? { k: 'Most improved', name: best.schoolName, v: signed(best.change, 0), sub: `${fmt(best.prior, 0)} → ${fmt(best.current, 0)}`, tone: INK.ahead }
+    // A move that PRINTS as 0 is no move to headline: "Most improved +0".
+    best && best.change > 0 && !showsAsZero(best.change, dp)
+      ? { k: 'Most improved', name: best.schoolName, v: signed(best.change, dp), sub: `${fmt(best.prior, dp)} → ${fmt(best.current, dp)}`, tone: INK.ahead }
       : null,
-    worst && worst.change < 0
-      ? { k: 'Steepest decline', name: worst.schoolName, v: signed(worst.change, 0), sub: `${fmt(worst.prior, 0)} → ${fmt(worst.current, 0)}`, tone: INK.behind }
+    worst && worst.change < 0 && !showsAsZero(worst.change, dp)
+      ? { k: 'Steepest decline', name: worst.schoolName, v: signed(worst.change, dp), sub: `${fmt(worst.prior, dp)} → ${fmt(worst.current, dp)}`, tone: INK.behind }
       : null,
     national !== null && national !== undefined
       ? {
@@ -1801,6 +1834,53 @@ function MovementHighlights({ movements, national }) {
         </Stat>
       ))}
     </StatStrip>
+  )
+}
+
+
+/**
+ * Every school's year-over-year move, ranked — at the precision the scores are
+ * printed at. An ACT composite that slips 25.6 → 25.2 reads "−0.4", never a
+ * red "0"; and a move that does print as 0 carries no colour, whatever its
+ * sign underneath.
+ */
+export function MovementRanking({ movements, dp = 0, reduce = false }) {
+  return (
+    <div className="space-y-1.5">
+      {(movements ?? []).map((m, i) => {
+        const flat = m.change === null || m.change === undefined || showsAsZero(m.change, dp)
+        const tone = flat
+          ? '#94a3b8'
+          : m.direction === 'improved'
+            ? '#059669'
+            : m.direction === 'declined'
+              ? '#e11d48'
+              : '#94a3b8'
+        return (
+          <motion.div
+            key={m.schoolId ?? m.schoolName ?? i}
+            initial={reduce ? false : { opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: reduce ? 0 : i * 0.04, duration: 0.35 }}
+            className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-navy/[0.03]"
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
+            <span className="flex-1 truncate text-[12.5px] text-navy">{m.schoolName}</span>
+            <span className="text-[11px] tabular-nums text-muted">
+              {fmt(m.prior, dp)} → {fmt(m.current, dp)}
+            </span>
+            <span className="w-12 text-right text-[12px] font-bold tabular-nums" style={{ color: tone }}>
+              {signed(m.change, dp)}
+            </span>
+            {m.belowNational ? (
+              <Flag size={12} className="text-rose-600" title="Below the national midpoint" />
+            ) : (
+              <span className="w-3" />
+            )}
+          </motion.div>
+        )
+      })}
+    </div>
   )
 }
 

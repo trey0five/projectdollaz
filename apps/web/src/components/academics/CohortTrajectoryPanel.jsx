@@ -43,6 +43,7 @@ import {
   fmtScore,
   legTitle,
   legToken,
+  printedChange,
   segmentsOf,
   signed,
   unavailableSentence,
@@ -70,7 +71,10 @@ const gradeName = (g) => (g === 'K' ? 'Kindergarten' : `Grade ${g}`)
  * never become it: on a five-point gap a +2 is 'held', and this chip says so.
  */
 function NetChangeChip({ focus, unit, gap, delay, reduce, big = false }) {
-  const { direction, netChange, netChangeUnavailable, startGrade, endGrade } = focus
+  const { direction, netChangeUnavailable, startGrade, endGrade } = focus
+  // Printed from the printed endpoints, so "56 → 62" never sits beside "+7".
+  const legs = focus.legs ?? []
+  const netChange = printedChange(focus.netChange, legs[0]?.value, legs[legs.length - 1]?.value, unit.decimals)
   const tone =
     direction === 'gained' ? 'good' : direction === 'declined' ? 'risk' : direction === 'held' ? 'neutral' : 'neutral'
   const Icon = direction === 'gained' ? TrendingUp : direction === 'declined' ? TrendingDown : null

@@ -50,6 +50,10 @@ const CONFIRM_REFRESH_KEYS = {
   // initiative may be goal-bound or accreditation-only, so both surfaces refetch.
   draft_improvement_plan: ['strategy', 'accreditation'],
   attach_evidence: ['accreditation'],
+  // Penny coverage Phase 1 — both cash writes are CONFIRM tools, so this is the
+  // path that tells an open /cash forecast (useCashFlowProjection) to recount.
+  create_cash_commitment: 'cashflow',
+  save_cash_line_adjustment: 'cashflow',
 }
 
 // tool → the domain refresh keys to broadcast after an UNDO reverses that action, so
@@ -76,6 +80,8 @@ const UNDO_REFRESH_KEYS = {
   create_task: ['tasks'],
   file_document: ['knowledge', 'facilities'],
   import_trial_balance: ['dataStatus', 'metrics'],
+  create_cash_commitment: ['cashflow'],
+  save_cash_line_adjustment: ['cashflow'],
 }
 
 // Map a locally-staged attachment to the FROZEN wire shape the backend expects.

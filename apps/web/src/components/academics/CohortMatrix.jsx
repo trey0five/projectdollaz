@@ -29,7 +29,7 @@
 import { motion } from 'framer-motion'
 import HeatCell, { HeatScaleLegend, HeatStateKeys } from '../analytics/charts/HeatCell.jsx'
 import { DIVERGING_INK } from '../analytics/charts/heatScales.js'
-import { COH_EASE, COH_HUE, cohortScale, cohortStep, fmtScore, legTitle, signed } from './cohortKit.js'
+import { COH_EASE, COH_HUE, cohortScale, cohortStep, fmtScore, legTitle, printedChange, signed } from './cohortKit.js'
 
 const TOTAL = 'total'
 
@@ -58,6 +58,9 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
   const scale = cohortScale(gap)
   const decimals = unit?.decimals ?? 0
   const tick = (v) => signed(v, decimals)
+  // The printed change is the difference of the printed endpoints (see
+  // printedChange); the cell's shade still keys off the exact netChange.
+  const shown = (cell) => printedChange(cell.netChange, cell.startValue, cell.endValue, decimals)
 
   // The composite's NAME comes from the server, per family — this file must
   // never type 'Total Battery' over an ACT or SAT school.
@@ -135,15 +138,13 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                           {
                             color: step?.fill ?? '#94A3B8',
                             label: 'Net change',
-                            value: `${tick(cell.netChange)} ${unit.points}${held ? ' · within the noise' : ''}`,
+                            value: `${tick(shown(cell))} ${unit.points}${held ? ' · within the noise' : ''}`,
                           },
                         ],
                       }
                   const aria = blank
                     ? `${title}: ${blank.title}`
-                    : `${title}: ${fmtScore(cell.startValue, decimals)} to ${fmtScore(cell.endValue, decimals)}, ${tick(
-                        cell.netChange,
-                      )} ${unit.points}${held ? `, smaller than ${scale.gap} — within the noise` : ''}`
+                    : `${title}: ${fmtScore(cell.startValue, decimals)} to ${fmtScore(cell.endValue, decimals)}, ${tick(shown(cell))} ${unit.points}${held ? `, smaller than ${scale.gap} — within the noise` : ''}`
                   return (
                     <td
                       key={s.key}
@@ -160,7 +161,7 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                         ) : (
                           <span className="inline-flex items-center gap-1 leading-none">
                             <span className="text-[11px]">{ARROW[cell.direction] ?? '•'}</span>
-                            <span className="text-[15px] font-bold tabular-nums">{tick(cell.netChange)}</span>
+                            <span className="text-[15px] font-bold tabular-nums">{tick(shown(cell))}</span>
                           </span>
                         )}
                       </HeatCell>

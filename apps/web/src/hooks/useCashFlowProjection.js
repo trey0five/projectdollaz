@@ -38,6 +38,9 @@ export function useCashFlowProjection(schoolId, { enabled = true } = {}) {
   // The last body sent to project() — so a mutation (a new commitment, a flipped
   // include switch) can re-run the SAME projection as a persist:false preview.
   const lastBodyRef = useRef(null)
+  // …and which school that body was built for, so a replay can never project the
+  // previous tenant's opening balance onto the school the user swapped to.
+  const lastBodySchoolRef = useRef(null)
 
   // The adjustments endpoint ships with the flows upgrade; an older API image
   // simply doesn't have it. Its absence degrades to "no adjustments" — never an
@@ -97,6 +100,7 @@ export function useCashFlowProjection(schoolId, { enabled = true } = {}) {
     async (body) => {
       if (!schoolId) return null
       lastBodyRef.current = body
+      lastBodySchoolRef.current = schoolId
       setProjecting(true)
       setError('')
       try {
@@ -129,9 +133,9 @@ export function useCashFlowProjection(schoolId, { enabled = true } = {}) {
   // discipline: only the explicit "Build forecast" click freezes a run, so a
   // burst of toggles and edits can never fill the archive with duplicates.
   const reproject = useCallback(() => {
-    if (!lastBodyRef.current) return Promise.resolve(null)
+    if (!lastBodyRef.current || lastBodySchoolRef.current !== schoolId) return Promise.resolve(null)
     return project({ ...lastBodyRef.current, persist: false })
-  }, [project])
+  }, [project, schoolId])
 
   // Toggle-driven re-projections are DEBOUNCED (~500ms): each switch flip saves
   // its adjustment immediately, but a run of quick flips coalesces into one
@@ -150,6 +154,34 @@ export function useCashFlowProjection(schoolId, { enabled = true } = {}) {
     },
     [],
   )
+
+  // KYRO RECOUNT. When KYRO applies a cash change (create_cash_commitment /
+  // save_cash_line_adjustment broadcast 'cashflow'; a QuickBooks sync broadcasts
+  // 'cash'), re-read the settings and re-run the on-screen forecast as a
+  // persist:false PREVIEW so the page recounts in front of the user. Debounced so
+  // a burst of applied changes coalesces into one rebuild. Event-only: nothing
+  // here runs on mount, so the mount load + rehydration stay the only fetches.
+  const recountTimerRef = useRef(null)
+  useEffect(() => {
+    if (!schoolId || !enabled) return undefined
+    const onDataChanged = (e) => {
+      const key = e?.detail?.key
+      if (key !== 'cashflow' && key !== 'cash') return
+      if (recountTimerRef.current) clearTimeout(recountTimerRef.current)
+      recountTimerRef.current = setTimeout(() => {
+        recountTimerRef.current = null
+        if (activeSchoolRef.current !== schoolId) return
+        load(schoolId)
+        reproject()
+      }, 400)
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => {
+      window.removeEventListener('penny:data-changed', onDataChanged)
+      if (recountTimerRef.current) clearTimeout(recountTimerRef.current)
+      recountTimerRef.current = null
+    }
+  }, [schoolId, enabled, load, reproject])
 
   const saveAssumptions = useCallback(
     async (body) => {
