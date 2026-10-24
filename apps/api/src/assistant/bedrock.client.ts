@@ -36,6 +36,13 @@ interface OaiTool {
 
 const MAX_TOKENS = 1200
 const TEMPERATURE = 0.2
+// Converse rejects text blocks that are empty OR whitespace-only ("text content
+// blocks must contain non-whitespace text"), so placeholders must be real words.
+const USER_BLANK = '(sent an attachment with no message)'
+
+function nonBlank(s: string, fallback: string): string {
+  return s.trim() ? s : fallback
+}
 
 function safeParse(s: string): Record<string, unknown> {
   try {
@@ -98,7 +105,7 @@ export class BedrockClient {
         pending.push({
           toolResult: {
             toolUseId: m.tool_call_id ?? '',
-            content: [{ text: text || ' ' }], // Bedrock rejects empty text
+            content: [{ text: nonBlank(text, '(empty result)') }],
           },
         })
         continue
@@ -108,7 +115,7 @@ export class BedrockClient {
         push('user', this.toUserContent(m.content))
       } else {
         const content: ContentBlock[] = []
-        if (typeof m.content === 'string' && m.content) content.push({ text: m.content })
+        if (typeof m.content === 'string' && m.content.trim()) content.push({ text: m.content })
         for (const tc of m.tool_calls ?? []) {
           // input is a Smithy DocumentType; assert through unknown.
           content.push({
@@ -119,7 +126,7 @@ export class BedrockClient {
             },
           } as unknown as ContentBlock)
         }
-        if (!content.length) content.push({ text: ' ' })
+        if (!content.length) content.push({ text: '(no reply)' })
         push('assistant', content)
       }
     }
@@ -129,17 +136,21 @@ export class BedrockClient {
 
   // Attachments (image/file blocks) are stripped upstream in FERPA mode; here we
   // keep only text blocks and drop anything else that slips through.
+  // A user turn can be blank — a file sent with no typed message rides the
+  // history as content ''. Blank turns get a placeholder rather than being
+  // dropped, so user/assistant alternation stays intact.
   private toUserContent(content: unknown): ContentBlock[] {
-    if (typeof content === 'string') return [{ text: content || ' ' }]
+    const blank: ContentBlock[] = [{ text: USER_BLANK }]
+    if (typeof content === 'string') return [{ text: nonBlank(content, USER_BLANK) }]
     if (Array.isArray(content)) {
       const blocks: ContentBlock[] = []
       for (const b of content) {
         const bb = b as { type?: string; text?: string }
-        if (bb?.type === 'text' && typeof bb.text === 'string') blocks.push({ text: bb.text })
+        if (bb?.type === 'text' && typeof bb.text === 'string' && bb.text.trim()) blocks.push({ text: bb.text })
       }
-      return blocks.length ? blocks : [{ text: ' ' }]
+      return blocks.length ? blocks : blank
     }
-    return [{ text: ' ' }]
+    return blank
   }
 
   private toToolConfig(tools: OaiTool[]): ToolConfiguration | undefined {

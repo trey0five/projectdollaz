@@ -30,6 +30,13 @@ const ROW_PX = 24
 export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
   const [value, setValue] = useState('')
   const [attachments, setAttachments] = useState([])
+  // Mirror of `attachments`, updated synchronously so queueFiles can check the
+  // per-turn cap without reading state inside an updater.
+  const attachmentsRef = useRef([])
+  const updateAttachments = useCallback((fn) => {
+    attachmentsRef.current = fn(attachmentsRef.current)
+    setAttachments(attachmentsRef.current)
+  }, [])
   const [toast, setToast] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const localRef = useRef(null)
@@ -94,56 +101,57 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
       }
       if (cleaned.length === 0) return
 
-      setAttachments((prev) => {
-        const room = MAX_FILES - prev.length
-        if (room <= 0) {
-          setToast(`Up to ${MAX_FILES} files per message.`)
-          return prev
+      // Check the room against the ref (always current), then stage. Never call
+      // setAttachments or start reads from INSIDE an updater: React 19 prod
+      // dropped the nested update, so the first attach of a session vanished
+      // and the user had to attach twice.
+      const room = MAX_FILES - attachmentsRef.current.length
+      if (room <= 0) {
+        setToast(`Up to ${MAX_FILES} files per message.`)
+        return
+      }
+      const accepted = cleaned.slice(0, room)
+      if (accepted.length < cleaned.length) {
+        setToast(`Only the first ${room} file${room === 1 ? '' : 's'} were attached.`)
+      }
+      // Read each accepted file → data URL → strip prefix. Async, so we patch
+      // the staged chip from 'reading' to 'ready' when its bytes land.
+      accepted.forEach(({ file, kind }) => {
+        const local_id = uid()
+        const seed = {
+          local_id,
+          name: file.name,
+          mime: file.type || (kind === 'csv' ? 'text/csv' : 'application/octet-stream'),
+          kind,
+          dataBase64: '',
+          preview: undefined,
+          status: 'reading',
         }
-        const accepted = cleaned.slice(0, room)
-        if (accepted.length < cleaned.length) {
-          setToast(`Only the first ${room} file${room === 1 ? '' : 's'} were attached.`)
-        }
-        // Read each accepted file → data URL → strip prefix. Async, so we patch
-        // the staged chip from 'reading' to 'ready' when its bytes land.
-        accepted.forEach(({ file, kind }) => {
-          const local_id = uid()
-          const seed = {
-            local_id,
-            name: file.name,
-            mime: file.type || (kind === 'csv' ? 'text/csv' : 'application/octet-stream'),
-            kind,
-            dataBase64: '',
-            preview: undefined,
-            status: 'reading',
-          }
-          setAttachments((cur) => [...cur, seed])
-          readAsDataURL(file)
-            .then((dataUrl) => {
-              const comma = dataUrl.indexOf(',')
-              const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
-              setAttachments((cur) =>
-                cur.map((a) =>
-                  a.local_id === local_id
-                    ? {
-                        ...a,
-                        dataBase64: b64,
-                        preview: kind === 'image' ? dataUrl : undefined,
-                        status: 'ready',
-                      }
-                    : a,
-                ),
-              )
-            })
-            .catch(() => {
-              setToast(`Couldn’t read ${file.name}.`)
-              setAttachments((cur) => cur.filter((a) => a.local_id !== local_id))
-            })
-        })
-        return prev
+        updateAttachments((cur) => [...cur, seed])
+        readAsDataURL(file)
+          .then((dataUrl) => {
+            const comma = dataUrl.indexOf(',')
+            const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
+            updateAttachments((cur) =>
+              cur.map((a) =>
+                a.local_id === local_id
+                  ? {
+                      ...a,
+                      dataBase64: b64,
+                      preview: kind === 'image' ? dataUrl : undefined,
+                      status: 'ready',
+                    }
+                  : a,
+              ),
+            )
+          })
+          .catch(() => {
+            setToast(`Couldn’t read ${file.name}.`)
+            updateAttachments((cur) => cur.filter((a) => a.local_id !== local_id))
+          })
       })
     },
-    [],
+    [updateAttachments],
   )
 
   const onFilePick = (e) => {
@@ -153,7 +161,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
   }
 
   const removeAttachment = (local_id) => {
-    setAttachments((prev) => prev.filter((a) => a.local_id !== local_id))
+    updateAttachments((prev) => prev.filter((a) => a.local_id !== local_id))
   }
 
   // Panel-wide drop dispatch from PennyChat.
@@ -181,7 +189,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
     if (speech.listening) speech.stop()
     tts.primeForGesture() // iOS audio unlock — must run inside the user gesture
     setValue('')
-    setAttachments([])
+    updateAttachments(() => [])
     onSubmit(text, { attachments: ready })
   }
 
