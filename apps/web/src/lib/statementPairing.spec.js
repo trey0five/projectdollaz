@@ -3,9 +3,11 @@
 //
 // A QuickBooks Profit and Loss export is only the income half of a trial
 // balance; the engine used to call it "Balanced". The intake now says "Income
-// only", and merges a same-period P&L half with its Balance Sheet half into ONE
-// entry (the parser's own mergeStatementResults), showing the balancing line
-// when one was needed. Never guesses: two P&Ls for one date stay apart.
+// only". A same-period P&L half and its Balance Sheet half stay SEPARATE cards
+// that offer Combine; only the person's Combine merges them into ONE entry (the
+// parser's own mergeStatementResults), and only when they tie — a pair that
+// doesn't tie is never combined (customer upload 2026-10-24: $977,876.30 apart).
+// Never guesses: two P&Ls for one date stay apart.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
 import { ingest, asStatementResult, mergeStatementResults, inferPeriod } from '@finrep/ingestion'
@@ -49,6 +51,10 @@ const BS_DEC = HF_BS.map((row) => (row[0] === 'As of June 30, 2026' ? ['As of De
 const pl = (id = 'pl', extra) => entry(id, 'Holy Family Profit and Loss 6-30-26.xlsx', HF_PL, extra)
 const bs = (id = 'bs', extra) => entry(id, 'Holy Family Balance Sheet 6-30-26.xlsx', HF_BS, extra)
 const bsDec = (id = 'bsd', extra) => entry(id, 'Holy Family Balance Sheet 12-31-25.xlsx', BS_DEC, extra)
+// The same Balance Sheet with Operating Checking $977,876.30 higher — no longer matches the P&L.
+const BS_OFF = HF_BS.map((row) => (String(row[0]).includes('10100 Operating Checking') ? [row[0], row[1] + 977876.3] : row))
+const bsOff = (id = 'bso', extra) => entry(id, 'Holy Family Balance Sheet 6-30-26.xlsx', BS_OFF, extra)
+const COMBINE = [{ plId: 'pl', bsId: 'bs' }]
 
 describe('A40-1 — half a trial balance is never "Balanced"', () => {
   it('a P&L half says "Income only" and asks for the Balance Sheet', () => {
@@ -68,10 +74,19 @@ describe('A40-1 — half a trial balance is never "Balanced"', () => {
 })
 
 describe('A40-2 — pairIntakeFiles', () => {
-  it('one P&L and one Balance Sheet on the same date merge into ONE full entry', () => {
+  it('one P&L and one Balance Sheet on the same date stay separate and offer Combine', () => {
+    const out = pairIntakeFiles([pl(), bs()])
+    expect(out.map((f) => f.id)).toEqual(['pl', 'bs'])
+    expect(out[0].pairNote).toMatchObject({ why: 'can-combine', partnerId: 'bs' })
+    expect(out[1].pairNote).toMatchObject({ why: 'can-combine', partnerId: 'pl' })
+    const line = statementLines(out[0]).find((l) => l.key === 'pair')
+    expect(line.action).toMatchObject({ kind: 'combine', partnerId: 'bs' })
+  })
+
+  it('Combine (the person’s choice) merges a pair that ties into ONE full entry', () => {
     const a = pl()
     const b = bs()
-    const out = pairIntakeFiles([a, b])
+    const out = pairIntakeFiles([a, b], COMBINE)
     expect(out).toHaveLength(1)
     const m = out[0]
     expect(isPairId(m.id)).toBe(true)
@@ -96,7 +111,8 @@ describe('A40-2 — pairIntakeFiles', () => {
     // decides; a later slot drop only means "here is the other half".
     const a = pl('pl', { role: 'cy', roleConfirmed: true, roleFromSlot: true })
     const b = bs('bs', { role: 'py', roleConfirmed: true, roleFromSlot: true })
-    const out = pairIntakeFiles([a, b])
+    expect(pairIntakeFiles([a, b])[0].pairNote.why).toBe('can-combine')
+    const out = pairIntakeFiles([a, b], COMBINE)
     expect(out).toHaveLength(1)
     expect(out[0].metadata.statement.partial).toBe('full')
     expect(out[0].role).toBe('cy')
@@ -106,7 +122,7 @@ describe('A40-2 — pairIntakeFiles', () => {
     const out2 = pairIntakeFiles([
       bs('bs', { role: 'cy', roleConfirmed: true, roleFromSlot: true }),
       pl('pl', { role: 'py', roleConfirmed: true, roleFromSlot: true }),
-    ])
+    ], COMBINE)
     expect(out2).toHaveLength(1)
     expect(out2[0].role).toBe('cy')
   })
@@ -132,12 +148,13 @@ describe('A40-2 — pairIntakeFiles', () => {
 
   it('the merged file name fits the API’s 255-character limit', () => {
     const long = 'x'.repeat(200)
-    const out = pairIntakeFiles([pl('pl', { fileName: `${long}.xlsx` }), bs('bs', { fileName: `${long}.xlsx` })])
+    const out = pairIntakeFiles([pl('pl', { fileName: `${long}.xlsx` }), bs('bs', { fileName: `${long}.xlsx` })], COMBINE)
+    expect(out).toHaveLength(1)
     expect(out[0].fileName.length).toBeLessThanOrEqual(255)
   })
 
-  it('a saved P&L half + a new Balance Sheet merge into an UNSAVED entry', () => {
-    const out = pairIntakeFiles([pl('pl', { persisted: true, importId: 'imp1' }), bs()])
+  it('a saved P&L half + a new Balance Sheet, combined, become an UNSAVED entry', () => {
+    const out = pairIntakeFiles([pl('pl', { persisted: true, importId: 'imp1' }), bs()], COMBINE)
     expect(out).toHaveLength(1)
     expect(out[0].persisted).toBe(false)
     expect(out[0].members.map((m) => m.persisted)).toEqual([true, false])
@@ -174,6 +191,21 @@ describe('A40-2 — pairIntakeFiles', () => {
     expect(out[0].metadata.statement.partial).toBe('full')
   })
 
+  it('a same-date pair that does NOT tie is never combined — even when the person clicks Combine', () => {
+    for (const manual of [[], [{ plId: 'pl', bsId: 'bso' }]]) {
+      const out = pairIntakeFiles([pl(), bsOff()], manual)
+      expect(out.map((f) => f.id)).toEqual(['pl', 'bso'])
+      expect(out.some((f) => (f.rows || []).some((r) => r.acct === 399))).toBe(false)
+      expect(out[0].pairNote).toMatchObject({ why: 'no-tie', partnerId: 'bso' })
+      expect(out[0].pairNote.gap).toBeCloseTo(977876.3, 2)
+      const line = statementLines(out[0]).find((l) => l.key === 'pair')
+      expect(line.text).toBe(
+        'This and Holy Family Balance Sheet 6-30-26.xlsx are $977,876.30 apart, so they can’t be combined — check both are for the same company, period and accounting basis.',
+      )
+      expect(line.action).toBeNull()
+    }
+  })
+
   it('a role the person confirmed differently on each half keeps them apart', () => {
     const out = pairIntakeFiles([
       pl('pl', { role: 'cy', roleConfirmed: true }),
@@ -191,7 +223,7 @@ describe('A40-2 — pairIntakeFiles', () => {
 describe('A40-3 — actions on a merged entry', () => {
   it('removing it removes only the halves added this session, and never deletes on the server', () => {
     const raw = [pl('pl', { persisted: true, importId: 'imp1' }), bs()]
-    const derived = pairIntakeFiles(raw)
+    const derived = pairIntakeFiles(raw, COMBINE)
     const r = removeIntakeEntry(raw, [{ plId: 'pl', bsId: 'bs' }], derived, derived[0].id)
     expect(r.rawFiles.map((f) => f.id)).toEqual(['pl'])
     expect(r.manualPairs).toEqual([])
@@ -205,7 +237,7 @@ describe('A40-3 — actions on a merged entry', () => {
 
   it('a role set on the merged entry is set on both halves', () => {
     const raw = [pl(), bs()]
-    const derived = pairIntakeFiles(raw)
+    const derived = pairIntakeFiles(raw, COMBINE)
     const next = setRoleInRaw(raw, derived, derived[0].id, 'py')
     expect(next.map((f) => [f.role, f.roleConfirmed])).toEqual([
       ['py', true],
@@ -216,7 +248,7 @@ describe('A40-3 — actions on a merged entry', () => {
 
   it('re-keying an account finds the half that holds it', () => {
     const raw = [pl(), bs()]
-    const derived = pairIntakeFiles(raw)
+    const derived = pairIntakeFiles(raw, COMBINE)
     expect(memberHolding(raw, derived, derived[0].id, 40100).id).toBe('pl')
     expect(memberHolding(raw, derived, derived[0].id, 10100).id).toBe('bs')
   })

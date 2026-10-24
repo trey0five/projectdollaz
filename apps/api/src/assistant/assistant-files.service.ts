@@ -17,6 +17,8 @@ import {
   mergeStatementResults,
   pairStatements,
   statementHalf,
+  statementGap,
+  statementsTie,
   statementTypeFromFileName,
   type IntakeMemory,
   type NormalizedRow,
@@ -42,12 +44,20 @@ const MIME_ALLOW: Record<string, string[]> = {
   image: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'],
 }
 
+/** Prefixed to the digest of a file the client re-sent from an earlier turn. */
+export const CARRIED_NOTE =
+  '(This file was attached EARLIER in this conversation and is re-sent so you can act on the user’s ' +
+  'follow-up — it is NOT newly attached. Its attachmentId below is current; ignore any earlier one. ' +
+  'Do not import it again if you already imported it in this conversation.)'
+
 export interface AttachmentInput {
   name: string
   kind: 'xlsx' | 'csv' | 'pdf' | 'image'
   mimeType: string
   size: number
   dataBase64: string
+  /** Re-sent from an earlier turn of the same chat (see ChatAttachmentDto). */
+  carried?: boolean
 }
 
 export interface ParsedFile {
@@ -174,144 +184,151 @@ export class AssistantFilesService {
     let totalBytes = 0
 
     for (const att of attachments) {
-      const allow = MIME_ALLOW[att.kind]
-      if (!allow) throw new AttachmentError(`Unsupported attachment type for “${this.safeName(att.name)}”.`)
-      const mime = (att.mimeType || '').toLowerCase().split(';')[0].trim()
-      if (!allow.includes(mime)) {
-        throw new AttachmentError(
-          `“${this.safeName(att.name)}” isn’t an allowed ${att.kind} file type.`,
-        )
-      }
-
-      // Re-decode and re-derive the true byte length — never trust the declared size.
-      let buf: Buffer
+      // try/finally so every exit path (incl. the `continue`s) labels a
+      // re-sent file's digest(s) as carried from an earlier turn.
+      const digestStart = digests.length
       try {
-        buf = Buffer.from(att.dataBase64, 'base64')
-      } catch {
-        throw new AttachmentError(`Couldn’t read “${this.safeName(att.name)}”.`)
-      }
-      if (buf.length === 0) throw new AttachmentError(`“${this.safeName(att.name)}” is empty.`)
-      if (buf.length > MAX_DECODED_BYTES) {
-        throw new AttachmentError(`“${this.safeName(att.name)}” is too large (max 8MB).`)
-      }
-      totalBytes += buf.length
-      if (totalBytes > MAX_TOTAL_DECODED_BYTES) {
-        throw new AttachmentError('Those attachments are too large in total (max 16MB).')
-      }
-
-      // ONE attachmentId per attachment, minted up-front and surfaced in the digest,
-      // so the LLM can cite it for BOTH propose_import_trial_balance (xlsx/csv) AND
-      // file_document (any kind). Retain the raw bytes+mime+filename for filing.
-      const attachmentId = randomId()
-      rawFiles.set(attachmentId, {
-        buffer: buf,
-        mimeType: mime,
-        fileName: this.safeName(att.name),
-        kind: att.kind,
-      })
-
-      if (att.kind === 'image') {
-        // FERPA: do NOT send the image bytes to the model (may hold student
-        // records; images can't be redacted). Still stored/filable.
-        if (!this.ferpaMode) {
-          const b64 = buf.toString('base64')
-          llmContentBlocks.push({
-            type: 'image_url',
-            image_url: { url: `data:${mime};base64,${b64}` },
-          })
-        }
-        digests.push(
-          this.wrapDigest(
-            att.name,
-            this.ferpaMode
-              ? `kind: image\nattachmentId: ${attachmentId}\nAn image was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — images may contain student records). Tell the user you can't read image contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
-              : `kind: image\nattachmentId: ${attachmentId}\nThe image is attached above for you to view directly. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
-          ),
-        )
-        continue
-      }
-
-      if (att.kind === 'pdf') {
-        // FERPA: do NOT inline the PDF bytes to the model (transcripts/discipline
-        // files can't be redacted). Still stored/filable. No server-side PDF
-        // text extraction (no parser permitted).
-        if (!this.ferpaMode) {
-          const b64 = buf.toString('base64')
-          llmContentBlocks.push({
-            type: 'file',
-            file: { filename: this.safeName(att.name), file_data: `data:application/pdf;base64,${b64}` },
-          })
-        }
-        digests.push(
-          this.wrapDigest(
-            att.name,
-            this.ferpaMode
-              ? `kind: pdf\nattachmentId: ${attachmentId}\nA PDF (${this.safeName(att.name)}) was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — PDFs may contain student records). Tell the user you can't read PDF contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
-              : `kind: pdf\nattachmentId: ${attachmentId}\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
-          ),
-        )
-        continue
-      }
-
-      // xlsx / csv — parse server-side via @finrep/ingestion (the only place bytes
-      // become rows). Guarded; a parse failure degrades to a note, never throws out.
-      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
-
-      // An .xlsx may hold MANY sheets (e.g. a prior-year annual TB + monthly YTD
-      // sheets). Enumerate them all and fan out one candidate PER trial-balance
-      // sheet under a composite attachmentId, so each is independently importable
-      // WITHOUT a new tool param. CSV / a single-sheet workbook keep one candidate
-      // under the ORIGINAL attachmentId (byte-identical to the prior behaviour).
-      if (att.kind === 'xlsx') {
-        let sheets: SheetCandidate[] = []
-        try {
-          sheets = this.withBudget(att.name, () => this.workbookSheetCandidates(att.name, ab, memory))
-        } catch (e) {
-          this.logger.warn(
-            `attachment sheet-enumeration failed: ${e instanceof Error ? e.message : 'error'}`,
+        const allow = MIME_ALLOW[att.kind]
+        if (!allow) throw new AttachmentError(`Unsupported attachment type for “${this.safeName(att.name)}”.`)
+        const mime = (att.mimeType || '').toLowerCase().split(';')[0].trim()
+        if (!allow.includes(mime)) {
+          throw new AttachmentError(
+            `“${this.safeName(att.name)}” isn’t an allowed ${att.kind} file type.`,
           )
         }
-        if (sheets.length > 1) {
-          this.registerMultiSheet(att.name, attachmentId, sheets, parsed, importCandidates, digests)
+
+        // Re-decode and re-derive the true byte length — never trust the declared size.
+        let buf: Buffer
+        try {
+          buf = Buffer.from(att.dataBase64, 'base64')
+        } catch {
+          throw new AttachmentError(`Couldn’t read “${this.safeName(att.name)}”.`)
+        }
+        if (buf.length === 0) throw new AttachmentError(`“${this.safeName(att.name)}” is empty.`)
+        if (buf.length > MAX_DECODED_BYTES) {
+          throw new AttachmentError(`“${this.safeName(att.name)}” is too large (max 8MB).`)
+        }
+        totalBytes += buf.length
+        if (totalBytes > MAX_TOTAL_DECODED_BYTES) {
+          throw new AttachmentError('Those attachments are too large in total (max 16MB).')
+        }
+
+        // ONE attachmentId per attachment, minted up-front and surfaced in the digest,
+        // so the LLM can cite it for BOTH propose_import_trial_balance (xlsx/csv) AND
+        // file_document (any kind). Retain the raw bytes+mime+filename for filing.
+        const attachmentId = randomId()
+        rawFiles.set(attachmentId, {
+          buffer: buf,
+          mimeType: mime,
+          fileName: this.safeName(att.name),
+          kind: att.kind,
+        })
+
+        if (att.kind === 'image') {
+          // FERPA: do NOT send the image bytes to the model (may hold student
+          // records; images can't be redacted). Still stored/filable.
+          if (!this.ferpaMode) {
+            const b64 = buf.toString('base64')
+            llmContentBlocks.push({
+              type: 'image_url',
+              image_url: { url: `data:${mime};base64,${b64}` },
+            })
+          }
+          digests.push(
+            this.wrapDigest(
+              att.name,
+              this.ferpaMode
+                ? `kind: image\nattachmentId: ${attachmentId}\nAn image was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — images may contain student records). Tell the user you can't read image contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
+                : `kind: image\nattachmentId: ${attachmentId}\nThe image is attached above for you to view directly. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
+            ),
+          )
           continue
         }
-        // 0 or 1 TB sheet → fall through to the single-candidate path below.
-      }
 
-      let result: { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } | null = null
-      try {
-        result = this.ingestWithBudget(att.name, ab, memory)
-      } catch (e) {
-        // The log keeps the technical message (unchanged). The digest carries ONLY
-        // the plain reason + ask (column letters / row numbers, never cell text) —
-        // NEVER e.preview, which holds raw cells and must not reach the model.
-        this.logger.warn(`attachment parse failed for a spreadsheet: ${e instanceof Error ? e.message : 'error'}`)
-        digests.push(
-          this.wrapDigest(att.name, this.parseFailureDigest(attachmentId, e, red)),
-        )
-        continue
-      }
+        if (att.kind === 'pdf') {
+          // FERPA: do NOT inline the PDF bytes to the model (transcripts/discipline
+          // files can't be redacted). Still stored/filable. No server-side PDF
+          // text extraction (no parser permitted).
+          if (!this.ferpaMode) {
+            const b64 = buf.toString('base64')
+            llmContentBlocks.push({
+              type: 'file',
+              file: { filename: this.safeName(att.name), file_data: `data:application/pdf;base64,${b64}` },
+            })
+          }
+          digests.push(
+            this.wrapDigest(
+              att.name,
+              this.ferpaMode
+                ? `kind: pdf\nattachmentId: ${attachmentId}\nA PDF (${this.safeName(att.name)}) was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — PDFs may contain student records). Tell the user you can't read PDF contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
+                : `kind: pdf\nattachmentId: ${attachmentId}\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
+            ),
+          )
+          continue
+        }
 
-      const rows = result.rows ?? []
-      const metadata = result.metadata
-      const candidate = this.looksLikeTrialBalance(rows)
-      parsed.set(attachmentId, {
-        sourceName: metadata?.sourceName ?? this.safeName(att.name),
-        rows,
-        metadata,
-        isTrialBalanceCandidate: candidate,
-        ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
-      })
-      if (candidate) {
-        importCandidates.push({
-          attachmentId,
-          kind: 'trial_balance',
+        // xlsx / csv — parse server-side via @finrep/ingestion (the only place bytes
+        // become rows). Guarded; a parse failure degrades to a note, never throws out.
+        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+
+        // An .xlsx may hold MANY sheets (e.g. a prior-year annual TB + monthly YTD
+        // sheets). Enumerate them all and fan out one candidate PER trial-balance
+        // sheet under a composite attachmentId, so each is independently importable
+        // WITHOUT a new tool param. CSV / a single-sheet workbook keep one candidate
+        // under the ORIGINAL attachmentId (byte-identical to the prior behaviour).
+        if (att.kind === 'xlsx') {
+          let sheets: SheetCandidate[] = []
+          try {
+            sheets = this.withBudget(att.name, () => this.workbookSheetCandidates(att.name, ab, memory))
+          } catch (e) {
+            this.logger.warn(
+              `attachment sheet-enumeration failed: ${e instanceof Error ? e.message : 'error'}`,
+            )
+          }
+          if (sheets.length > 1) {
+            this.registerMultiSheet(att.name, attachmentId, sheets, parsed, importCandidates, digests)
+            continue
+          }
+          // 0 or 1 TB sheet → fall through to the single-candidate path below.
+        }
+
+        let result: { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } | null = null
+        try {
+          result = this.ingestWithBudget(att.name, ab, memory)
+        } catch (e) {
+          // The log keeps the technical message (unchanged). The digest carries ONLY
+          // the plain reason + ask (column letters / row numbers, never cell text) —
+          // NEVER e.preview, which holds raw cells and must not reach the model.
+          this.logger.warn(`attachment parse failed for a spreadsheet: ${e instanceof Error ? e.message : 'error'}`)
+          digests.push(
+            this.wrapDigest(att.name, this.parseFailureDigest(attachmentId, e, red)),
+          )
+          continue
+        }
+
+        const rows = result.rows ?? []
+        const metadata = result.metadata
+        const candidate = this.looksLikeTrialBalance(rows)
+        parsed.set(attachmentId, {
           sourceName: metadata?.sourceName ?? this.safeName(att.name),
+          rows,
           metadata,
+          isTrialBalanceCandidate: candidate,
           ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
         })
+        if (candidate) {
+          importCandidates.push({
+            attachmentId,
+            kind: 'trial_balance',
+            sourceName: metadata?.sourceName ?? this.safeName(att.name),
+            metadata,
+            ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
+          })
+        }
+        digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate, red))
+      } finally {
+        if (att.carried) this.markCarried(digests, digestStart)
       }
-      digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate, red))
     }
 
     this.pairSameTurn(parsed, importCandidates, digests)
@@ -371,6 +388,22 @@ export class AssistantFilesService {
         this.logger.warn(`attachment statement merge failed: ${e instanceof Error ? e.message : 'error'}`)
         continue
       }
+      const names = `"${this.safeName(pl.sourceName)}" + "${this.safeName(bs.sourceName)}"`
+      // Never combine halves that don't tie: a balancing line would hide a gap
+      // that means different books or periods (STATEMENT_TIE_TOLERANCE).
+      if (!statementsTie(merged)) {
+        digests.push(
+          this.wrapDigest(
+            `${pl.sourceName} + ${bs.sourceName}`,
+            `kind: note (QuickBooks statements that do NOT tie)\n` +
+              `${names} are ${Math.abs(statementGap(merged)).toFixed(2)} apart — the income statement's result ` +
+              `doesn't match the balance sheet's, so they can't be combined into one trial balance. Tell the user, ` +
+              `and suggest checking both exports are for the same company, period and accounting basis. Do not ` +
+              `combine or import them on your own.`,
+          ),
+        )
+        continue
+      }
       const id = `pair:${plId}+${bsId}`
       const sourceName = `${pl.sourceName} + ${bs.sourceName}`.slice(0, 255)
       const metadata: SheetMetadata = { ...merged.metadata, sourceName }
@@ -379,17 +412,13 @@ export class AssistantFilesService {
       if (candidate) {
         importCandidates.push({ attachmentId: id, kind: 'trial_balance', sourceName, metadata })
       }
-      const plug = merged.metadata.statement.balancePlug
       const lines = [
-        `kind: spreadsheet (combined QuickBooks statements)`,
-        `Combined "${this.safeName(pl.sourceName)}" + "${this.safeName(bs.sourceName)}" into one full trial balance (P&L + balance sheet) — attachmentId "${id}". Prefer this one.`,
+        `kind: spreadsheet (QuickBooks statements that CAN be combined)`,
+        `${names} tie, so they can be combined into one full trial balance (P&L + balance sheet) — attachmentId "${id}".`,
         `rowCount: ${merged.rows.length}`,
         metadata.periodEndDate ? `periodEndDate: ${metadata.periodEndDate}` : null,
-        plug != null
-          ? `The two exports were ${Math.abs(merged.metadata.statement.imbalance ?? plug).toFixed(2)} apart, so one balancing line (account 399) was added — tell the user.`
-          : `The P&L and balance sheet tie; no balancing line was needed.`,
         candidate
-          ? `If the user wants to import these, call propose_import_trial_balance with attachmentId "${id}" (no importPartial needed — this is a full trial balance). NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
+          ? `They stay separate unless the user chooses: ASK whether to combine them into one trial balance. Only after they say yes, call propose_import_trial_balance with attachmentId "${id}" and combine: true. NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
           : `This did not look like a standard trial balance; do not propose importing it.`,
       ].filter((l): l is string => l != null)
       digests.push(this.wrapDigest(sourceName, lines.join('\n')))
@@ -601,6 +630,12 @@ export class AssistantFilesService {
       top || '  (no rows)',
     ].filter((l): l is string => l != null)
     return this.wrapDigest(name, lines.join('\n'))
+  }
+
+  /** Label digests[from..] as belonging to a file re-sent from an earlier turn.
+   *  The note sits OUTSIDE the UNTRUSTED markers — it is ours, not file content. */
+  private markCarried(digests: string[], from: number): void {
+    for (let i = from; i < digests.length; i++) digests[i] = `${CARRIED_NOTE}\n${digests[i]}`
   }
 
   /** Wrap a digest in clearly-delimited UNTRUSTED markers (prompt-injection hygiene). */

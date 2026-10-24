@@ -23,6 +23,7 @@ import { tokenStore, apiErrorMessage, assistantApi } from '../../../lib/api.js'
 import { useTextToSpeech } from '../hooks/useTextToSpeech.js'
 import { useSmoothStream } from '../hooks/useSmoothStream.js'
 import { useAiChatSessions } from '../hooks/useAiChatSessions.js'
+import { MAX_FILES } from './stageAttachments.js'
 
 // A confirmed module-create proposal → the domain refresh key(s) to broadcast so an
 // open register page refetches. Mirrors the API's REFRESH map for these kinds; any
@@ -91,6 +92,31 @@ function toWireAttachment(a) {
   }
 }
 
+// Files only reach the server with the message they're attached to, so a
+// follow-up ("June 30, 2026", "import it anyway", the other half of a QuickBooks
+// pair) used to arrive with nothing to act on. Re-send them, marked carried, with
+// the next few messages. Server caps: MAX_FILES per message, 16MB decoded total.
+const CARRY_TURNS = 3
+const MAX_TOTAL_BYTES = 16 * 1024 * 1024
+const decodedBytes = (a) => Math.floor((a.dataBase64?.length || 0) * 0.75)
+
+// Pick the earlier files that still fit beside this message's new ones (newest
+// kept first; a re-attached file of the same name replaces its old copy).
+export function pickCarried(prior, fresh) {
+  const room = MAX_FILES - fresh.length
+  if (room <= 0) return []
+  let budget = MAX_TOTAL_BYTES - fresh.reduce((n, a) => n + decodedBytes(a), 0)
+  const kept = []
+  const candidates = prior.filter((p) => !fresh.some((a) => a.name === p.name))
+  for (let i = candidates.length - 1; i >= 0 && kept.length < room; i--) {
+    const size = decodedBytes(candidates[i])
+    if (size > budget) continue
+    budget -= size
+    kept.unshift(candidates[i])
+  }
+  return kept
+}
+
 export default function usePennyChat() {
   const { activeId } = useSchools()
 
@@ -127,10 +153,13 @@ export default function usePennyChat() {
 
   // Abort the live stream when the user starts a new chat / switches sessions.
   const abortRef = useRef(null)
+  // { files, turnsLeft } — files re-sent with follow-ups (see CARRY_TURNS).
+  const carriedRef = useRef(null)
   // Guard so a stale stream (school switched mid-flight) can't clobber state.
   const activeIdRef = useRef(activeId)
   useEffect(() => {
     activeIdRef.current = activeId
+    carriedRef.current = null // never carry one school's files into another
   }, [activeId])
 
   // ── Session hydration: load the active stored transcript when the identity
@@ -236,6 +265,7 @@ export default function usePennyChat() {
           reversible: !!applied.reversible,
           undoTool: action?.kind,
         })
+        if (/import/.test(action?.kind || '')) carriedRef.current = null
         // A confirmed create_task now exists server-side — broadcast so an open
         // Tasks page (useTasks) refetches. The autonomous 'applied' SSE path already
         // refreshes via ev.refresh; the proposal/confirm path needs this explicitly.
@@ -339,7 +369,15 @@ export default function usePennyChat() {
         } catch {
           periodId = null
         }
-        const wireAttachments = attachments.map(toWireAttachment)
+        const carry = carriedRef.current
+        const carried = carry?.turnsLeft > 0 ? pickCarried(carry.files, attachments) : []
+        if (attachments.length) carriedRef.current = { files: [...carried, ...attachments], turnsLeft: CARRY_TURNS }
+        else if (carried.length) carriedRef.current = { files: carried, turnsLeft: carry.turnsLeft - 1 }
+        else carriedRef.current = null
+        const wireAttachments = [
+          ...carried.map((a) => ({ ...toWireAttachment(a), carried: true })),
+          ...attachments.map(toWireAttachment),
+        ]
         const token = tokenStore.getAccess()
         const res = await fetch(assistantApi.chatStreamUrl(activeId), {
           method: 'POST',
@@ -438,6 +476,8 @@ export default function usePennyChat() {
               ]
               update()
               pennyRef.current.agentRefresh(ev.refresh || [])
+              // Imported — stop re-sending the files so a follow-up can't import twice.
+              if (/import/.test(ev.tool || '')) carriedRef.current = null
             } else if (ev.type === 'guide') {
               // Interactive on-screen walkthrough — drive the existing Penny glide.
               pennyRef.current.runAgentGuide(ev.steps)
@@ -533,6 +573,7 @@ export default function usePennyChat() {
 
   const newChat = useCallback(() => {
     abortLive()
+    carriedRef.current = null
     sessionsRef.current.newChat()
     setMessages([])
     setError(null)
@@ -541,6 +582,7 @@ export default function usePennyChat() {
   const switchSession = useCallback(
     (id) => {
       abortLive()
+      carriedRef.current = null
       sessionsRef.current.switchSession(id)
       // hydration effect (keyed on activeSessionId) loads the transcript
     },

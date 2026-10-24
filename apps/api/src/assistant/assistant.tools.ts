@@ -467,6 +467,11 @@ export const TOOL_SCHEMAS = [
             description:
               'ONLY after the user explicitly asked to import a PARTIAL statement (income statement only / balance sheet only) anyway. Never set it on your own initiative.',
           },
+          combine: {
+            type: 'boolean',
+            description:
+              'Required to import a combined P&L + balance sheet pair (an attachmentId starting "pair:"). Set ONLY after the user said yes to combining them.',
+          },
           role: {
             type: 'string',
             enum: ['cy', 'py', 'audit'],

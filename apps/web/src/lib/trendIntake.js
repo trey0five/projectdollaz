@@ -18,9 +18,11 @@ import {
   statementTypeFromFileName,
   inferPeriod,
   statementHalf,
-  pairStatements,
   asStatementResult,
   mergeStatementResults,
+  pairStatements,
+  statementsTie,
+  statementGap,
 } from '@finrep/ingestion'
 import { validateDataset } from '@finrep/engine'
 import { failureFromError, failureText } from './ingestFailure.js'
@@ -46,8 +48,9 @@ const nextKey = () =>
  *
  * HALF A TRIAL BALANCE IS NEVER A YEAR (#41 S-D). A QuickBooks Profit and Loss
  * (or Balance Sheet) export on its own is `status:'partial'` — it never reaches
- * the annual bucket, so it can never be saved as a trend year. pairCandidates
- * merges a P&L half with its Balance Sheet into one `ready` candidate.
+ * the annual bucket, so it can never be saved as a trend year. "Pair with…"
+ * (pairChosen) merges a P&L half with its Balance Sheet into one `ready`
+ * candidate — the person's choice, and only when they tie.
  */
 export function toCandidate(sourceName, rows, metadata, sheet, warnings) {
   const inferred = inferPeriod(metadata)
@@ -192,10 +195,13 @@ export function mergeCandidates(pl, bs) {
 }
 
 /**
- * Merge every unambiguous same-date P&L half + Balance Sheet half (across files
- * AND sheets) into one ready candidate, at the first half's position. Anything
- * not partial — including candidates already saving/saved — is left exactly as
- * it is. `manual` = [{plKey, bsKey}] forces a pair ("Pair with…").
+ * Merge the P&L + Balance Sheet halves the person paired (`manual` =
+ * [{plKey, bsKey}], "Pair with…") into one ready candidate, at the first half's
+ * position — only when they tie (STATEMENT_TIE_TOLERANCE). Halves in SEPARATE
+ * files are never merged on their own: they stay separate until the person
+ * pairs them (customer upload 2026-10-24). Same-date sheets of ONE workbook
+ * still merge (one export, like the single intake's parseStatementWorkbook) —
+ * again only when they tie. Anything not partial is left as it is.
  */
 export function pairCandidates(cands, manual = []) {
   const list = Array.isArray(cands) ? cands : []
@@ -214,13 +220,15 @@ export function pairCandidates(cands, manual = []) {
     used.add(b.key)
   }
   const rest = partials.filter((c) => !used.has(c.key))
-  pairs.push(...pairStatements(rest, (c) => c.metadata).pairs)
+  const byFile = new Map()
+  for (const c of rest) byFile.set(c.sourceName, [...(byFile.get(c.sourceName) ?? []), c])
+  for (const sheets of byFile.values()) pairs.push(...pairStatements(sheets, (c) => c.metadata).pairs)
   if (pairs.length === 0) return list
 
   const replace = new Map()
   for (const { pl, bs } of pairs) {
     const merged = mergeCandidates(pl, bs)
-    if (!merged) continue
+    if (!merged || !statementsTie(merged)) continue
     const first = list.indexOf(pl) <= list.indexOf(bs) ? pl : bs
     replace.set(first.key, merged)
     replace.set((first === pl ? bs : pl).key, null)
@@ -395,6 +403,14 @@ export function pairChosen(list, aKey, bKey) {
   const bs = pl === a ? b : a
   const merged = mergeCandidates(pl, bs)
   if (!merged) return list
+  // Halves that don't tie are never combined (a balancing line would hide the
+  // gap): both stay, each saying how far apart it is from the other.
+  if (!statementsTie(merged)) {
+    const gap = Math.abs(statementGap(merged))
+    return list.map((c) =>
+      c === pl || c === bs ? { ...c, noTie: { gap, partnerName: candidateName(c === pl ? bs : pl) } } : c,
+    )
+  }
   const out = []
   for (const c of list) {
     if (c.key === aKey) out.push(merged)

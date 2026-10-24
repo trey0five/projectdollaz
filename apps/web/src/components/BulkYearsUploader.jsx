@@ -396,6 +396,13 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
                         {HALF_LABEL[c.partial]}
                         {c.periodEndDate ? ` · ${formatShortDate(c.periodEndDate)}` : ''}
                       </span>
+                      {c.noTie && (
+                        <span className="text-[12.5px] font-medium text-[rgb(var(--c-risk))]" data-testid="bulk-no-tie">
+                          {c.noTie.gap.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} apart from{' '}
+                          {c.noTie.partnerName}, so they can’t be combined — check both are for the same company,
+                          period and accounting basis.
+                        </span>
+                      )}
                     </span>
                     <span className="flex items-center gap-2">
                       {partners.length > 0 ? (

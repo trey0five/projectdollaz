@@ -207,3 +207,33 @@ describe('N4 — a workbook of monthly P&L tabs points to Monthly numbers, not "
     expect(monthlyStatementKeys(cands).size).toBe(0)
   })
 })
+
+// Customer upload 2026-10-24: a P&L and a Balance Sheet uploaded as two files
+// were combined on their own, with a balancing line hiding a $977,876.30 gap.
+describe('P&L and Balance Sheet in SEPARATE files stay separate until paired', () => {
+  const plFile = () => expandFileToCandidates('P&L FY26.xlsx', workbook({ PL: plSheet('July 2025 - June 2026', 768_000, 420_000) }))
+  const bsFile = (netIncome) => expandFileToCandidates('Balance Sheet 6-30-26.xlsx', workbook({ BS: bsSheet('As of June 30, 2026', netIncome) }))
+
+  it('same date, two files: nothing merges until "Pair with…"', async () => {
+    const all = settleCandidates([...(await plFile()), ...(await bsFile(348_000))])
+    expect(all.filter((c) => c.status === 'partial')).toHaveLength(2)
+    expect(all.some((c) => c.merged)).toBe(false)
+    const pl = all.find((c) => c.partial === 'pl')
+    const bs = all.find((c) => c.partial === 'bs')
+    const next = pairChosen(all, pl.key, bs.key)
+    expect(next.filter((c) => c.merged)).toHaveLength(1)
+    expect(savableOf(next)).toHaveLength(1)
+  })
+
+  it('a pair that does not tie is never combined — both stay, saying how far apart', async () => {
+    const all = settleCandidates([...(await plFile()), ...(await bsFile(348_000 + 977_876.3))])
+    const pl = all.find((c) => c.partial === 'pl')
+    const bs = all.find((c) => c.partial === 'bs')
+    const next = pairChosen(all, pl.key, bs.key)
+    expect(next.some((c) => c.merged)).toBe(false)
+    expect(savableOf(next)).toHaveLength(0)
+    const after = next.find((c) => c.key === pl.key)
+    expect(after.noTie.gap).toBeCloseTo(977_876.3, 2)
+    expect(after.noTie.partnerName).toBe(candidateName(bs))
+  })
+})

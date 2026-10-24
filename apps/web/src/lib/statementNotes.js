@@ -113,7 +113,25 @@ export function statementLines(file) {
 
   if (p === 'pl' || p === 'bs') {
     const other = p === 'pl' ? 'bs' : 'pl'
-    if (note?.why === 'date-mismatch' && note.partnerDate) {
+    if (note?.why === 'can-combine' && note.partnerId) {
+      // Kept separate until the person chooses (they tie, so Combine is safe).
+      lines.push({
+        key: 'pair',
+        tone: 'watch',
+        text: `${note.partnerName || `Its ${HALF_LABEL[other]}`} is for the same date — keep them separate or combine them into one trial balance.`,
+        action: { kind: 'combine', label: 'Combine into one trial balance', partnerId: note.partnerId },
+      })
+    } else if (note?.why === 'no-tie') {
+      // Never combined: a balancing line would hide the gap.
+      lines.push({
+        key: 'pair',
+        tone: 'watch',
+        text:
+          `This and ${note.partnerName || `its ${HALF_LABEL[other]}`} are ${fmtDollar(Number(note.gap) || 0).replace('$ ', '$')} apart, ` +
+          'so they can’t be combined — check both are for the same company, period and accounting basis.',
+        action: null,
+      })
+    } else if (note?.why === 'date-mismatch' && note.partnerDate) {
       lines.push({
         key: 'pair',
         tone: 'watch',

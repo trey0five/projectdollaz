@@ -3124,6 +3124,12 @@ export class AssistantService {
     // real current-year TB with an income statement. Only an explicit
     // importPartial: true — which the digest tells the model to pass ONLY after
     // the user asked for the half anyway — lets it through.
+    // A combined P&L + balance sheet pair is the user's choice, never the model's.
+    if (attachmentId.startsWith('pair:') && args.combine !== true) {
+      throw new Error(
+        'Not imported: these statements stay separate unless the user chooses to combine them. Ask; if they say yes, call again with combine: true.',
+      )
+    }
     const partial = partialStatementNotice(parsed.metadata)
     if (partial && args.importPartial !== true) {
       throw new Error(`${partial} (Not imported. If the user explicitly asks for this half anyway, call again with importPartial: true.)`)
@@ -6185,6 +6191,13 @@ export class AssistantService {
       'replies that it couldn’t determine the period), do NOT import — ASK the user for the period-ending date ' +
       '(or fiscal year), then re-call propose_import_trial_balance passing periodEndDate=YYYY-MM-DD. ' +
       'For other attachments, answer the user’s questions from what you can read. ' +
+      'Files attached in an earlier message are RE-SENT with the user’s next few messages (marked as attached ' +
+      'EARLIER) so you can act on their follow-up — e.g. they answer your period question or say "import it ' +
+      'anyway": act on the re-sent file with its current attachmentId. A QuickBooks income statement and ' +
+      'balance sheet sent in different messages arrive together this way. They stay SEPARATE unless the user ' +
+      'chooses to combine them (and they tie) — the digest says which; never combine on your own. ' +
+      'Users NEVER see attachmentIds — never ask them for one. If they refer to a file and no attachment ' +
+      'digest is present, ask them to attach the file(s) again. ' +
       'When the user wants to SAVE or FILE an attached document to the Knowledge store (a policy, board packet, ' +
       'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
       'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +

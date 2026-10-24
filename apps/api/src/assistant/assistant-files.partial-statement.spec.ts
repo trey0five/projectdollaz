@@ -8,7 +8,7 @@
 //   2. partialStatementNotice() — the same text buildImportProposal throws
 //      unless importPartial: true — is null for a full TB and set for a half.
 import { describe, expect, it } from 'vitest'
-import { AssistantFilesService, partialStatementNotice } from './assistant-files.service.js'
+import { AssistantFilesService, CARRIED_NOTE, partialStatementNotice } from './assistant-files.service.js'
 import { AssistantService } from './assistant.service.js'
 import { Redactor } from './redaction.js'
 
@@ -197,7 +197,7 @@ const proposer = () =>
 const ctxOf = (prep: unknown) => ({ schoolId: 's1', periodId: 'p1', userId: 'u1', user: null, role: 'owner', prep })
 
 describe('AssistantFilesService.prepare — same-turn P&L + Balance Sheet pairing', () => {
-  it('a P&L and a BS in ONE message become one full candidate pair:<pl>+<bs>, preferred in the digest', async () => {
+  it('a P&L and a BS that tie offer a full candidate pair:<pl>+<bs> — combined only if the user chooses', async () => {
     const prep = await svc().prepare([SOA, balanceSheet('Balance Sheet 6-30-26.csv')], new Redactor(false))
     const halves = prep.importCandidates.filter((c) => !c.attachmentId.startsWith('pair:'))
     expect(halves).toHaveLength(2)
@@ -224,8 +224,10 @@ describe('AssistantFilesService.prepare — same-turn P&L + Balance Sheet pairin
 
     const pairDigest = prep.digests.find((d) => d.includes(`attachmentId "${pairId}"`))!
     expect(pairDigest).toContain(
-      `Combined "Statement of Activity 6-30-26.csv" + "Balance Sheet 6-30-26.csv" into one full trial balance (P&L + balance sheet) — attachmentId "${pairId}". Prefer this one.`,
+      `"Statement of Activity 6-30-26.csv" + "Balance Sheet 6-30-26.csv" tie, so they can be combined into one full trial balance (P&L + balance sheet) — attachmentId "${pairId}".`,
     )
+    expect(pairDigest).toMatch(/ASK whether to combine them/)
+    expect(pairDigest).not.toMatch(/Prefer this one/)
     expect(pairDigest).toMatch(/UNTRUSTED/)
 
     // The halves are still listed AND still gated.
@@ -233,10 +235,13 @@ describe('AssistantFilesService.prepare — same-turn P&L + Balance Sheet pairin
     expect(partialStatementNotice(prep.parsed.get(bsId)!.metadata)).not.toBeNull()
   })
 
-  it('the merged pair proposes with NO importPartial; each half alone is still refused', async () => {
+  it('the pair imports only with combine: true (the user said yes); each half alone is still refused', async () => {
     const prep = await svc().prepare([SOA, balanceSheet('Balance Sheet 6-30-26.csv')], new Redactor(false))
     const pair = prep.importCandidates.find((c) => c.attachmentId.startsWith('pair:'))!
-    const p = proposer().buildImportProposal({ attachmentId: pair.attachmentId }, ctxOf(prep))
+    expect(() => proposer().buildImportProposal({ attachmentId: pair.attachmentId }, ctxOf(prep))).toThrow(
+      /stay separate unless the user chooses/,
+    )
+    const p = proposer().buildImportProposal({ attachmentId: pair.attachmentId, combine: true }, ctxOf(prep))
     expect(p.payload.periodEndDate).toBe('2026-06-30')
     expect((p.payload.metadata as { statement: { partial: string } }).statement.partial).toBe('full')
     expect(p.summary).not.toMatch(/income statement only|balance sheet only/)
@@ -247,18 +252,18 @@ describe('AssistantFilesService.prepare — same-turn P&L + Balance Sheet pairin
     )
   })
 
-  it('a pair that does not tie carries the acct-399 balancing line and the digest says how far apart', async () => {
+  // Customer upload 2026-10-24: a P&L and BS $977,876.30 apart were combined
+  // with a balancing line that hid the gap. Halves that don't tie never combine.
+  it('a pair that does not tie is NOT combined — no pair, no acct-399 line, the digest says how far apart', async () => {
     const prep = await svc().prepare(
       [SOA, balanceSheet('Balance Sheet 6-30-26.csv', { offBy: 1234.56 })],
       new Redactor(false),
     )
-    const pair = prep.importCandidates.find((c) => c.attachmentId.startsWith('pair:'))!
-    expect(Math.abs(pair.metadata!.statement!.balancePlug!)).toBeCloseTo(1234.56, 2)
-    const rows = prep.parsed.get(pair.attachmentId)!.rows
-    expect(rows.some((r) => r.acct === 399)).toBe(true)
-    expect(Math.abs(rows.reduce((t, r) => t + r.total, 0))).toBeLessThan(0.01)
-    const digest = prep.digests.find((d) => d.includes(pair.attachmentId) && d.includes('Prefer this one'))!
-    expect(digest).toMatch(/1234\.56 apart, so one balancing line \(account 399\) was added/)
+    expect(prep.importCandidates.some((c) => c.attachmentId.startsWith('pair:'))).toBe(false)
+    expect([...prep.parsed.values()].some((p) => p.rows.some((r) => r.acct === 399))).toBe(false)
+    const digest = prep.digests.find((d) => d.includes('do NOT tie'))!
+    expect(digest).toMatch(/are 1234\.56 apart/)
+    expect(digest).toMatch(/Do not combine or import them on your own/)
   })
 
   it('a P&L alone: no pair candidate, still gated (the gate is unchanged)', async () => {
@@ -289,5 +294,35 @@ describe('AssistantFilesService.prepare — same-turn P&L + Balance Sheet pairin
   it('a plain trial balance next to a half never pairs with it', async () => {
     const prep = await svc().prepare([TB, balanceSheet('Balance Sheet 6-30-26.csv')], new Redactor(false))
     expect(prep.importCandidates.some((c) => c.attachmentId.startsWith('pair:'))).toBe(false)
+  })
+})
+
+// Prod 2026-10-24: files only reached the server with the message they were
+// attached to, so the user's answer to KYRO's follow-up question arrived with no
+// file and KYRO asked them for an "attachment ID". The client now re-sends
+// recent files with carried: true; prepare() labels them and pairs across turns.
+describe('AssistantFilesService.prepare — files carried from an earlier message', () => {
+  it('a P&L sent earlier (carried) + a BS sent now still merge into one pair', async () => {
+    const prep = await svc().prepare(
+      [{ ...SOA, carried: true }, balanceSheet('Balance Sheet 6-30-26.csv')],
+      new Redactor(false),
+    )
+    expect(prep.importCandidates.some((c) => c.attachmentId.startsWith('pair:'))).toBe(true)
+  })
+
+  it('labels only the carried file’s digest, outside the UNTRUSTED markers', async () => {
+    const prep = await svc().prepare(
+      [{ ...SOA, carried: true }, balanceSheet('Balance Sheet 6-30-26.csv')],
+      new Redactor(false),
+    )
+    const soa = prep.digests.find((d) => d.includes('Statement of Activity 6-30-26.csv') && !d.includes('Combined'))!
+    const bs = prep.digests.find((d) => d.includes('name="Balance Sheet 6-30-26.csv"'))!
+    expect(soa.startsWith(`${CARRIED_NOTE}\n<<<ATTACHMENT`)).toBe(true)
+    expect(bs).not.toContain(CARRIED_NOTE)
+  })
+
+  it('no carried flag → digests unchanged (no note)', async () => {
+    const prep = await svc().prepare([TB], new Redactor(false))
+    expect(prep.digests.join('\n')).not.toContain(CARRIED_NOTE)
   })
 })

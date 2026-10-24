@@ -99,3 +99,26 @@ describe('a workbook with one Balance Sheet and several P&Ls', () => {
     expect(r.metadata.statement.workbook).toEqual({ code: 'other-statement-sheets', statements: 3, used: ['A'], unused: ['B', 'Balance Sheet'] })
   })
 })
+
+// Customer upload 2026-10-24: a P&L and Balance Sheet $977,876.30 apart were
+// combined with an acct-399 balancing line that hid the gap. A workbook pair
+// that doesn't tie is not combined — the first statement is read on its own,
+// and the warning says how far apart they are.
+describe('a workbook whose P&L and Balance Sheet do not tie', () => {
+  const g = grids()
+  const off = (g['Balance Sheet'] as unknown[][]).map((row) =>
+    String(row[0] ?? '').includes('10100') ? [row[0], Number(row[1]) + 977876.3] : row,
+  )
+
+  it('is not combined, adds no balancing line, and says how far apart', () => {
+    const r = ingest('Holy Family statements.xlsx', book([['Profit and Loss', g['Profit and Loss']!], ['Balance Sheet', off]]))
+    expect(r.metadata!.statement!.partial).toBe('pl')
+    expect(r.rows.some((x) => x.acct === 399)).toBe(false)
+    expect((r.warnings ?? []).join(' ')).toMatch(/977876\.30 apart, so they were not combined/)
+  })
+
+  it('…while a pair that ties still combines', () => {
+    const r = ingest('Holy Family statements.xlsx', book([['Profit and Loss', g['Profit and Loss']!], ['Balance Sheet', g['Balance Sheet']!]]))
+    expect(r.metadata!.statement!.partial).toBe('full')
+  })
+})

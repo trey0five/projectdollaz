@@ -2,6 +2,7 @@ import { Type } from 'class-transformer'
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -48,6 +49,12 @@ export class ChatAttachmentDto {
   @IsString()
   @MaxLength(11_500_000)
   dataBase64!: string
+
+  /** Re-sent from an EARLIER turn of this chat (not newly attached) so a
+   *  follow-up answer — a period, "import it anyway" — can still act on it. */
+  @IsOptional()
+  @IsBoolean()
+  carried?: boolean
 }
 
 export class ChatDto {

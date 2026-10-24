@@ -1251,6 +1251,28 @@ export function mergeStatementResults(
   return { rows, startRow: pl.startRow, warnings: warnings.length ? warnings : undefined, metadata }
 }
 
+/**
+ * Two halves TIE when the merged rows balance to within rounding — the P&L's
+ * result equals the balance sheet's. A bigger gap means they are not the same
+ * books or period, and an acct-399 balancing line would only hide it (customer
+ * upload 2026-10-24: $977,876.30 apart, silently plugged). Callers combine a
+ * pair ONLY when it ties; otherwise they keep the halves apart and say why.
+ */
+export const STATEMENT_TIE_TOLERANCE = 1
+
+/** The merged pair's imbalance (0 when they tie exactly). */
+export function statementGap(merged: StatementSheetResult): number {
+  return merged.metadata.statement.imbalance ?? 0
+}
+
+export function statementsTie(merged: StatementSheetResult): boolean {
+  return Math.abs(statementGap(merged)) <= STATEMENT_TIE_TOLERANCE
+}
+
+const untiedWarning = (merged: StatementSheetResult): string =>
+  `The P&L and Balance Sheet in this workbook are ${Math.abs(statementGap(merged)).toFixed(2)} apart, ` +
+  'so they were not combined — check both are for the same company and period.'
+
 // ── xlsx entry ────────────────────────────────────────────────────────────────
 
 function sheetGrid(wb: XLSX.WorkBook, name: string): RawGrid {
@@ -1293,8 +1315,9 @@ const withWarnings = (r: StatementSheetResult, extra: string[]): StatementSheetR
 
 /**
  * Parse an xlsx export. With `opts.sheet` only that sheet is read. Otherwise
- * every sheet is tried: exactly one P&L (or BvA) + one BS → merged into a
- * full TB with a plug; else the FIRST statement sheet, with a warning naming
+ * every sheet is tried: exactly one P&L (or BvA) + one BS that TIE → merged
+ * into a full TB (a pair that doesn't tie is NOT merged — see
+ * STATEMENT_TIE_TOLERANCE); else the FIRST statement sheet, with a warning naming
  * the sheets that were not imported (a workbook of monthly P&L tabs belongs
  * to the multi-sheet uploader — listStatementSheets). Returns null when no
  * sheet is a statement; throws StatementExportError when the only statement
@@ -1319,7 +1342,9 @@ export function parseStatementWorkbook(
   if (isStatementPair(found)) {
     const pl = found.find((r) => r.metadata.statement.type !== 'bs')!
     const bs = found.find((r) => r.metadata.statement.type === 'bs')!
-    return withWarnings(mergeStatementResults(pl, bs), warnings)
+    const merged = mergeStatementResults(pl, bs)
+    if (statementsTie(merged)) return withWarnings(merged, warnings)
+    return untiedFallback(found, merged, warnings)
   }
   // ONE Balance Sheet beside several P&Ls ('P&L Jan 2026' + 'P&L FY26' +
   // 'Balance Sheet'): import the P&L whose period end matches the BS date,
@@ -1328,6 +1353,7 @@ export function parseStatementWorkbook(
   const dated = pairInWorkbook(found)
   if (dated) {
     const merged = mergeStatementResults(dated.pl, dated.bs)
+    if (!statementsTie(merged)) return untiedFallback(found, merged, warnings)
     const used = [dated.pl, dated.bs]
     const unused = found.filter((r) => !used.includes(r))
     return withWarnings(withWorkbookNote(merged, found.length, used, unused), [...warnings, workbookWarning(found.length, used, unused)])
@@ -1338,6 +1364,21 @@ export function parseStatementWorkbook(
     return withWarnings(withWorkbookNote(first, found.length, [first], unused), [...warnings, workbookWarning(found.length, [first], unused)])
   }
   return withWarnings(first, warnings)
+}
+
+/** A P&L + BS pair that doesn't tie: the first statement sheet alone, saying why. */
+function untiedFallback(
+  found: readonly StatementSheetResult[],
+  merged: StatementSheetResult,
+  warnings: string[],
+): StatementSheetResult {
+  const first = found[0]!
+  const unused = found.slice(1)
+  return withWarnings(withWorkbookNote(first, found.length, [first], unused), [
+    ...warnings,
+    untiedWarning(merged),
+    workbookWarning(found.length, [first], unused),
+  ])
 }
 
 /** The one P&L whose period end matches the workbook's ONE Balance Sheet, else null. */

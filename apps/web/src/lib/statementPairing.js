@@ -2,10 +2,12 @@
 // statementPairing — half a trial balance + the other half = one (#40).
 //
 // A QuickBooks Profit and Loss export is only the INCOME half of a trial
-// balance; a Balance Sheet export is only the other half. Dropped together (or
-// one now and one later, for the same period end) they merge — client-side, via
-// the parser's own mergeStatementResults — into ONE full trial balance, with an
-// explicit acct-399 balancing line when they didn't tie.
+// balance; a Balance Sheet export is only the other half. They stay SEPARATE
+// cards until the person clicks Combine; a same-period pair is offered with a
+// note. They combine — client-side, via the parser's own mergeStatementResults —
+// into ONE full trial balance ONLY when they tie (STATEMENT_TIE_TOLERANCE). A
+// pair that doesn't tie is never combined: the note says how far apart they are
+// (customer upload 2026-10-24: $977,876.30 hidden behind an acct-399 line).
 //
 // This is a PURE DERIVATION over the intake's raw file list: the raw files stay
 // in state untouched and the paired list is recomputed (useMemo) from them, so
@@ -18,6 +20,8 @@ import {
   pairStatements,
   asStatementResult,
   mergeStatementResults,
+  statementsTie,
+  statementGap,
   classifyRole,
 } from '@finrep/ingestion'
 import { validateDataset, findUnmapped } from '@finrep/engine'
@@ -107,11 +111,13 @@ export function canPairHalves(pl, bs, order = null) {
 }
 
 /**
- * rawFiles → the list the intake shows. Same-period P&L + Balance Sheet halves
- * become one merged entry (at the first half's position); halves that stay
- * apart carry a `pairNote` saying why. `manualPairs` ([{plId, bsId}], either
- * order) are honoured first ("Combine anyway"). Two PERSISTED halves are left
- * alone — that pair is already on the server as it is.
+ * rawFiles → the list the intake shows. Only pairs the person chose
+ * (`manualPairs`, [{plId, bsId}] either order — the Combine button) become one
+ * merged entry (at the first half's position), and only when they tie. Every
+ * other half carries a `pairNote` saying why it's on its own: 'can-combine' (a
+ * same-period partner that ties — offer Combine), 'no-tie' (a partner that
+ * doesn't — `gap` says by how much), or the existing date/ambiguity reasons.
+ * Two PERSISTED halves are left alone — that pair is already on the server.
  */
 export function pairIntakeFiles(rawFiles, manualPairs = []) {
   const files = Array.isArray(rawFiles) ? rawFiles : []
@@ -143,9 +149,25 @@ export function pairIntakeFiles(rawFiles, manualPairs = []) {
   const order = new Map(files.map((f, i) => [f.id, i]))
   const rest = eligible.filter((f) => !used.has(f.id))
   const auto = pairStatements(rest, (f) => f.metadata, { canPair: (a, b) => canPairHalves(a, b, order) })
-  pairs.push(...auto.pairs)
 
-  // Merge every pair that has something new in it.
+  const notes = new Map()
+  // Both halves point at each other: Combine (when they tie) or the gap.
+  const notePair = (pl, bs, merged) => {
+    const ties = statementsTie(merged)
+    const why = ties ? 'can-combine' : 'no-tie'
+    const gap = ties ? 0 : Math.abs(statementGap(merged))
+    for (const [self, other] of [[pl, bs], [bs, pl]]) {
+      notes.set(self.id, {
+        why,
+        ...(ties ? {} : { gap }),
+        half: self === pl ? 'pl' : 'bs',
+        partnerId: other.id,
+        partnerName: other.fileName,
+      })
+    }
+  }
+
+  // The person's Combine: merge only a pair that ties.
   const dropped = new Map() // member id → merged entry (or null for the 2nd member)
   for (const { pl, bs } of pairs) {
     if (pl.persisted && bs.persisted) continue
@@ -155,12 +177,22 @@ export function pairIntakeFiles(rawFiles, manualPairs = []) {
     const second = first === pl ? bs : pl
     const merged = makeMergedEntry(pl, bs, first.id)
     if (!merged) continue
+    if (!statementsTie(merged)) {
+      notePair(pl, bs, merged)
+      continue
+    }
     dropped.set(first.id, merged)
     dropped.set(second.id, null)
   }
 
+  // Same-period pairs found automatically are only OFFERED, never merged.
+  for (const { pl, bs } of auto.pairs) {
+    if (pl.persisted && bs.persisted) continue
+    const merged = makeMergedEntry(pl, bs)
+    if (merged) notePair(pl, bs, merged)
+  }
+
   // Why each remaining half is still on its own.
-  const notes = new Map()
   const unpaired = auto.unpaired || []
   for (const u of unpaired) {
     const note = { why: u.why }

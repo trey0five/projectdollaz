@@ -9,7 +9,7 @@ import { needsCheckPhrase, reviewButtonLabel } from '../lib/reviewQueue.js'
 import { openReviewModal, useReviewModal } from '../lib/reviewModalStore.js'
 import ReviewAccountsHost from './intake/ReviewAccountsHost.jsx'
 import IntakeFinishBar from './intake/IntakeFinishBar.jsx'
-import { formatShortDate } from '../lib/format.js'
+import { fmtDollar, formatShortDate } from '../lib/format.js'
 import { statementPartial } from '../lib/statementNotes.js'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
@@ -52,6 +52,39 @@ export function ambiguityBanners(files) {
     )
   }
   return [...seen.values()]
+}
+
+const PAIR_WHYS = new Set(['can-combine', 'no-tie'])
+
+/**
+ * A P&L and a Balance Sheet for the same date stay separate until the person
+ * combines them — one banner per pair, in place of the generic "Two files are
+ * set to CY" conflict (pairedDuplicate hides that one).
+ */
+export function pairBanners(files) {
+  const seen = new Map()
+  for (const f of files || []) {
+    const n = f?.pairNote
+    if (!n || !PAIR_WHYS.has(n.why) || !n.partnerId) continue
+    const k = [f.id, n.partnerId].sort().join('|')
+    if (seen.has(k)) continue
+    const date = f.metadata?.periodEndDate
+    const when = date ? `for ${formatShortDate(date)}` : ''
+    seen.set(
+      k,
+      n.why === 'can-combine'
+        ? `Your Profit and Loss and Balance Sheet ${when} are separate files. To use them as this year’s trial balance, combine them with the button on either card.`
+        : `Your Profit and Loss and Balance Sheet ${when} are ${fmtDollar(Number(n.gap) || 0).replace('$ ', '$')} apart, so they can’t be combined. Check both exports are for the same company, period and accounting basis, then upload them again.`,
+    )
+  }
+  return [...seen.values()].map((t) => t.replace(/\s+/g, ' '))
+}
+
+/** A duplicate-role conflict that is only a P&L + Balance Sheet pair (its banner says it better). */
+export function pairedDuplicate(c, files) {
+  if (c?.kind !== 'duplicate') return false
+  const byId = new Map((files || []).map((f) => [f.id, f]))
+  return c.fileIds.every((id) => PAIR_WHYS.has(byId.get(id)?.pairNote?.why))
 }
 
 /**
@@ -352,7 +385,8 @@ export default function IntakeBar({ confirmBandShowing = false, onFinish = null 
     () => files.filter((f) => !slottedIds.has(f.id) && f.status === 'error'),
     [files, slottedIds]
   )
-  const ambiguity = useMemo(() => ambiguityBanners(files), [files])
+  const ambiguity = useMemo(() => [...pairBanners(files), ...ambiguityBanners(files)], [files])
+  const shownConflicts = useMemo(() => conflicts.filter((c) => !pairedDuplicate(c, files)), [conflicts, files])
 
   // The ONE column picker (#32), full width under the file groups. An error
   // entry brings its own preview; a file that read (Change columns) is
@@ -556,9 +590,9 @@ export default function IntakeBar({ confirmBandShowing = false, onFinish = null 
             )}
 
             {/* conflict banners */}
-            {conflicts.length > 0 && (
+            {shownConflicts.length > 0 && (
               <div className="mb-5 space-y-2">
-                {conflicts.map((c, i) => (
+                {shownConflicts.map((c, i) => (
                   <div
                     key={`${c.kind}-${i}`}
                     className="b2-callout font-medium"
