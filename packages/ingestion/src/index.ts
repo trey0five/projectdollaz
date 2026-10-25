@@ -157,3 +157,5 @@ export type {
   BudgetSpreadSkippedRow,
 } from './budget/budgetSpread.js'
 export { parseBudgetSpread } from './budget/budgetSpread.js'
+// Shared table reader + column matcher (#44) and the schemas built on it.
+export * from './table-import/index.js'

@@ -4,15 +4,17 @@
 // OneRoster parser's philosophy: throw ONLY on a structurally unusable file
 // (unrecognizable headers / empty), degrade everything softer (unmapped grade,
 // bad date) into per-row `issues` + file-level `warnings` so a mostly-good file
-// still previews. CSV ONLY this phase (the ZIP reader is locked inside
-// packages/ingestion and unexported — that package is NOT edited; we import only
-// its already-exported ONEROSTER_GRADE_MAP).
+// still previews.
 //
-// Two auto-detected shapes:
+// Any tabular file (.xlsx / .xls / .csv / .tsv — readTable finds the header row
+// under titles and blank lines), two auto-detected shapes:
 //   • OneRoster users.csv (sourcedId/givenName/familyName/role/grades/status…)
 //     + an optional demographics.csv joined by sourcedId, and
-//   • a simple flat CSV (firstName,lastName,grade[,gender,race,ethnicity,
-//     birthDate,status,enrolledOn,withdrawnOn,iep,504,ell,notes,externalId]).
+//   • any other student list — columns matched by MEANING (rosterFromSheet:
+//     "Student Name" / "Gr" / "Student ID" all work, names are split, grades
+//     read as people write them). Customer 2026-10-24: an Excel roster was
+//     refused for "missing expected columns"; the headers were just spelled
+//     differently.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   GRADE_KEYS,
@@ -25,6 +27,15 @@ import {
   type StudentStatusKey,
 } from '@finrep/analytics'
 import { ONEROSTER_GRADE_MAP } from '@finrep/ingestion/oneroster'
+import {
+  ROSTER_FIELDS,
+  gradeKeyFromText,
+  mainSheet,
+  readTable,
+  rosterFromSheet,
+  type RosterRecord,
+  type TableSheet,
+} from '@finrep/ingestion'
 
 /** A candidate roster row in CreateStudentDto shape (grade kept raw when unmapped
  *  so the preview can SHOW what was in the file next to its skip issue). */
@@ -58,6 +69,8 @@ export interface ParsedStudentImport {
   shape: 'oneroster' | 'simple'
   rows: ParsedImportRow[]
   warnings: string[]
+  /** How the file's columns were read ("Student Name" → Student name), for the preview. */
+  columns?: { field: string; header: string }[]
 }
 
 // ── CSV plumbing (local copy — the ingestion parseCsv is unexported) ──────────
@@ -114,6 +127,14 @@ function headerKey(h: string): string {
   return h.toLowerCase().replace(/[\s_-]+/g, '')
 }
 
+/** The main sheet of any tabular upload (header row found, cells trimmed). */
+function readSheet(buf: Buffer): { sheet: TableSheet; sheetCount: number } {
+  const read = readTable(buf)
+  const sheet = mainSheet(read)
+  if (!sheet) throw new Error('The file is empty — no header row or student rows were found.')
+  return { sheet, sheetCount: read.sheets.length }
+}
+
 function parseTable(buf: Buffer): { header: string[]; rows: string[][] } {
   const parsed = parseCsv(buf.toString('utf8'))
   if (parsed.length === 0) throw new Error('The CSV file is empty.')
@@ -147,7 +168,7 @@ export function normalizeGrade(raw: string): GradeKey | null {
   if (!s) return null
   const upper = s.toUpperCase()
   if ((GRADE_KEYS as readonly string[]).includes(upper)) return upper as GradeKey
-  return ONEROSTER_GRADE_MAP[s] ?? ONEROSTER_GRADE_MAP[upper] ?? null
+  return ONEROSTER_GRADE_MAP[s] ?? ONEROSTER_GRADE_MAP[upper] ?? (gradeKeyFromText(s) as GradeKey | null)
 }
 
 /** Resolve a demographic cell to a key of the wanted dimension. Accepts the
@@ -309,39 +330,25 @@ function parseOneRosterUsers(
   return out
 }
 
-function parseSimple(header: string[], rows: string[][], warnings: string[]): ParsedImportRow[] {
-  const col = (...names: string[]): number => {
-    for (const n of names) {
-      const i = header.indexOf(n)
-      if (i >= 0) return i
-    }
-    return -1
-  }
-  const iFirst = col('firstname')
-  const iLast = col('lastname')
-  const iGrade = col('grade')
-  const iGender = col('gender', 'sex')
-  const iRace = col('race')
-  const iEth = col('ethnicity')
-  const iBirth = col('birthdate', 'dob')
-  const iStatus = col('status')
-  const iEnrolled = col('enrolledon', 'enrolled')
-  const iWithdrawn = col('withdrawnon', 'withdrawn')
-  const iIep = col('iep', 'hasiep', 'isp', 'hasisp') // ISP = private-school term; both header spellings accepted
-  const i504 = col('504', 'plan504', 'has504')
-  const iEll = col('ell')
-  const iNotes = col('notes')
-  const iExt = col('externalid', 'sourcedid')
+/** Status words a school writes → the register's keys; unknown words become a row issue. */
+const STATUS_WORDS: Record<string, StudentStatusKey> = {
+  active: 'enrolled', enrolled: 'enrolled', current: 'enrolled', attending: 'enrolled', yes: 'enrolled', y: 'enrolled',
+  withdrawn: 'withdrawn', withdrew: 'withdrawn', inactive: 'withdrawn', left: 'withdrawn', exited: 'withdrawn',
+  transferred: 'withdrawn', tobedeleted: 'withdrawn', no: 'withdrawn', n: 'withdrawn',
+  graduated: 'graduated', graduate: 'graduated', alumni: 'graduated',
+  waitlist: 'waitlist', waitlisted: 'waitlist', waiting: 'waitlist',
+}
 
+function parseFlexible(records: readonly RosterRecord[], warnings: string[]): ParsedImportRow[] {
   const out: ParsedImportRow[] = []
-  rows.forEach((cells, idx) => {
-    const rowNum = idx + 2
+  records.forEach((r) => {
+    const rowNum = r.row
     const issues: string[] = []
-    const firstName = (cells[iFirst] ?? '').trim()
-    const lastName = (cells[iLast] ?? '').trim()
-    if (!firstName || !lastName) issues.push(`row ${rowNum}: missing firstName/lastName`)
+    const firstName = r.firstName
+    const lastName = r.lastName
+    if (!firstName || !lastName) issues.push(`row ${rowNum}: missing first or last name`)
 
-    const gradeRaw = iGrade >= 0 ? (cells[iGrade] ?? '').trim() : ''
+    const gradeRaw = r.grade
     const grade = normalizeGrade(gradeRaw)
     if (!grade) {
       const msg = `row ${rowNum}: unmapped grade '${gradeRaw || '(blank)'}' — skipped`
@@ -349,34 +356,34 @@ function parseSimple(header: string[], rows: string[][], warnings: string[]): Pa
       warnings.push(msg)
     }
 
-    const gender = resolveDim(iGender >= 0 ? cells[iGender] : undefined, 'gender', ['female', 'male', 'unknown'])
-    if (!gender.ok) issues.push(`row ${rowNum}: unrecognized gender '${(cells[iGender] ?? '').trim()}'`)
-    const race = resolveDim(iRace >= 0 ? cells[iRace] : undefined, 'race', [
+    const gender = resolveDim(r.gender || undefined, 'gender', ['female', 'male', 'unknown'])
+    if (!gender.ok) issues.push(`row ${rowNum}: unrecognized gender '${r.gender}'`)
+    const race = resolveDim(r.race || undefined, 'race', [
       'asian', 'black', 'hispanicLatino', 'mena', 'nhpi', 'twoOrMore', 'white',
     ])
-    if (!race.ok) warnings.push(`row ${rowNum}: unrecognized race '${(cells[iRace] ?? '').trim()}' — left unset`)
-    const ethnicity = resolveDim(iEth >= 0 ? cells[iEth] : undefined, 'ethnicity', ['hispanic', 'nonHispanic'])
-    if (!ethnicity.ok) warnings.push(`row ${rowNum}: unrecognized ethnicity '${(cells[iEth] ?? '').trim()}' — left unset`)
+    if (!race.ok) warnings.push(`row ${rowNum}: unrecognized race '${r.race}' — left unset`)
+    const ethnicity = resolveDim(r.ethnicity || undefined, 'ethnicity', ['hispanic', 'nonHispanic'])
+    if (!ethnicity.ok) warnings.push(`row ${rowNum}: unrecognized ethnicity '${r.ethnicity}' — left unset`)
 
-    const birth = parseIsoDate(iBirth >= 0 ? cells[iBirth] : undefined)
-    if (!birth.ok) issues.push(`row ${rowNum}: invalid birthDate '${(cells[iBirth] ?? '').trim()}' (expected YYYY-MM-DD)`)
+    const birth = parseIsoDate(r.birthDate || undefined)
+    if (!birth.ok) issues.push(`row ${rowNum}: invalid birth date '${r.birthDate}' (expected YYYY-MM-DD)`)
     // Future birthDate = typo — flag here so the commit-side guard never 400s a whole batch.
     if (birth.value && birth.value > new Date().toISOString().slice(0, 10)) {
       issues.push(`row ${rowNum}: birthDate '${birth.value}' is in the future`)
     }
-    const enrolled = parseIsoDate(iEnrolled >= 0 ? cells[iEnrolled] : undefined)
-    if (!enrolled.ok) issues.push(`row ${rowNum}: invalid enrolledOn (expected YYYY-MM-DD)`)
-    const withdrawnOn = parseIsoDate(iWithdrawn >= 0 ? cells[iWithdrawn] : undefined)
-    if (!withdrawnOn.ok) issues.push(`row ${rowNum}: invalid withdrawnOn (expected YYYY-MM-DD)`)
+    const enrolled = parseIsoDate(r.enrolledOn || undefined)
+    if (!enrolled.ok) issues.push(`row ${rowNum}: invalid enrolled-on date (expected YYYY-MM-DD)`)
+    const withdrawnOn = parseIsoDate(r.withdrawnOn || undefined)
+    if (!withdrawnOn.ok) issues.push(`row ${rowNum}: invalid withdrawn-on date (expected YYYY-MM-DD)`)
 
     let status: StudentStatusKey = 'enrolled'
-    const statusRaw = iStatus >= 0 ? (cells[iStatus] ?? '').trim().toLowerCase() : ''
+    const statusRaw = r.status.toLowerCase()
     if (statusRaw) {
-      if ((STUDENT_STATUS_KEYS as readonly string[]).includes(statusRaw)) {
-        status = statusRaw as StudentStatusKey
-      } else {
-        issues.push(`row ${rowNum}: unknown status '${statusRaw}'`)
-      }
+      const known = (STUDENT_STATUS_KEYS as readonly string[]).includes(statusRaw)
+        ? (statusRaw as StudentStatusKey)
+        : STATUS_WORDS[statusRaw]
+      if (known) status = known
+      else issues.push(`row ${rowNum}: unknown status '${statusRaw}'`)
     }
     // Cross-field fix-up: a withdrawal date with no explicit terminal status reads
     // as withdrawn (the commit-side rule requires withdrawn/graduated).
@@ -395,11 +402,11 @@ function parseSimple(header: string[], rows: string[][], warnings: string[]): Pa
         status,
         enrolledOn: enrolled.value,
         withdrawnOn: withdrawnOn.value,
-        hasIep: iIep >= 0 ? parseBool(cells[iIep]) : false,
-        has504: i504 >= 0 ? parseBool(cells[i504]) : false,
-        ell: iEll >= 0 ? parseBool(cells[iEll]) : false,
-        notes: iNotes >= 0 ? (cells[iNotes] ?? '').trim() || null : null,
-        externalId: iExt >= 0 ? (cells[iExt] ?? '').trim() || null : null,
+        hasIep: parseBool(r.iep),
+        has504: parseBool(r.plan504),
+        ell: parseBool(r.ell),
+        notes: r.notes || null,
+        externalId: r.externalId || null,
       },
       issues,
     })
@@ -410,18 +417,23 @@ function parseSimple(header: string[], rows: string[][], warnings: string[]): Pa
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /**
- * Parse a roster CSV (auto-detected OneRoster users.csv vs simple flat shape)
- * plus an optional OneRoster demographics.csv into candidate rows.
+ * Parse a roster file (OneRoster users.csv auto-detected, else ANY student list
+ * with recognisable name + grade columns) plus an optional OneRoster
+ * demographics.csv into candidate rows.
  *
- * @throws only when the file is empty or matches neither shape's headers.
+ * @throws only when the file is empty, or no name / grade column can be found —
+ * and then the message names the columns it saw.
  */
 export function parseStudentImport(file: Buffer, demographicsFile?: Buffer): ParsedStudentImport {
-  const { header, rows } = parseTable(file)
+  const { sheet, sheetCount } = readSheet(file)
+  const header = sheet.header.map(headerKey)
+  const rows = sheet.rows
   const warnings: string[] = []
+  if (sheetCount > 1 && sheet.name) {
+    warnings.push(`This workbook has ${sheetCount} sheets — we read “${sheet.name}” (the one with the most rows).`)
+  }
 
   const isOneRoster = header.includes('sourcedid') && header.includes('role')
-  const isSimple = header.includes('firstname') && header.includes('lastname')
-
   if (isOneRoster) {
     const demographics = demographicsFile
       ? parseOneRosterDemographics(demographicsFile, warnings)
@@ -431,14 +443,10 @@ export function parseStudentImport(file: Buffer, demographicsFile?: Buffer): Par
     }
     return { shape: 'oneroster', rows: parseOneRosterUsers(header, rows, demographics, warnings), warnings }
   }
-  if (isSimple) {
-    if (header.indexOf('grade') < 0) {
-      throw new Error('The roster CSV is missing the required grade column.')
-    }
-    return { shape: 'simple', rows: parseSimple(header, rows, warnings), warnings }
-  }
-  throw new Error(
-    'Unrecognized roster CSV. Expected OneRoster users.csv headers (sourcedId, givenName, familyName, role, grades) ' +
-      'or a simple roster (firstName, lastName, grade, …).',
-  )
+
+  const roster = rosterFromSheet(sheet)
+  if (roster.problem) throw new Error(roster.problem)
+  const label = (key: string) => ROSTER_FIELDS.find((f) => f.key === key)?.label ?? key
+  const columns = roster.columns.matches.map((m) => ({ field: label(m.key), header: m.header }))
+  return { shape: 'simple', rows: parseFlexible(roster.records, warnings), warnings, columns }
 }

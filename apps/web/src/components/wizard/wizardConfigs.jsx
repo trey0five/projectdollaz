@@ -181,17 +181,8 @@ export const wizardConfigs = {
     module: 'enrollment',
     hue: HUE.enrollment,
     options: [
-      // Phase 5 — student-level roster (the Records-tab register's ADD paths).
-      {
-        key: 'students',
-        kind: 'flow',
-        Icon: GraduationCap,
-        label: 'Students',
-        blurb:
-          'Add students to your roster one by one — name, grade, status and support flags. The register and analytics update live.',
-        cta: 'Add students',
-        flow: recordFlows['enrollment.student'],
-      },
+      // The one-by-one "Students" tile was removed (#45): a roster is a file, and
+      // the register keeps its own Add button for the odd late arrival.
       {
         key: 'import-students',
         kind: 'embed',
@@ -216,7 +207,7 @@ export const wizardConfigs = {
         // choosing, the very ambiguity between the two cards that caused the
         // report. It now names the thing itself: the same roster file.
         blurb:
-          'Same roster file, one extra step: preview every row — new, updated, unchanged, skipped — fix what you need, then choose merge or replace. Saves the students and sets the current period’s enrollment. Up to 2,000 students per file. Best when you are not sure the file is clean.',
+          'Any Excel or CSV student list — we match your column names. Preview every row — new, updated, unchanged, skipped — fix what you need, then choose merge or replace. Saves the students and sets the current period’s enrollment. Up to 2,000 students per file. Best when you are not sure the file is clean.',
         cta: 'Preview and import',
         renderEmbed: (ctx) => (
           <StudentImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
@@ -228,7 +219,7 @@ export const wizardConfigs = {
         Icon: Upload,
         label: 'Upload a roster file',
         blurb:
-          'Drop a OneRoster ZIP or CSV and we do the whole job in one step — a student record for every row, plus the enrollment count by grade for the period the file is dated to. Records are created for files of up to 10,000 students; above that the count still lands. Best when the file is already correct.',
+          'Drop any Excel or CSV student list (or a OneRoster ZIP) and we do the whole job in one step — a student record for every row, plus the enrollment count by grade for the period the file is dated to. Re-uploads add and update; nothing is removed unless you choose Replace. Records are created for files of up to 10,000 students; above that the count still lands. Best when the file is already correct.',
         cta: 'Upload roster file',
         renderEmbed: (ctx) => (
           <RosterUpload

@@ -449,7 +449,7 @@ describe('the two Choose cards describe what actually happens', () => {
       block.indexOf("key: 'roster'"),
     )
     expect(reviewed, 'the blurb forward-references the card below it').not.toMatch(/Same import/)
-    expect(reviewed, 'the blurb must stand on its own').toMatch(/Same roster file/)
+    expect(reviewed, 'the blurb must stand on its own').toMatch(/Any Excel or CSV student list/)
   })
 
   it('each card states the limit it is ACTUALLY subject to — and they differ now', () => {

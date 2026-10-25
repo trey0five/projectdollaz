@@ -136,7 +136,7 @@ export default function RosterUpload({
       if (inputRef.current) inputRef.current.value = ''
       onApplied?.()
     } catch (e) {
-      setErr(apiErrorMessage(e, 'Could not read that roster file. Check it is a OneRoster ZIP or CSV.'))
+      setErr(apiErrorMessage(e, 'Could not read that roster file. It needs a student name column and a grade column.'))
     } finally {
       setBusy(false)
     }
@@ -202,11 +202,13 @@ export default function RosterUpload({
         <input
           ref={inputRef}
           type="file"
-          accept=".zip,.csv"
+          accept=".zip,.csv,.tsv,.txt,.xlsx,.xls"
           className="hidden"
           onChange={(e) => pickFile(e.target.files?.[0])}
         />
-        <p className="mt-2 text-[12px] text-ink2">OneRoster ZIP or CSV · up to a few MB</p>
+        <p className="mt-2 text-[12px] text-ink2">
+          Excel, CSV or a OneRoster ZIP — any column names, we match them · up to a few MB
+        </p>
       </div>
 
       {/* Selected-file confirm bar (confirm-then-apply). */}

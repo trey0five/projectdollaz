@@ -180,6 +180,8 @@ export interface ImportPreviewResult {
   summary: { new: number; update: number; unchanged: number; skipped: number }
   warnings: string[]
   rows: ImportPreviewRow[]
+  /** How the file's columns were read, so the preview can say "Student Name → Student name". */
+  columns?: { field: string; header: string }[]
 }
 
 const FLAG_FIELD: Record<StudentFlagKey, 'hasIep' | 'has504' | 'ell'> = {
@@ -468,7 +470,7 @@ export class StudentsService {
     try {
       parsed = parseStudentImport(file.buffer, demographicsFile?.buffer)
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Could not parse the roster CSV.')
+      throw new BadRequestException(e instanceof Error ? e.message : 'Could not read the roster file.')
     }
 
     const existing = await this.prisma.student.findMany({ where: { schoolId } })
@@ -496,7 +498,7 @@ export class StudentsService {
       summary[action]++
       return { action, existingId: match.id, student: r.student, issues: [] }
     })
-    return { shape: parsed.shape, summary, warnings: parsed.warnings, rows }
+    return { shape: parsed.shape, summary, warnings: parsed.warnings, rows, ...(parsed.columns ? { columns: parsed.columns } : {}) }
   }
 
   /** Commit the previewed/user-edited rows. merge = upsert matching like the

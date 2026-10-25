@@ -357,7 +357,7 @@ describe('StudentsService import — stateless preview, transactional commit', (
         'Ada,Lovelace,4,S-1', // externalId match, grade changed → update
         'Grace,Hopper,5,', // (lastName, firstName, birthDate) match, identical → unchanged
         'New,Kid,1,S-9', // no match → new
-        'Bad,Grade,Kinder,', // unmapped grade → skipped
+        'Bad,Grade,Staff,', // unmapped grade → skipped ("Kinder" reads as K since #45)
       ]),
     )
     expect(res.shape).toBe('simple')

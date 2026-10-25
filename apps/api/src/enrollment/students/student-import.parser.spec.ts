@@ -41,11 +41,12 @@ describe('parseStudentImport — simple flat CSV', () => {
   })
 
   it('flags unmapped grades as issues + warnings (row is skippable, grade kept raw)', () => {
-    const csv = ['firstName,lastName,grade', 'Kid,One,Kinder', 'Kid,Two,4'].join('\n')
+    // ("Kinder" reads as K since #45 — "Staff" is the kind of cell no grade map can take.)
+    const csv = ['firstName,lastName,grade', 'Kid,One,Staff', 'Kid,Two,4'].join('\n')
     const res = parseStudentImport(buf(csv))
-    expect(res.rows[0]!.issues.some((i) => i.includes("unmapped grade 'Kinder'"))).toBe(true)
-    expect(res.rows[0]!.student.grade).toBe('Kinder') // raw, so the preview can show it
-    expect(res.warnings.some((w) => w.includes('Kinder'))).toBe(true)
+    expect(res.rows[0]!.issues.some((i) => i.includes("unmapped grade 'Staff'"))).toBe(true)
+    expect(res.rows[0]!.student.grade).toBe('Staff') // raw, so the preview can show it
+    expect(res.warnings.some((w) => w.includes('Staff'))).toBe(true)
     expect(res.rows[1]!.issues).toEqual([])
   })
 
@@ -55,7 +56,9 @@ describe('parseStudentImport — simple flat CSV', () => {
     expect(normalizeGrade('pk3')).toBe('PK3')
     expect(normalizeGrade('TK')).toBe('PK4')
     expect(normalizeGrade('10')).toBe('10')
-    expect(normalizeGrade('Kinder')).toBeNull()
+    expect(normalizeGrade('Kinder')).toBe('K') // #45: grades the way schools write them
+    expect(normalizeGrade('9th grade')).toBe('9')
+    expect(normalizeGrade('Staff')).toBeNull()
   })
 
   it('resolves verbose demographic labels via the canonical vocab', () => {
@@ -75,8 +78,8 @@ describe('parseStudentImport — simple flat CSV', () => {
   it('missing names and bad dates are row issues (not throws)', () => {
     const csv = ['firstName,lastName,grade,birthDate', ',Smith,2,2019-01-01', 'Ok,Kid,2,notadate'].join('\n')
     const res = parseStudentImport(buf(csv))
-    expect(res.rows[0]!.issues.some((i) => i.includes('missing firstName/lastName'))).toBe(true)
-    expect(res.rows[1]!.issues.some((i) => i.includes('invalid birthDate'))).toBe(true)
+    expect(res.rows[0]!.issues.some((i) => i.includes('missing first or last name'))).toBe(true)
+    expect(res.rows[1]!.issues.some((i) => i.includes('invalid birth date'))).toBe(true)
   })
 })
 
@@ -133,7 +136,7 @@ describe('parseStudentImport — OneRoster users.csv (+ demographics.csv)', () =
 
 describe('parseStudentImport — hard failures', () => {
   it('throws on an unrecognizable header set', () => {
-    expect(() => parseStudentImport(buf('foo,bar\n1,2'))).toThrow(/Unrecognized roster CSV/)
+    expect(() => parseStudentImport(buf('foo,bar\n1,2'))).toThrow(/Couldn’t find a student name column.*“foo”, “bar”/)
   })
 
   it('throws on an empty file', () => {
@@ -142,5 +145,41 @@ describe('parseStudentImport — hard failures', () => {
 
   it('throws when the simple shape lacks the grade column', () => {
     expect(() => parseStudentImport(buf('firstName,lastName\nA,B'))).toThrow(/grade column/)
+  })
+})
+
+// #45 — any student list, columns matched by meaning (customer 2026-10-24: an
+// Excel roster with "Student Name / Gr / Student ID" was refused for "missing
+// expected columns"). The xlsx reader itself is covered in packages/ingestion.
+describe('parseStudentImport — a roster with the school’s own column names', () => {
+  const file = (s: string) => Buffer.from(s, 'utf8')
+
+  it('reads "Student Name" (Last, First) + "Gr" + "Student ID" under a title row, and reports the columns', () => {
+    const p = parseStudentImport(
+      file('St. Aurelia Academy\n\nStudent Name,Gr,Student ID,Status,Homeroom\n"Smith, Ann",9th,S-1,Active,Lee\nBo Diaz,Kindergarten,S-2,Withdrawn,Ng\n'),
+    )
+    expect(p.shape).toBe('simple')
+    expect(p.rows.map((r) => [r.student.firstName, r.student.lastName, r.student.grade, r.student.externalId, r.student.status, r.row])).toEqual([
+      ['Ann', 'Smith', '9', 'S-1', 'enrolled', 4],
+      ['Bo', 'Diaz', 'K', 'S-2', 'withdrawn', 5],
+    ])
+    expect(p.rows.every((r) => r.issues.length === 0)).toBe(true)
+    expect(p.columns).toEqual([
+      { field: 'Student name', header: 'Student Name' },
+      { field: 'Grade', header: 'Gr' },
+      { field: 'Student ID', header: 'Student ID' },
+      { field: 'Status', header: 'Status' },
+      { field: 'Homeroom', header: 'Homeroom' },
+    ])
+  })
+
+  it('reads a tab-separated export with First / Last / Grade Level / DOB', () => {
+    const p = parseStudentImport(file('First\tLast\tGrade Level\tDOB\nAnn\tSmith\tGrade 12\t2008-05-01\n'))
+    expect(p.rows[0]!.student).toMatchObject({ firstName: 'Ann', lastName: 'Smith', grade: '12', birthDate: '2008-05-01' })
+  })
+
+  it('says which columns it saw when there is no name or no grade column', () => {
+    expect(() => parseStudentImport(file('Homeroom,Grade\nLee,9\n'))).toThrow(/Couldn’t find a student name column.*“Homeroom”, “Grade”/)
+    expect(() => parseStudentImport(file('Student,Homeroom\nAnn Smith,Lee\n'))).toThrow(/Couldn’t find a grade column/)
   })
 })

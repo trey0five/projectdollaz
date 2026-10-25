@@ -55,6 +55,7 @@ import {
   parseOneRosterStudents,
   type OneRosterStudentRow,
 } from '@finrep/ingestion/oneroster'
+import { looksLikeWorkbook, mainSheet, readTable, rosterFromSheet, toOneRosterUsersCsv } from '@finrep/ingestion'
 import { gradeKeyFromLabel, isWithdrawnStatus } from './enrollment.normalize.js'
 import type { EnrollmentIntakeResult } from './enrollment.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
@@ -567,7 +568,9 @@ export class RosterUploadService {
     if (!file || !file.buffer || file.size === 0) {
       throw new BadRequestException('No file uploaded.')
     }
-    const zip = looksLikeZip(file.buffer) ? file.buffer : wrapCsvAsZip(file.buffer)
+    const zip = looksLikeZip(file.buffer) && !looksLikeWorkbook(file.buffer)
+      ? file.buffer
+      : wrapCsvAsZip(toOneRosterBytes(file.buffer))
     const parseOpts = opts.observedOn ? { observedOn: opts.observedOn } : undefined
 
     // 2 — the AGGREGATE parse runs first, so a structurally unusable file still
@@ -875,4 +878,24 @@ export class RosterUploadService {
       return null
     }
   }
+}
+
+/**
+ * A roster that is NOT a OneRoster users.csv — an Excel export, a CSV with the
+ * school's own column names — becomes one, so the frozen aggregate parser
+ * (headcount by grade, warnings, snapshot) and the per-student reader run on it
+ * unchanged. A real users.csv passes through untouched. Customer 2026-10-24:
+ * "users.csv is missing required column(s): sourcedId, role, status, grades"
+ * on a perfectly good roster whose headers were Student Name / Gr / ID.
+ * @throws a plain-words reason when no name or grade column can be found.
+ */
+export function toOneRosterBytes(buf: Buffer): Buffer {
+  const read = readTable(buf)
+  const sheet = mainSheet(read)
+  if (!sheet) throw new BadRequestException('The file is empty — no header row or student rows were found.')
+  const norm = sheet.header.map((h) => h.toLowerCase().replace(/[\s_-]+/g, ''))
+  if (norm.includes('sourcedid') && norm.includes('role') && read.kind === 'csv') return buf
+  const roster = rosterFromSheet(sheet)
+  if (roster.problem) throw new BadRequestException(roster.problem)
+  return Buffer.from(toOneRosterUsersCsv(roster.records), 'utf8')
 }

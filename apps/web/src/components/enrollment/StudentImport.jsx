@@ -133,7 +133,7 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
         ),
       )
     } catch (e) {
-      setErr(apiErrorMessage(e, 'Could not read that CSV. Check it is a OneRoster users.csv or a simple student list.'))
+      setErr(apiErrorMessage(e, 'Could not read that file. It needs a student name column and a grade column.'))
     } finally {
       setBusy(false)
     }
@@ -255,17 +255,19 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
                 onClick={() => fileRef.current?.click()}
                 icon={<FileText size={14} />}
               >
-                Choose CSV
+                Choose file
               </Button>
             )}
             <input
               ref={fileRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.tsv,.txt,.xlsx,.xls"
               className="hidden"
               onChange={(e) => pickFile(e.target.files?.[0])}
             />
-            <p className="mt-2 text-[12px] text-ink2">CSV only · up to 2,000 students per import</p>
+            <p className="mt-2 text-[12px] text-ink2">
+              Excel or CSV, any column names — we match them · up to 2,000 students per import
+            </p>
           </div>
 
           {file && (
@@ -342,7 +344,7 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="a2-eyebrow mr-2">
-              {preview.shape === 'oneroster' ? 'OneRoster file' : 'Simple CSV'}
+              {preview.shape === 'oneroster' ? 'OneRoster file' : 'Student list'}
             </span>
             {summary && (
               <>
@@ -351,6 +353,17 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
                 <SummaryStat label="unchanged" value={summary.unchanged ?? 0} tone={ACTION_TONE.unchanged} />
                 <SummaryStat label="skipped" value={summary.skipped ?? 0} tone={ACTION_TONE.skipped} />
               </>
+            )}
+            {preview.columns?.length > 0 && (
+              <p className="basis-full text-[12.5px] text-ink2" data-testid="import-columns">
+                How we read your columns:{' '}
+                {preview.columns.map((c, i) => (
+                  <span key={c.header}>
+                    {i > 0 && ' · '}
+                    <span className="font-medium text-ink">{c.header}</span> → {c.field}
+                  </span>
+                ))}
+              </p>
             )}
             <Button variant="quiet" size="sm" className="ml-auto" onClick={reset} icon={<RefreshCcw size={13} />}>
               Start over
