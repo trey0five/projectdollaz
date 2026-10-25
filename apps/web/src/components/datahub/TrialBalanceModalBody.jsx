@@ -8,6 +8,7 @@ import { useReviewCount } from '../../hooks/useReviewCount.js'
 import IntegrationsSection from '../settings/IntegrationsSection.jsx'
 import IntakeFinishBar from '../intake/IntakeFinishBar.jsx'
 import { OPEN_ADD_YEARS_EVENT } from '../../lib/statementNotes.js'
+import { hasPending } from '../../lib/pendingUploads.js'
 
 const TABS = [
   { key: 'single', label: 'This year', Icon: FileSpreadsheet },
@@ -60,7 +61,7 @@ export default function TrialBalanceModalBody({
   onFinish = null,
 }) {
   const [mode, setMode] = useState(() =>
-    TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
+    hasPending('tb-bulk') ? 'bulk' : TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
   )
   const active = canEdit ? mode : 'single'
 

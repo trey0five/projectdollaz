@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { AlertOctagon, AlertTriangle, ArrowRight, CheckCircle2, Files, Plus } from 'lucide-react'
 import { previewFile } from '@finrep/ingestion'
@@ -10,6 +10,7 @@ import { openReviewModal, useReviewModal } from '../lib/reviewModalStore.js'
 import ReviewAccountsHost from './intake/ReviewAccountsHost.jsx'
 import IntakeFinishBar from './intake/IntakeFinishBar.jsx'
 import { fmtDollar, formatShortDate } from '../lib/format.js'
+import { takePending } from '../lib/pendingUploads.js'
 import { statementPartial } from '../lib/statementNotes.js'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
@@ -284,6 +285,14 @@ export default function IntakeBar({ confirmBandShowing = false, onFinish = null 
     canGenerate = false,
     save = null,
   } = useApp()
+
+  // Files the Finance upload sorter (#43) sent here: load them exactly as a
+  // drop would, once, on mount (microtask-deferred — no setState in an effect).
+  useEffect(() => {
+    const pending = takePending('tb-single')
+    if (pending.length) queueMicrotask(() => loadFiles(pending))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // A5: the review popup's store also remembers a school that just finished
   // sorting, so the green "all sorted" survives the intake's autosave remount.
   const reviewModal = useReviewModal()

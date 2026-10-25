@@ -22,6 +22,7 @@ import { Sparkles, Table2 } from 'lucide-react'
 import MonthlySpreadGrid from './MonthlySpreadGrid.jsx'
 import BudgetWizard from './wizard/BudgetWizard.jsx'
 import BudgetImport from './BudgetImport.jsx'
+import { takePending } from '../../lib/pendingUploads.js'
 import BudgetSummary from './BudgetSummary.jsx'
 import { describeBudgetSource } from './budgetSource.js'
 import { useBudget, useBudgetContext } from '../../hooks/useAnalytics.js'
@@ -40,7 +41,9 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
   // `mode` is the Guided/Advanced segmented control. `guidedView` is 'auto'
   // (derive summary-vs-wizard from whether a budget exists) or 'wizard' (forced
   // open for an Edit). Both are read at render and set only from event handlers.
-  const [mode, setMode] = useState('guided')
+  // A budget file the Finance upload sorter (#43) sent here opens the import directly.
+  const [pendingFiles] = useState(() => takePending('budget'))
+  const [mode, setMode] = useState(pendingFiles.length ? 'advanced' : 'guided')
   const [guidedView, setGuidedView] = useState('auto')
 
   // Reset the surface to its default when the school/period changes (microtask-
@@ -199,6 +202,7 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
             schoolId={schoolId}
             periodId={periodId}
             canEdit={canEdit}
+            initialFile={pendingFiles[0] ?? null}
             onImported={onAdvancedImported}
           />
         </div>

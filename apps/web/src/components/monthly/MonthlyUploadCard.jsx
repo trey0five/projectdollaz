@@ -9,7 +9,7 @@
 // component defs — React-Compiler safe). The parser runs in a try/catch so a
 // malformed file shows a friendly inline error instead of crashing the page.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Panel, StatStrip, Stat, Button } from '../ui/surface/index.js'
 import '../../styles/pending/b2-finance.css'
@@ -53,6 +53,8 @@ export default function MonthlyUploadCard({
   fiscalYearStart,
   loadedMonthKeys = [],
   initialMonthKey = '',
+  /** A file handed over by the Finance upload sorter (#43): read it on mount. */
+  initialFile = null,
   onSaved,
   onCancel,
 }) {
@@ -112,6 +114,11 @@ export default function MonthlyUploadCard({
       setParseError(failureText(failureFromError(e)) || 'Could not parse this spreadsheet.')
     }
   }
+
+  useEffect(() => {
+    if (initialFile) queueMicrotask(() => void handleFile(initialFile))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onDrop = (e) => {
     e.preventDefault()

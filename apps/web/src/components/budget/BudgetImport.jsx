@@ -5,7 +5,7 @@
 // Flow states are derived from local state at render (no effects, no in-render
 // component definitions). The parser runs in a try/catch so a malformed file
 // shows a friendly inline error instead of crashing the page.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { UploadCloud, FileSpreadsheet, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { parseBudgetSpread } from '@finrep/ingestion'
 import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
@@ -27,7 +27,7 @@ function readBytes(file) {
 
 const isXlsx = (name) => /\.xlsx?$/i.test(name || '')
 
-export default function BudgetImport({ schoolId, periodId, canEdit, onImported }) {
+export default function BudgetImport({ schoolId, periodId, canEdit, onImported, initialFile = null }) {
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState('')
@@ -84,6 +84,12 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
       setParseError(e?.message || 'Could not parse this spreadsheet.')
     }
   }
+
+  // A file handed over by the Finance upload sorter (#43): read it on mount.
+  useEffect(() => {
+    if (initialFile) queueMicrotask(() => void handleFile(initialFile))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onDrop = (e) => {
     e.preventDefault()

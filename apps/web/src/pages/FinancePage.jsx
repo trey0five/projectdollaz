@@ -254,7 +254,7 @@ function FinanceAddData({ schoolName, children }) {
           school={schoolName}
           eyebrow="Add data"
           title="Finance"
-          verdict="Get your finance numbers in: choose what to add, then follow the steps."
+          verdict="Get your finance numbers in: drop your files and we’ll figure out what each one is."
           actions={
             <AuroraButton to="/finance" icon={<ArrowLeft size={18} aria-hidden="true" />}>
               Back to Finance

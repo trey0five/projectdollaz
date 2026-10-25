@@ -12,7 +12,7 @@
 //   • idle  → the loaded-months strip + an "Upload a month" CTA
 //   • upload→ the MonthlyUploadCard (optionally pre-set to a month for Replace)
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CalendarClock, Plus, Loader2, Info } from 'lucide-react'
 import { Section, Pill, Button } from '../ui/surface/index.js'
@@ -21,6 +21,7 @@ import { monthlyApi, apiErrorMessage } from '../../lib/api.js'
 import { useMonthlySnapshots } from '../../hooks/useMonthlySnapshots.js'
 import { monthKeyLabel } from '../../lib/monthlyShapes.js'
 import MonthlyUploadCard from './MonthlyUploadCard.jsx'
+import { takePending } from '../../lib/pendingUploads.js'
 import LoadedMonthsList from './LoadedMonthsList.jsx'
 
 // What monthly actuals are, in the user's terms (shared with the hub header).
@@ -52,9 +53,16 @@ export default function MonthlyActualsPanel({
   // 'idle' | 'upload'. When opening upload via a cell's Replace/Add, pre-set the
   // month so the picker lands on it.
   const controlled = upload !== undefined && typeof onUploadChange === 'function'
-  const [innerMode, setInnerMode] = useState('idle')
+  // A file the Finance upload sorter (#43) sent here opens the upload card at once.
+  const [pendingFiles] = useState(() => takePending('monthly'))
+  const [innerMode, setInnerMode] = useState(pendingFiles.length ? 'upload' : 'idle')
   const [innerPreset, setInnerPreset] = useState('')
   const mode = controlled ? (upload ? 'upload' : 'idle') : innerMode
+  // Hosted (controlled) panel: ask the host to open the upload for the pending file.
+  useEffect(() => {
+    if (controlled && pendingFiles.length && !upload) queueMicrotask(() => onUploadChange({ month: '' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const presetMonth = controlled ? (upload?.month ?? '') : innerPreset
   const [toast, setToast] = useState('')
   const [deleteError, setDeleteError] = useState('')
@@ -170,6 +178,7 @@ export default function MonthlyActualsPanel({
           fiscalYearStart={fiscalYearStart}
           loadedMonthKeys={loadedMonthKeys}
           initialMonthKey={presetMonth}
+          initialFile={pendingFiles[0] ?? null}
           onSaved={onSaved}
           onCancel={closeUpload}
         />

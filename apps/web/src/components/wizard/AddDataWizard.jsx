@@ -46,6 +46,11 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     if (initialOption && options.some((o) => o.key === initialOption)) {
       return options.find((o) => o.key === initialOption)
     }
+    // A module may open straight on one option (Finance opens on the upload
+    // sorter, #43); Choose stays one "Options" click away.
+    if (config.defaultOption && options.some((o) => o.key === config.defaultOption)) {
+      return options.find((o) => o.key === config.defaultOption)
+    }
     return options.length === 1 ? options[0] : null
   }
   const [step, setStep] = useState(() => {

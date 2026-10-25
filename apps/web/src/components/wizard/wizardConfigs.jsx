@@ -59,6 +59,7 @@ import {
 import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
 
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
+import FinanceUploadSorter from '../finance/FinanceUploadSorter.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
@@ -96,7 +97,23 @@ export const wizardConfigs = {
     // Every "Done" in Finance's add-data flow lands on the FULL overview (the
     // band, figures and warnings) — never the Records tab's Workspaces doors.
     finishTo: 'overview',
+    // Finance → Add data opens on the upload sorter (#43): drop any financial
+    // file and it lands on the right tile below with the file already loaded.
+    defaultOption: 'upload',
     options: [
+      {
+        key: 'upload',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload your financial files',
+        blurb:
+          'Drop your QuickBooks exports or spreadsheets — trial balance, Profit and Loss, Balance Sheet, month-end numbers, budget — and we figure out what each one is.',
+        cta: 'Upload files',
+        ownFinish: true,
+        renderEmbed: (ctx, nav) => (
+          <FinanceUploadSorter schoolId={ctx.schoolId} canEdit={ctx.canEdit} goToOption={nav.goToOption} />
+        ),
+      },
       {
         key: 'tb',
         kind: 'embed',

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import '../styles/pending/b2-finance.css'
 import {
@@ -24,6 +24,7 @@ import {
   candidateName as nameOf,
 } from '../lib/trendIntake.js'
 import { formatShortDate } from '../lib/format.js'
+import { takePending } from '../lib/pendingUploads.js'
 import { getIntakeMemory, invalidateIntakeMemory } from '../lib/intakeMemory.js'
 import YearTimeline from './datahub/YearTimeline.jsx'
 import ColumnPicker from './intake/ColumnPicker.jsx'
@@ -103,6 +104,13 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
     if (firstPickable) setPickerKey((prev) => prev ?? firstPickable.key)
     setReading(false)
   }
+
+  // Files the Finance upload sorter (#43) sent here (several years at once).
+  useEffect(() => {
+    const pending = takePending('tb-bulk')
+    if (pending.length) queueMicrotask(() => void addFiles(pending))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onBrowse = (e) => {
     if (e.target.files?.length) addFiles(e.target.files)
