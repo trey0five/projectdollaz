@@ -2,10 +2,10 @@
 // Phase 2C — dedicated print/export route for the Year-End Workpapers Packet.
 // Lives inside AuthedLayout (so SchoolProvider + Billing context are available).
 // Reads the period from ?period=, fetches the aggregated packet, renders the clean
-// WorkpapersPrintDocument, and auto-triggers window.print() once loaded. 402 ->
+// WorkpapersPrintDocument, with a Print button (no auto-print). 402 ->
 // friendly paused panel. Print CSS is scoped under the `.packet-print` class.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -21,15 +21,8 @@ export default function WorkpapersPrintPage() {
 
   const { data, loading, error, notEntitled } = useWorkpapers(schoolId, periodId)
 
-  // Auto-print once the document is ready (one-shot).
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && !loading && data && !notEntitled) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 350)
-      return () => clearTimeout(t)
-    }
-  }, [loading, data, notEntitled])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (

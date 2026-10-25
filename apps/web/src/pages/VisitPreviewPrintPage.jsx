@@ -24,11 +24,11 @@
 // printed verbatim. No adopt control appears here; this is paper.
 //
 // Clones EvidenceIndexPrintPage structurally: inside AuthedLayout, `.no-print`
-// toolbar, `.ui-v1` wrapper, one-shot auto `window.print()`, 402
+// toolbar, `.ui-v1` wrapper, a Print button (no auto-print), 402
 // MODULE_NOT_LICENSED → module panel, plain 402 → `<EntitlementPausedPanel/>`.
 // No motion anywhere (acceptance 5 — nothing to suppress).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, BadgeCheck, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -184,14 +184,8 @@ export default function VisitPreviewPrintPage() {
   const ready = !loading && !!visit
   const disclaimer = typeof visit?.disclaimer === 'string' ? visit.disclaimer.trim() : ''
 
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !!disclaimer && !notEntitled && !notLicensed) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, disclaimer, notEntitled, notLicensed])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (

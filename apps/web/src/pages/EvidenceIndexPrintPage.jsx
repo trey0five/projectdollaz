@@ -28,10 +28,10 @@
 // Clones GovernanceReportPrintPage exactly: inside AuthedLayout (SchoolProvider is
 // available; the AppShell chrome is `.no-print` and the sidebar offset is
 // neutralized by the global print reset), wrapped in `.ui-v1` so the v2 typography
-// scale never reflows the page, auto-`window.print()` once data is ready, 402
+// scale never reflows the page, a Print button (no auto-print), 402
 // MODULE_NOT_LICENSED → module panel, plain 402 → paused panel.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, BadgeCheck, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -178,15 +178,8 @@ export default function EvidenceIndexPrintPage() {
 
   const ready = !loading && !!data
 
-  // Auto-print once data is ready (one-shot) — the BoardReportPrintPage idiom.
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !notEntitled && !notLicensed) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, notEntitled, notLicensed])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (

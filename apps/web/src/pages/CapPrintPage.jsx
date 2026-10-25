@@ -2,10 +2,10 @@
 // Phase 2D — dedicated print/export route for the Corrective Action Plan. Lives
 // inside AuthedLayout (so SchoolProvider + Billing context are available). Reads
 // the period from ?period=, fetches the merged CAP, renders the clean
-// CapPrintDocument, and auto-triggers window.print() once loaded. 402 -> friendly
+// CapPrintDocument, with a Print button (no auto-print). 402 -> friendly
 // paused panel. Print CSS is scoped under the `cap-print` class in index.css.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -24,15 +24,8 @@ export default function CapPrintPage() {
     periodId,
   )
 
-  // Auto-print once the document is ready (one-shot).
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && !loading && data && !notEntitled) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 350)
-      return () => clearTimeout(t)
-    }
-  }, [loading, data, notEntitled])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (

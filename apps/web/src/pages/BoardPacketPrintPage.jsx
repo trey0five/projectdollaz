@@ -3,9 +3,9 @@
 // Lives inside AuthedLayout (SchoolProvider + Billing context available). Reads the
 // period from ?period=, aggregates the dashboard insight + metrics + compliance /
 // CAP / reconciliation status, renders the clean BoardPacketPrintDocument, and
-// auto-triggers window.print() once everything has loaded. 402 -> paused panel.
+// shows a Print button (no auto-print). 402 -> paused panel.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -38,15 +38,8 @@ export default function BoardPacketPrintPage() {
 
   const ready = !aLoading && !iLoading && !cLoading && !capLoading && !rLoading
 
-  // Auto-print once everything is ready (one-shot).
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !aPaused) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, aPaused])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (aPaused) {
     return (

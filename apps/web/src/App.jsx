@@ -90,7 +90,7 @@ const ImprovementPage = lazy(() => import('./pages/ImprovementPage.jsx'))
 // commendations panel, the evidence-readiness table, the date picker and the
 // narration/TTS stack, none of which a school that never rehearses a visit should
 // download. The two PRINT routes below are eager, like every other print page —
-// they auto-`window.print()` on load and a Suspense frame would race that.
+// they render a print-clean document outside the app chrome (no Suspense frame).
 const VisitPage = lazy(() => import('./pages/VisitPage.jsx'))
 
 // AIC Phase I — the superintendent portfolio. Lazy for the same reason as the
@@ -356,11 +356,11 @@ export default function App() {
         <Route path="/governance/report/print" element={<GovernanceReportPrintPage />} />
         {/* AIC Phase C — the Evidence Index a school hands a visiting team. Same
             print-route treatment as the governance report (inside AuthedLayout,
-            `.ui-v1` wrapper, auto window.print()). */}
+            `.ui-v1` wrapper, Print button — no auto-print). */}
         <Route path="/accreditation/evidence/print" element={<EvidenceIndexPrintPage />} />
         {/* AIC Phase H — the Board Readiness One-Pager and the Visiting-Team
             Preview. Same print-route treatment as the Evidence Index: inside
-            AuthedLayout, `.ui-v1` wrapper, one-shot auto window.print(). */}
+            AuthedLayout, `.ui-v1` wrapper, Print button — no auto-print). */}
         <Route path="/accreditation/board/print" element={<BoardReadinessOnePagerPrintPage />} />
         <Route path="/accreditation/visit/print" element={<VisitPreviewPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />

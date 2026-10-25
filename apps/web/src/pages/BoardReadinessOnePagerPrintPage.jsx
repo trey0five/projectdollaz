@@ -19,7 +19,7 @@
 // available; the AppShell chrome is `.no-print` and the sidebar offset is
 // neutralized by the global print reset), a screen-only `.no-print` toolbar, the
 // whole document wrapped in `.ui-v1` so the v2 typography scale never reflows the
-// page, a one-shot auto `window.print()` once data is ready, 402
+// page, a a Print button (no auto-print), 402
 // MODULE_NOT_LICENSED → module panel, plain 402 → `<EntitlementPausedPanel/>`.
 //
 // NO MOTION AT ALL, anywhere on this page (acceptance 5). A print document that
@@ -33,7 +33,7 @@
 //   · no percentage on a finding (acceptance 2).
 //   · no adopt control — this is paper.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BadgeCheck, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -167,15 +167,8 @@ export default function BoardReadinessOnePagerPrintPage() {
   // readiness document in a board packet is to open the print dialog on one.
   const disclaimer = typeof visit?.disclaimer === 'string' ? visit.disclaimer.trim() : ''
 
-  // Auto-print once data is ready (one-shot) — the BoardReportPrintPage idiom.
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !!disclaimer && !notEntitled && !notLicensed) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, disclaimer, notEntitled, notLicensed])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   // The link was for a different school than the reader is scoped to. Refuse,
   // name the school, and offer the switch — never render a board document that

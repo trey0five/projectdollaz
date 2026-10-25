@@ -3,10 +3,10 @@
 // inside AuthedLayout (SchoolProvider + Billing context available). Reads the
 // period from ?period=, fetches the fully-computed BoardReportBundle via
 // useBoardReport (the web does ZERO math), renders the presentational
-// BoardReportPrintDocument, and auto-fires window.print() once data is ready.
+// BoardReportPrintDocument, with a Print button (no auto-print).
 // 402 -> paused panel. DISTINCT from /board-packet/print (compliance packet).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -34,15 +34,8 @@ export default function BoardReportPrintPage() {
   )
   const ready = !loading && !!data
 
-  // Auto-print once data is ready (one-shot).
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !notEntitled) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, notEntitled])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (

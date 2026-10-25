@@ -5,11 +5,11 @@
 // AppShell chrome is .no-print and the sidebar offset is neutralized in the
 // global print reset), fetches the fully-computed report from
 // GET schools/:schoolId/governance/report (the web does ZERO math), renders a
-// print-clean document, and auto-fires window.print() once data is ready.
+// print-clean document, with a Print button (no auto-print).
 // Wrapped in `.ui-v1` so the v2 typography scale never reflows the printed page.
 // 402 MODULE_NOT_LICENSED → module panel; plain 402 → paused panel.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Printer, Landmark } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -177,15 +177,8 @@ export default function GovernanceReportPrintPage() {
 
   const ready = !loading && !!data && disclaimer !== null
 
-  // Auto-print once data is ready (one-shot) — the BoardReportPrintPage idiom.
-  const printed = useRef(false)
-  useEffect(() => {
-    if (!printed.current && ready && !notEntitled && !notLicensed) {
-      printed.current = true
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [ready, notEntitled, notLicensed])
+  // The page IS the preview; the toolbar's Print button prints. (It used to
+  // auto-fire window.print() on load — customers got the dialog before the report.)
 
   if (notEntitled) {
     return (
