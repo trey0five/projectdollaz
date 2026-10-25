@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service.js'
 // Purges: expired/old-revoked refresh tokens, expired unaccepted invitations,
 // and expired reset/verification tokens (nulled). Optionally trims audit_log
 // older than AUDIT_RETENTION_DAYS (0 = keep forever, the default).
+// Recently-removed finance data is erased 30 days after removal (the person was told "30 days").
 //
 // NOTE: runs per-instance. Under horizontal scaling it may run on >1 replica; the
 // deletes are idempotent so double-runs are harmless (no leader election needed).
@@ -67,9 +68,21 @@ export class RetentionService {
         auditDeleted = res.count
       }
 
+      // Finance data removed more than 30 days ago (its bin rows cascade).
+      let removalsDeleted = 0
+      try {
+        const res = await this.prisma.dataRemoval.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+        removalsDeleted = res.count
+      } catch (err) {
+        this.logger.warn(
+          `retention purge (recently removed) failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+
       this.logger.log(
         `retention purge: refreshTokens=${refreshTokens.count} invitations=${invitations.count} ` +
-          `resetCodes=${resetCodes.count} verifyTokens=${verifyTokens.count} auditRows=${auditDeleted}`,
+          `resetCodes=${resetCodes.count} verifyTokens=${verifyTokens.count} auditRows=${auditDeleted} ` +
+          `removedFinanceData=${removalsDeleted}`,
       )
     } catch (err) {
       // Never crash the scheduler; the next run retries.

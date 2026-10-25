@@ -60,6 +60,7 @@ import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
 
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
 import FinanceUploadSorter from '../finance/FinanceUploadSorter.jsx'
+import WorkingYearNote from '../finance/WorkingYearNote.jsx'
 import GovernanceImport from '../governance/GovernanceImport.jsx'
 import RecordsImport from '../imports/RecordsImport.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
@@ -113,7 +114,12 @@ export const wizardConfigs = {
         cta: 'Upload files',
         ownFinish: true,
         renderEmbed: (ctx, nav) => (
-          <FinanceUploadSorter schoolId={ctx.schoolId} canEdit={ctx.canEdit} goToOption={nav.goToOption} />
+          <FinanceUploadSorter
+            schoolId={ctx.schoolId}
+            canEdit={ctx.canEdit}
+            goToOption={nav.goToOption}
+            pagePeriodId={ctx.periodId}
+          />
         ),
       },
       {
@@ -170,7 +176,10 @@ export const wizardConfigs = {
           'Add a month-end trial balance for each month to power your month-by-month board report.',
         cta: 'Manage months',
         renderEmbed: (ctx) => (
-          <MonthlyActualsPanel schoolId={ctx.schoolId} periodId={ctx.periodId} canEdit={ctx.canEdit} />
+          <>
+            {ctx.periodOverride ? <WorkingYearNote period={ctx.periodOverride} /> : null}
+            <MonthlyActualsPanel schoolId={ctx.schoolId} periodId={ctx.periodId} canEdit={ctx.canEdit} />
+          </>
         ),
       },
       {
@@ -182,12 +191,15 @@ export const wizardConfigs = {
         blurb: 'Import your budget so every report can show budget vs. actual.',
         cta: 'Set up budget',
         renderEmbed: (ctx) => (
-          <BudgetSetup
-            schoolId={ctx.schoolId}
-            periodId={ctx.periodId}
-            canEdit={ctx.canEdit}
-            onSaved={ctx.onSaved}
-          />
+          <>
+            {ctx.periodOverride ? <WorkingYearNote period={ctx.periodOverride} /> : null}
+            <BudgetSetup
+              schoolId={ctx.schoolId}
+              periodId={ctx.periodId}
+              canEdit={ctx.canEdit}
+              onSaved={ctx.onSaved}
+            />
+          </>
         ),
       },
       // QuickBooks is NOT a separate option — connecting QBO syncs the trial

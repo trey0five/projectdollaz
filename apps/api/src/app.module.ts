@@ -9,6 +9,7 @@ import { SchoolsModule } from './schools/schools.module.js'
 import { OrganizationsModule } from './organizations/organizations.module.js'
 import { PeriodsModule } from './periods/periods.module.js'
 import { ImportsModule } from './imports/imports.module.js'
+import { FinanceFilesModule } from './finance-files/finance-files.module.js'
 import { MappingModule } from './mapping/mapping.module.js'
 import { StatementsModule } from './statements/statements.module.js'
 import { MonthlyModule } from './monthly/monthly.module.js'
@@ -65,6 +66,7 @@ import { RecordImportsModule } from './record-imports/record-imports.module.js'
     OrganizationsModule,
     PeriodsModule,
     ImportsModule,
+    FinanceFilesModule,
     MappingModule,
     StatementsModule,
     MonthlyModule,

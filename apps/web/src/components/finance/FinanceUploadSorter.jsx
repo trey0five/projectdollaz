@@ -29,6 +29,11 @@ import { DESTINATION, groupByDestination, sortFinanceFile } from '../../lib/fina
 import { stashPending } from '../../lib/pendingUploads.js'
 import { apiErrorMessage } from '../../lib/api.js'
 import { asTableFile, isPdfFile } from '../../lib/pdfTable.js'
+import OnFilePanel from './OnFilePanel.jsx'
+import ReplaceNotes from './ReplaceNotes.jsx'
+import { useFinanceOnFile } from '../../hooks/useFinanceOnFile.js'
+import { usePersistence } from '../../context/PersistenceContext.jsx'
+import { destinationKeyOf, routeVerdict, splitFocusGroups } from '../../lib/financeInventory.js'
 
 const ACCEPT = '.xlsx,.xls,.csv,.tsv,.txt,.pdf'
 
@@ -45,17 +50,21 @@ const KIND_ICON = {
 let seq = 0
 const nextId = () => `up-${Date.now()}-${(seq += 1)}`
 
-export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOption }) {
+export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOption, pagePeriodId = null }) {
   const reduce = useReducedMotion()
   const inputRef = useRef(null)
   const [items, setItems] = useState([]) // { id, file, status: 'reading'|'done', verdict }
   const [dragging, setDragging] = useState(false)
   const memoryRef = useRef(null)
+  // "Already on file" + what each dropped file would replace (owner 2026-10-25).
+  const onFile = useFinanceOnFile(schoolId)
+  const persistence = usePersistence()
+  const targetRef = useRef(null) // the Replace the person clicked, for the next pick
 
-  const addFiles = async (fileList) => {
+  const addFiles = async (fileList, target = null) => {
     const files = Array.from(fileList || [])
     if (!files.length || !canEdit) return
-    const seeded = files.map((file) => ({ id: nextId(), file, status: 'reading', verdict: null }))
+    const seeded = files.map((file) => ({ id: nextId(), file, status: 'reading', verdict: null, target }))
     setItems((prev) => [...prev, ...seeded])
     if (memoryRef.current === null) {
       memoryRef.current = await getIntakeMemory(schoolId).catch(() => null)
@@ -93,20 +102,67 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
 
   const remove = (id) => setItems((prev) => prev.filter((p) => p.id !== id))
 
-  const reading = items.some((it) => it.status === 'reading')
-  const done = items.filter((it) => it.status === 'done' && it.verdict)
-  const groups = groupByDestination(done.map((it) => ({ ...it.verdict, file: it.file, table: it.table })))
+  // Replace (in Already on file) → pick a file for that year.
+  const pickFor = (target) => {
+    targetRef.current = target
+    inputRef.current?.click()
+  }
+  const routeOf = (it) =>
+    routeVerdict(it.verdict, {
+      onFile: onFile.data,
+      periods: persistence.periods,
+      // The year the Budget / Monthly tiles will actually open on (the page's
+      // year), not the intake's last-hydrated one — warning and save agree.
+      activePeriodId: pagePeriodId ?? persistence.activePeriod?.id ?? null,
+      target: it.target,
+      onFileUnavailable: !!onFile.error && !onFile.data,
+    })
 
-  const go = (destinationKey) => {
+  const reading = items.some((it) => it.status === 'reading')
+  // Don't route (or let anyone Continue) until we know what each file replaces.
+  const checking = onFile.loading && !onFile.data
+  const done = items.filter((it) => it.status === 'done' && it.verdict)
+  const groups = splitFocusGroups(
+    groupByDestination(
+      done.map((it) => {
+        const route = routeOf(it)
+        return { ...it.verdict, destination: route.destination, route, file: it.file, table: it.table }
+      }),
+    ),
+  )
+  const groupLabel = (key, list) => {
+    const year = key.includes('@') ? list.find((s) => s.route?.yearLabel)?.route.yearLabel : null
+    return year ? `${year} trial balance` : DESTINATION[destinationKeyOf(key)].label
+  }
+
+  const go = async (groupKey) => {
+    const destinationKey = destinationKeyOf(groupKey)
     const dest = DESTINATION[destinationKey]
-    const files = (groups.get(destinationKey) || []).map((s) => s.table || s.file)
-    if (!dest || !files.length) return
+    const list = groups.get(groupKey) || []
+    const files = list.map((s) => s.table || s.file)
+    if (!dest || !files.length || checking) return
+    const r = list.find((s) => s.route?.focus)?.route ?? list[0].route
+    // The other half of a saved year: open the intake ON that year first.
+    if (destinationKey === 'tb-single' && r.focus && r.periodId && r.periodId !== persistence.activePeriod?.id) {
+      await persistence.focusPeriod(r.periodId)
+    }
     stashPending(dest.pending, files)
-    goToOption?.(dest.option)
+    const yearId = r.periodId ?? pagePeriodId
+    goToOption?.(
+      dest.option,
+      (destinationKey === 'monthly' || destinationKey === 'budget') && yearId ? { periodId: yearId } : undefined,
+    )
   }
 
   return (
     <div className="panel-body space-y-5" data-testid="finance-upload-sorter">
+      <OnFilePanel
+        schoolId={schoolId}
+        canEdit={canEdit}
+        onFile={onFile}
+        onReplace={pickFor}
+        onManageMonths={(id) => goToOption?.('monthly', { periodId: id })}
+      />
       {/* Drop zone */}
       <div
         onDragOver={(e) => {
@@ -136,7 +192,10 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
             variant="primary"
             icon={<Upload size={14} />}
             disabled={!canEdit}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => {
+              targetRef.current = null
+              inputRef.current?.click()
+            }}
           >
             Choose files
           </Button>
@@ -147,7 +206,8 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
             multiple
             className="hidden"
             onChange={(e) => {
-              void addFiles(e.target.files)
+              void addFiles(e.target.files, targetRef.current)
+              targetRef.current = null
               e.target.value = ''
             }}
           />
@@ -161,7 +221,8 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
           {items.map((it) => {
             const v = it.verdict
             const Icon = v ? KIND_ICON[v.kind] || FileSpreadsheet : Loader2
-            const dest = v?.destination ? DESTINATION[v.destination] : null
+            const route = v ? routeOf(it) : null
+            const dest = route?.destination ? DESTINATION[route.destination] : null
             const tone = v?.kind === 'unsupported' ? 'risk' : v?.kind === 'unread' ? 'watch' : 'ok'
             return (
               <motion.li
@@ -189,6 +250,7 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
                       {dest ? ` → ${dest.label}` : ''} · {v.detail}
                     </p>
                   )}
+                  {route ? <ReplaceNotes notes={route.notes} /> : null}
                 </div>
                 <button
                   type="button"
@@ -208,12 +270,23 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
       {done.length > 0 && !reading && groups.size > 0 && (
         <div className="flex flex-wrap items-center gap-2" data-testid="sorter-continue">
           {[...groups.entries()].map(([key, list]) => (
-            <Button key={key} variant="primary" icon={<ArrowRight size={14} />} onClick={() => go(key)}>
+            <Button
+              key={key}
+              variant="primary"
+              icon={<ArrowRight size={14} />}
+              disabled={checking}
+              onClick={() => void go(key)}
+            >
               {groups.size === 1
-                ? `Continue to ${DESTINATION[key].label}`
-                : `${DESTINATION[key].label} (${list.length} file${list.length === 1 ? '' : 's'})`}
+                ? `Continue to ${groupLabel(key, list)}`
+                : `${groupLabel(key, list)} (${list.length} file${list.length === 1 ? '' : 's'})`}
             </Button>
           ))}
+          {checking && (
+            <p className="basis-full text-[12.5px] text-ink2" role="status">
+              Checking what&rsquo;s already on file…
+            </p>
+          )}
           {groups.size > 1 && (
             <p className="basis-full text-[12.5px] text-ink2">
               These go to different places — open each in turn; the files wait for you.

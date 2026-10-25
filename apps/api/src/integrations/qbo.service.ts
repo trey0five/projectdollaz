@@ -522,13 +522,18 @@ export class QboService {
         await clearPeriodInsights(this.prisma, schoolId)
       }
       // Drop a period only when nothing user-owned remains (a QBO-created history
-      // year). Guarded on imports + monthly + budget so we never cascade real data.
-      const [importsLeft, monthlyLeft, budgetLeft] = await Promise.all([
+      // year). Guarded on imports + monthly + budget so we never cascade real data,
+      // and on "Recently removed" entries: data_removals cascade with the period, so
+      // deleting it would erase data the person was told they could restore for 30 days.
+      const [importsLeft, monthlyLeft, budgetLeft, removalsKept] = await Promise.all([
         this.prisma.import.count({ where: { fiscalPeriodId: periodId } }),
         this.prisma.monthlySnapshot.count({ where: { fiscalPeriodId: periodId } }),
         this.prisma.periodBudget.count({ where: { fiscalPeriodId: periodId } }),
+        this.prisma.dataRemoval.count({
+          where: { fiscalPeriodId: periodId, expiresAt: { gt: new Date() } },
+        }),
       ])
-      if (importsLeft === 0 && monthlyLeft === 0 && budgetLeft === 0) {
+      if (importsLeft === 0 && monthlyLeft === 0 && budgetLeft === 0 && removalsKept === 0) {
         await this.prisma.fiscalPeriod.delete({ where: { id: periodId } })
         periodsDeleted++
       }

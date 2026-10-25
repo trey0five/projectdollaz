@@ -167,6 +167,14 @@ export const EXPORT_TABLES: ExportTable[] = [
       'your school, so including it would only tell you that you asked for it.',
   },
   {
+    model: 'dataRemoval',
+    folder: 'finance',
+    file: 'recently-removed',
+    skip:
+      'Copies of finance files you removed in the last 30 days, kept only so you can undo the removal. ' +
+      'They are erased automatically after 30 days.',
+  },
+  {
     model: 'subscription',
     folder: 'account',
     file: 'subscription',

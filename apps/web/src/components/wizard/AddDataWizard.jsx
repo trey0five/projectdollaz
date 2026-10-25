@@ -65,6 +65,10 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   // mounted RecordFlow registers (returns false when it opened its own dialog).
   const [flowResult, setFlowResult] = useState(null)
   const flowGuardRef = useRef(null)
+  // A year other than the page's, picked from inside an embed (the upload
+  // sorter's "Replace" / "Manage months" in Already on file). Cleared whenever
+  // the person leaves the option. An id that isn't a known period is ignored.
+  const [periodOverride, setPeriodOverride] = useState(null)
 
   const option = useMemo(
     () => options.find((o) => o.key === optionKey) || null,
@@ -73,12 +77,17 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
   // ctx handed to the render functions, with reduced-motion folded in (the modal
   // forms read ctx.reduce). onSaved fires the parent refresh + penny:data-changed.
-  const fullCtx = useMemo(() => ({ ...ctx, reduce }), [ctx, reduce])
+  const ov = periodOverride ? (ctx.periods || []).find((p) => p.id === periodOverride) ?? null : null
+  const fullCtx = useMemo(
+    () => ({ ...ctx, ...(ov ? { periodId: ov.id, periodLabel: ov.label, periodOverride: ov } : {}), reduce }),
+    [ctx, ov, reduce],
+  )
 
   // ── Option selection ──────────────────────────────────────────────────────
   const chooseOption = (key) => {
     setFlowResult(null)
     flowGuardRef.current = null
+    setPeriodOverride(null)
     const opt = options.find((o) => o.key === key)
     if (!opt) return
     setOptionKey(key)
@@ -91,8 +100,9 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     }
   }
 
-  // Cross-option jump from inside an embed (e.g. TB → Monthly).
-  const goToOption = (key) => {
+  // Cross-option jump from inside an embed (e.g. TB → Monthly). `opts.periodId`
+  // opens the option on that year instead of the page's.
+  const goToOption = (key, opts = null) => {
     setFlowResult(null)
     flowGuardRef.current = null
     const opt = options.find((o) => o.key === key)
@@ -100,11 +110,13 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     setOptionKey(key)
     savedRef.current = false
     setStep(opt.kind === 'handoff' ? 'confirm' : 'work')
+    setPeriodOverride(opts?.periodId ?? null)
   }
 
   const backToChoose = () => {
     setFlowResult(null)
     flowGuardRef.current = null
+    setPeriodOverride(null)
     savedRef.current = false
     // Keep the single-option selected so the one card still reads naturally.
     if (options.length > 1) setOptionKey(null)
@@ -161,6 +173,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     fullCtx.onSaved?.()
     setFlowResult(null)
     flowGuardRef.current = null
+    setPeriodOverride(null)
     savedRef.current = false
     setOptionKey(null)
     setStep('choose')
@@ -260,7 +273,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     step === 'choose' ? 'Choose what to add' : step === 'work' ? option?.label ?? 'Add' : 'Done'
 
   const needsPeriodBlocked =
-    step === 'work' && option?.kind === 'embed' && option.needsPeriod && !ctx.periodId
+    step === 'work' && option?.kind === 'embed' && option.needsPeriod && !fullCtx.periodId
 
   // Step-aware meta line under the title (the visible twin of the live region).
   // An option that finishes itself has no Done step (no Step 3 screen).

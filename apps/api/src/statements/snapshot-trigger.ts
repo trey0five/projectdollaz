@@ -10,6 +10,8 @@ export type SnapshotTrigger =
   | 'quickbooks_sync'
   | 'scheduled_sync'
   | 'remap'
+  | 'data_removed'
+  | 'data_restored'
 
 /** Every valid trigger, for @IsIn / runtime validation. */
 export const SNAPSHOT_TRIGGERS: readonly SnapshotTrigger[] = [
@@ -18,6 +20,8 @@ export const SNAPSHOT_TRIGGERS: readonly SnapshotTrigger[] = [
   'quickbooks_sync',
   'scheduled_sync',
   'remap',
+  'data_removed',
+  'data_restored',
 ]
 
 /** Human-facing labels — one place so every surface (drawer, Penny) reads alike. */
@@ -27,6 +31,8 @@ export const SNAPSHOT_TRIGGER_LABELS: Record<SnapshotTrigger, string> = {
   quickbooks_sync: 'QuickBooks sync',
   scheduled_sync: 'Scheduled sync',
   remap: 'Category remap',
+  data_removed: 'Data removed',
+  data_restored: 'Data restored',
 }
 
 /** Label for an unresolved/legacy row that correlation could not classify. */

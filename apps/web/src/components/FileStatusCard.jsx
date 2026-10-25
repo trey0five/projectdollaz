@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   AlertOctagon,
@@ -21,6 +21,7 @@ import { AuroraLightButton } from './ui/aurora/index.js'
 import RoleChip from './RoleChip.jsx'
 import StatementNotes from './intake/StatementNotes.jsx'
 import CountUp from './CountUp.jsx'
+import RemoveDataDialog from './finance/RemoveDataDialog.jsx'
 
 // Stable empty Set so a missing context value (e.g. the read-only
 // ReportViewProvider mount, which does NOT expose the mapping API) never
@@ -76,6 +77,11 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
 
   const { id, fileName, status } = file
   const fromHistory = !!file.fromHistory
+  // A SAVED file's × asks first and can be undone (RemoveDataDialog); a file
+  // only added in this session, or a combined P&L + Balance Sheet card, still
+  // goes straight away (nothing on the server to remove).
+  const [confirming, setConfirming] = useState(false)
+  const savedFile = !!(file.persisted && file.importId && !fromHistory && !file.mergedFrom)
   const pill = balancePill(file)
   // A ruled column, not a card-in-panel: the 2px top rule carries the state
   // (risk = parse error, watch = accounts to review, hairline = fine).
@@ -123,11 +129,19 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
           <button
             type="button"
             aria-label={`Remove ${fileName}`}
-            onClick={() => removeFile(id)}
+            onClick={() => (savedFile ? setConfirming(true) : removeFile(id))}
             className="rounded-md p-1 text-ink2 transition-colors hover:bg-ground hover:text-[rgb(var(--c-risk))]"
           >
             <X size={16} />
           </button>
+        )}
+        {confirming && (
+          <RemoveDataDialog
+            open
+            schoolId={schoolId}
+            target={{ kind: 'trial_balance', importId: file.importId }}
+            onClose={() => setConfirming(false)}
+          />
         )}
       </div>
 

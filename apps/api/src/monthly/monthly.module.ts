@@ -4,6 +4,7 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { MappingModule } from '../mapping/mapping.module.js'
 import { BillingModule } from '../billing/billing.module.js'
+import { FinanceFilesModule } from '../finance-files/finance-files.module.js'
 import { MonthlyController } from './monthly.controller.js'
 import { MonthlySnapshotsService } from './monthly-snapshots.service.js'
 import { MonthlyActualsService } from './monthly-actuals.service.js'
@@ -13,10 +14,11 @@ import { MonthlyActualsService } from './monthly-actuals.service.js'
  * MappingService (active mapping/chart), the pure @finrep/engine + @finrep/
  * analytics, and AuditService. BillingModule supplies the EntitlementGuard on
  * the write endpoints. Purely additive — does not participate in the annual
- * Import/StatementSnapshot flow.
+ * Import/StatementSnapshot flow. FinanceFilesModule makes the per-month Delete
+ * restorable from "Recently removed".
  */
 @Module({
-  imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule],
+  imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule, FinanceFilesModule],
   controllers: [MonthlyController],
   providers: [MonthlySnapshotsService, MonthlyActualsService],
   exports: [MonthlySnapshotsService, MonthlyActualsService],

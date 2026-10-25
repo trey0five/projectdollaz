@@ -1637,3 +1637,12 @@ export function moduleFromError(err) {
 export function apiErrorCode(err) {
   return err?.response?.data?.code || null
 }
+
+// ── Finance files on record: "Already on file", remove with undo, restore ────
+export const financeFilesApi = {
+  onFile: (schoolId) => api.get(`/schools/${schoolId}/finance/on-file`),
+  previewRemoval: (schoolId, target) => api.post(`/schools/${schoolId}/finance/removals/preview`, target),
+  remove: (schoolId, body) => api.post(`/schools/${schoolId}/finance/removals`, body),
+  restore: (schoolId, removalId, body = {}) =>
+    api.post(`/schools/${schoolId}/finance/removals/${removalId}/restore`, body),
+}

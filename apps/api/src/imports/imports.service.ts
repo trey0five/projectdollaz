@@ -9,6 +9,8 @@ import { MappingService } from '../mapping/mapping.service.js'
 import { statementAutoMapping } from './statement-auto-map.js'
 import { StatementsService } from '../statements/statements.service.js'
 import type { CreateImportDto } from './dto/create-import.dto.js'
+import { FinanceRemovalsService } from '../finance-files/finance-removals.service.js'
+import { readSourceType } from '../finance-files/finance-files.constants.js'
 
 export interface DeleteImportResult {
   /** The clicked import id (the active version of the removed role slot). */
@@ -26,6 +28,10 @@ export interface DeleteImportResult {
    *  - 'unchanged': regeneration was attempted but failed; the prior snapshot is kept.
    */
   snapshot: 'regenerated' | 'cleared' | 'unchanged'
+  /** "Recently removed" entry holding the removed stack (when the bin is wired). */
+  removalId?: string
+  /** When that entry stops being restorable (ISO). */
+  expiresAt?: string
 }
 
 export interface ImportPublic {
@@ -66,16 +72,13 @@ export interface ImportSummary {
  */
 export const INTAKE_MEMORY_SCAN = 400
 
-/** Read an import's stored metadata.source into the public sourceType enum. */
-function readSourceType(metadata: unknown): ImportSourceType {
-  const source =
-    metadata && typeof metadata === 'object'
-      ? (metadata as { source?: unknown }).source
-      : undefined
-  if (source === 'quickbooks') return 'quickbooks'
-  if (source === 'upload') return 'upload'
-  return 'unknown'
-}
+/**
+ * Read an import's stored metadata.source into the public sourceType enum. It
+ * lives with the finance-files helpers (the "Already on file" list reads the
+ * same rule) and is re-exported here; defined there so finance-files never has
+ * to import this module back (an ESM cycle through the DI metadata).
+ */
+export { readSourceType }
 
 @Injectable()
 export class ImportsService {
@@ -90,6 +93,10 @@ export class ImportsService {
     // positional-arg unit specs (which stop at statements) still construct; with
     // no MappingService the auto-sort is simply skipped.
     @Optional() private readonly mapping?: MappingService,
+    // Restorable removal ("Recently removed"). Appended after mapping and
+    // @Optional for the same reason: positional-arg specs construct without it
+    // and keep today's hard-delete path.
+    @Optional() private readonly removals?: FinanceRemovalsService,
   ) {}
 
   private toPublic(imp: Import): ImportPublic {
@@ -269,6 +276,43 @@ export class ImportsService {
     const role = imp.role
     // Ownership/tenant check on the owning period (throws if not this school's).
     const owned = await this.periods.getOwnedPeriod(schoolId, periodId)
+
+    // Restorable path: the stack (and, for the current year, its statement
+    // snapshots) moves into "Recently removed" and every affected year is
+    // rebuilt by FinanceRemovalsService. The legacy audit row is kept so
+    // existing readers of 'import.deleted' (KYRO's action log) still see it.
+    if (this.removals) {
+      const r = await this.removals.removeTrialBalance(actor, schoolId, importId)
+      await this.audit.write({
+        schoolId,
+        userId: actor.id,
+        action: 'import.deleted',
+        targetType: 'import',
+        targetId: importId,
+        metadata: {
+          role,
+          periodId,
+          removed: r.removal.files.length,
+          rowCount: imp.rowCount,
+          sourceName: imp.sourceName,
+          removalId: r.removal.id,
+        },
+      })
+      return {
+        deleted: importId,
+        role,
+        removed: r.removal.files.length,
+        periodId,
+        snapshot:
+          r.effects.statements === 'cleared'
+            ? 'cleared'
+            : r.effects.statements === 'rebuilt'
+              ? 'regenerated'
+              : 'unchanged',
+        removalId: r.removal.id,
+        expiresAt: r.removal.expiresAt,
+      }
+    }
 
     // Remove the ENTIRE role slot for this period (the active version + every
     // superseded re-upload) so nothing resurfaces.

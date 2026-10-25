@@ -14,7 +14,7 @@
 // AppContext consumes hydratedFiles via lazy useState seeding + a remount key
 // (NO setState-in-effect injection).
 // ─────────────────────────────────────────────────────────────────────────────
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { validateDataset, findUnmapped } from '@finrep/engine'
 import { periodsApi, importsApi, statementsApi, isPaymentRequired } from '../lib/api.js'
 import { useSchools } from './SchoolContext.jsx'
@@ -73,6 +73,10 @@ export function PersistenceProvider({ children }) {
   const [hydrationToken, setHydrationToken] = useState(0)
   const [saveState, setSaveState] = useState('idle') // idle|saving|saved|error
   const [savedPeriodLabel, setSavedPeriodLabel] = useState(null)
+  // Every hydrate takes a ticket; only the NEWEST may write state. Two refreshes
+  // in flight (remove → Undo straight away) otherwise race: the pre-restore read
+  // could settle last and show the restored file as gone.
+  const loadSeqRef = useRef(0)
 
   // Fetch active (latest-per-role) full imports for a period.
   const fetchActiveImports = useCallback(async (sid, periodId) => {
@@ -97,9 +101,12 @@ export function PersistenceProvider({ children }) {
   // deleted only the one role. Falls back to newest when the preferred period is gone.
   const loadForSchool = useCallback(
     async (sid, preferPeriodId = null) => {
+      const seq = ++loadSeqRef.current
+      const stale = () => seq !== loadSeqRef.current
       setError('')
       try {
         const pres = await periodsApi.list(sid)
+        if (stale()) return
         const list = pres.data || []
         if (list.length === 0) {
           setPeriods([])
@@ -140,6 +147,7 @@ export function PersistenceProvider({ children }) {
             snapshot = null
           }
         }
+        if (stale()) return
         setPeriods(list)
         setActivePeriod(newest)
         setPeriodImports(imports)
@@ -148,6 +156,7 @@ export function PersistenceProvider({ children }) {
         setHydrating(false)
         setHydrationToken((t) => t + 1)
       } catch {
+        if (stale()) return
         setError('Could not load saved statements for this school.')
         setPeriods([])
         setActivePeriod(null)
@@ -308,10 +317,12 @@ export function PersistenceProvider({ children }) {
   // fetchActiveImports, one hydrationToken bump — not one per saved period).
   const refreshAfterSave = useCallback(
     async (sid, lastPeriod, lastSnapshot, savedLabel = null) => {
+      const seq = ++loadSeqRef.current
       const pres = await periodsApi.list(sid)
       const list = pres.data || []
       const refreshed = list.find((p) => p.id === lastPeriod.id) || lastPeriod
       const imports = await fetchActiveImports(sid, lastPeriod.id)
+      if (seq !== loadSeqRef.current) return
 
       setPeriods(list)
       setActivePeriod(refreshed)
@@ -444,6 +455,9 @@ export function PersistenceProvider({ children }) {
     // loadForSchool). The mount effect deliberately passes no preference.
     refresh: () =>
       schoolId ? loadForSchool(schoolId, activePeriod?.id ?? null) : Promise.resolve(),
+    // Re-hydrate the intake ON a given year (the upload sorter opening a saved
+    // year's half so the person can combine it). Unknown id → newest, as above.
+    focusPeriod: (periodId) => (schoolId ? loadForSchool(schoolId, periodId) : Promise.resolve()),
   }
 
   return <PersistenceContext.Provider value={value}>{children}</PersistenceContext.Provider>

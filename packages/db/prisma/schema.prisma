@@ -186,6 +186,7 @@ model School {
   @@index([organizationId])
   @@map("schools")
   dataExports          DataExport[]
+  dataRemovals         DataRemoval[]
 
 }
 
@@ -214,6 +215,7 @@ model FiscalPeriod {
   campaignSchedules        CampaignSchedule[]
   monthlySnapshots         MonthlySnapshot[]
   enrollmentSnapshots      EnrollmentSnapshot[]
+  dataRemovals             DataRemoval[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -901,6 +903,51 @@ model PeriodBudget {
 
   @@unique([schoolId, fiscalPeriodId])
   @@map("period_budgets")
+}
+
+/// Finance data a person removed (trial balance stack, months, or a budget), kept
+/// restorable for 30 days. The removed rows themselves live in DataRemovalItem as
+/// to_jsonb(row) and are moved back with their ORIGINAL ids. NOTE for any future
+/// migration that adds a column to imports / statement_snapshots /
+/// monthly_snapshots / period_budgets: rows binned before it don't carry that
+/// column. Restore inserts only the columns the binned JSON has, so a new column
+/// WITH a default gets its default; a NOT NULL column WITHOUT a default must also
+/// backfill data_removal_items.data (jsonb_set per model), or restoring those
+/// older removals fails. Renaming/dropping a column needs the same backfill.
+model DataRemoval {
+  id             String      @id @default(uuid()) @db.Uuid
+  schoolId       String      @map("school_id") @db.Uuid
+  fiscalPeriodId String      @map("fiscal_period_id") @db.Uuid
+  kind           String      // 'trial_balance' | 'monthly' | 'budget'
+  role           ImportRole? // trial_balance only
+  monthKeys      String[]    @default([]) @map("month_keys")
+  reason         String      @default("removed") // 'removed' | 'swapped_on_restore'
+  summary        Json        @db.JsonB
+  removedBy      String?     @map("removed_by") @db.Uuid // soft ref
+  removedAt      DateTime    @default(now()) @map("removed_at")
+  expiresAt      DateTime    @map("expires_at")
+
+  school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod      @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  items        DataRemovalItem[]
+
+  @@index([schoolId, removedAt])
+  @@index([fiscalPeriodId])
+  @@index([expiresAt])
+  @@map("data_removals")
+}
+
+model DataRemovalItem {
+  id        String @id @default(uuid()) @db.Uuid
+  removalId String @map("removal_id") @db.Uuid
+  model     String // 'import' | 'statement_snapshot' | 'monthly_snapshot' | 'period_budget'
+  recordId  String @map("record_id") @db.Uuid
+  data      Json   @db.JsonB
+
+  removal DataRemoval @relation(fields: [removalId], references: [id], onDelete: Cascade)
+
+  @@index([removalId])
+  @@map("data_removal_items")
 }
 
 /// Phase 3 — recurring board-summary email delivery for a school. One per school.

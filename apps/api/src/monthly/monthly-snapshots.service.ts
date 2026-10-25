@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common'
 import type { FiscalPeriod, MonthlySnapshot, Prisma, User } from '@finrep/db'
 import {
@@ -17,6 +18,7 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { MappingService } from '../mapping/mapping.service.js'
 import type { CreateMonthlySnapshotDto } from './dto/create-monthly-snapshot.dto.js'
 import { fyElapsed, fiscalYearStartOf, fyStartYearForPeriodEnd } from './fy-elapsed.js'
+import { FinanceRemovalsService } from '../finance-files/finance-removals.service.js'
 
 /** POST 201 response — payload/sourceRows are NOT echoed (lightweight). */
 export interface CreateMonthlySnapshotResponse {
@@ -61,6 +63,9 @@ export class MonthlySnapshotsService {
     private readonly audit: AuditService,
     private readonly periods: PeriodsService,
     private readonly mapping: MappingService,
+    // Restorable per-month Delete ("Recently removed"). @Optional + appended so
+    // positional-arg specs construct without it and keep the hard delete.
+    @Optional() private readonly removals?: FinanceRemovalsService,
   ) {}
 
   /**
@@ -223,6 +228,26 @@ export class MonthlySnapshotsService {
     monthKey: string,
   ): Promise<void> {
     await this.periods.getOwnedPeriod(schoolId, periodId)
+    if (this.removals) {
+      let removalId: string
+      try {
+        const r = await this.removals.removeMonths(actor, schoolId, periodId, [monthKey])
+        removalId = r.removal.id
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          throw new NotFoundException(`No monthly snapshot loaded for ${monthKey}.`)
+        }
+        throw err
+      }
+      await this.audit.write({
+        schoolId,
+        userId: actor.id,
+        action: 'monthly_snapshot.deleted',
+        targetType: 'monthly_snapshot',
+        metadata: { periodId, monthKey, removalId },
+      })
+      return
+    }
     const { count } = await this.prisma.monthlySnapshot.deleteMany({
       where: { schoolId, fiscalPeriodId: periodId, monthKey },
     })

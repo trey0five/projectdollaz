@@ -29,6 +29,8 @@ import {
   Clock,
   FileText,
   Shuffle,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react'
 import { formatMetricValue } from '@finrep/analytics'
 import { formatShortDate } from '../../lib/format.js'
@@ -44,6 +46,8 @@ const TRIGGER_ICON = {
   scheduled_sync: Clock,
   upload: FileText,
   remap: Shuffle,
+  data_removed: Trash2,
+  data_restored: RotateCcw,
 }
 
 function TriggerIcon({ trigger }) {

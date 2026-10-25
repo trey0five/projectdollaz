@@ -82,6 +82,7 @@ import { NAV_GROUPS, SETTINGS_ITEM, navGroupVisible } from './sidebarNav.js'
 import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, moduleTabLabel } from '../module/moduleAnatomy.js'
 import SupportButton from '../support/SupportButton.jsx'
 import InboxBell from '../inbox/InboxBell.jsx'
+import UndoToastHost from '../finance/UndoToastHost.jsx'
 import { InboxProvider } from '../../context/InboxContext.jsx'
 
 // Verb-icon per module section (mirrors the retired in-page tab bar).
@@ -956,6 +957,9 @@ export default function AppShell({ children }) {
           </>
         )}
       </AnimatePresence>
+
+      {/* "FY25 trial balance removed. [Undo]" — one host for the whole app. */}
+      <UndoToastHost />
     </InboxProvider>
   )
 }
