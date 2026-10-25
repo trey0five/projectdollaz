@@ -93,6 +93,9 @@ export default function EmptySlotCard({
         if (depth.current === 0) setDragOver(false)
       }}
       data-active={dragOver ? 'true' : undefined}
+      // A real drop target: the full-window DragOverlay steps aside over it,
+      // so a file dropped here is pinned to THIS slot (not auto-classified).
+      data-drop-zone="true"
       className={`b2-drop group relative min-h-[196px] w-full gap-3 px-4 py-8 ${border}`}
     >
       <span className={conflicted ? 'flex tone-watch' : 'b2-drop-icon'}>

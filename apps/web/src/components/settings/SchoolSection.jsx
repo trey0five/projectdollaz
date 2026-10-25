@@ -14,6 +14,7 @@ import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import SettingsCard from './SettingsCard.jsx'
 import { ImageUp, Trash2 } from 'lucide-react'
 import { LOGO_ACCEPT, prepareLogo } from '../../lib/schoolLogo.js'
+import { DROP_HIGHLIGHT, useFileDrop } from '../../hooks/useFileDrop.js'
 import { monogramOf } from '../home/SchoolCrest.jsx'
 import { SCHOOL_TYPES, GRADE_KEYS, sizeBandOf, sizeBandLabel, gradeOrdinal } from '../../lib/peerVocab.js'
 
@@ -405,6 +406,14 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
     }
   }
 
+  // A logo dropped on the Upload/Replace button runs the same onFile.
+  const { dragging, dropProps } = useFileDrop({
+    accept: LOGO_ACCEPT,
+    disabled: !isOwner || busy,
+    onFiles: ([f]) => onFile(f),
+    onReject: (msg) => setErr(msg),
+  })
+
   const remove = async () => {
     setBusy(true)
     setErr('')
@@ -452,9 +461,11 @@ function SchoolLogoCard({ activeSchool, isOwner }) {
           {isOwner ? (
             <div className="mt-3 flex flex-wrap items-center gap-2.5">
               <label
+                {...dropProps}
+                title="Choose a logo — or drop the image here"
                 className={`inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-hair/[0.18] px-3.5 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-ink/[0.04] ${
                   busy ? 'pointer-events-none opacity-60' : ''
-                }`}
+                } ${dragging ? DROP_HIGHLIGHT : ''}`}
               >
                 <ImageUp size={15} />
                 {logo ? 'Replace logo' : 'Upload a logo'}

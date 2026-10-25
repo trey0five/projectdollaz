@@ -17,6 +17,7 @@ import { X, Pencil, Star, Download, Upload, Trash2 } from 'lucide-react'
 import { governancePeopleApi, documentsApi } from '../../lib/api.js'
 import { Section, Pill, Button } from '../ui/surface/index.js'
 import '../../styles/pending/b1-domain.css'
+import { DROP_HIGHLIGHT, useFileDrop } from '../../hooks/useFileDrop.js'
 import {
   CREDENTIAL_TAGS,
   credentialTagLabel,
@@ -59,6 +60,26 @@ function UploadCredential({ schoolId, personId, onUploaded }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
+  // The ONE way a file arrives — the picker and a drop both call this. A drop
+  // also lands in the native input (where the browser allows it) so it shows
+  // the dropped file's name instead of "No file chosen".
+  const chooseFile = (f, { fromDrop = false } = {}) => {
+    setFile(f ?? null)
+    if (!fromDrop || !f || !fileRef.current) return
+    try {
+      const dt = new DataTransfer()
+      dt.items.add(f)
+      fileRef.current.files = dt.files
+    } catch {
+      /* older browsers / jsdom: the state still holds the file */
+    }
+  }
+  const { dragging, dropProps } = useFileDrop({
+    disabled: busy,
+    onFiles: ([f]) => chooseFile(f, { fromDrop: true }),
+    onReject: (msg) => setErr(msg),
+  })
+
   const submit = async () => {
     if (!file || busy) return
     setBusy(true)
@@ -87,11 +108,15 @@ function UploadCredential({ schoolId, personId, onUploaded }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        {...dropProps}
+        data-testid="credential-drop"
+        className={`flex flex-wrap items-center gap-2 rounded-[6px] ${dragging ? DROP_HIGHLIGHT : ''}`}
+      >
         <input
           ref={fileRef}
           type="file"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => chooseFile(e.target.files?.[0] ?? null)}
           className="b1-fld min-w-0 flex-1 file:mr-2 file:rounded file:border-0 file:bg-ink/[.06] file:px-2 file:py-1 file:text-[12px] file:font-semibold file:text-ink"
           aria-label="Choose a credential file"
         />

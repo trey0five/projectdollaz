@@ -41,6 +41,7 @@ import RegisterEmpty from '../components/module/RegisterEmpty.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useDocuments } from '../hooks/useDocuments.js'
 import EntityFormModal, { Field, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
+import FileDropZone from '../components/ui/FileDropZone.jsx'
 import { DataTable, Pill } from '../components/ui/surface/index.js'
 import '../styles/pending/b1-domain.css'
 
@@ -179,6 +180,21 @@ function GatePanel({ notEntitled }) {
 // ═══════════════════════════ UPLOAD MODAL ═══════════════════════════════════
 // The shared EntityFormModal (unchanged flow: file → title → description → tags).
 
+// Mirrors the server's MIME_ALLOWLIST (api/src/knowledge/documents.service.ts),
+// so a file it would refuse is refused here, in words, before the upload.
+export const KNOWLEDGE_ACCEPT = [
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.csv', '.txt',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'text/csv', 'text/plain',
+].join(',')
+
 function UploadModal({ onClose, onSubmit }) {
   const reduce = useReducedMotion()
   const [file, setFile] = useState(null)
@@ -187,6 +203,12 @@ function UploadModal({ onClose, onSubmit }) {
   const [tags, setTags] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+
+  // The ONE way a file arrives — the picker and a drop both call this.
+  const chooseFile = (f) => {
+    setFile(f ?? null)
+    if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ''))
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -236,17 +258,23 @@ function UploadModal({ onClose, onSubmit }) {
       submitLabel="Upload"
       reduce={reduce}
     >
-      <Field label="File" span={2} index={0} reduce={reduce}>
-        <input
-          type="file"
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null
-            setFile(f)
-            if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ''))
-          }}
-          className={`${fieldInput} file:mr-3 file:rounded file:border-0 file:bg-ink/[.06] file:px-2.5 file:py-1 file:text-[12px] file:font-semibold file:text-ink`}
+      {/* Not a <Field>: Field is a <label>, and the drop zone is one too —
+          labels can't nest. Same label style and full-width span. */}
+      <div className="block min-w-0 sm:col-span-2">
+        <span className="fld-label block">File</span>
+        {/* Drop or choose — both run chooseFile (owner 2026-10-25: drag and drop everywhere). */}
+        <FileDropZone
+          testId="knowledge-drop"
+          fileName={file?.name}
+          title={file ? 'Drop another file here, or choose one' : 'Drop a file here, or choose one'}
+          ariaLabel="Choose a document to upload"
+          accept={KNOWLEDGE_ACCEPT}
+          acceptLabel="PDF, Word, Excel, PowerPoint, CSV, text or a PNG, JPG, GIF or WebP image"
+          disabled={busy}
+          hint="PDF, Word, Excel, PowerPoint, CSV, text, or a PNG/JPG/GIF/WebP image · one at a time, up to 25 MB"
+          onFiles={([f]) => chooseFile(f)}
         />
-      </Field>
+      </div>
       <Field label="Title" span={2} index={1} reduce={reduce}>
         <input
           value={title}

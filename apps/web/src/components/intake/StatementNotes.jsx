@@ -15,6 +15,7 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, Hash, Info, Pencil } from 'lucide-react'
+import { DROP_HIGHLIGHT, useFileDrop } from '../../hooks/useFileDrop.js'
 import {
   statementLines,
   numberedAccounts,
@@ -25,6 +26,7 @@ import {
 } from '../../lib/statementNotes.js'
 
 const LINK = 'font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink'
+const HALF_ACCEPT = '.xlsx,.xls,.csv'
 
 function Disclosure({ id, label, icon, open, onToggle, cta, children }) {
   const Icon = icon
@@ -156,6 +158,19 @@ export default function StatementNotes({ file, canEdit = false, onCombine, onCha
   const numbered = numberedAccounts(file)
   const numberedText = numberedSummary(file)
   const notesText = notesSummary(file)
+
+  // The ONE way the other half arrives — the hidden picker and a drop on the
+  // "Add its …" link both call this, pinned to THIS file's slot.
+  const addHalfFiles = (role, list) => {
+    if (role && list?.length) onAddHalf?.(role, list)
+  }
+  const halfAction = lines.find((l) => l.action?.kind === 'addHalf')?.action ?? null
+  const { dragging: halfDragging, dropProps: halfDropProps, rejection: halfRejection } = useFileDrop({
+    accept: HALF_ACCEPT,
+    disabled: !(onAddHalf && canEdit && halfAction),
+    onFiles: (list) => addHalfFiles(halfAction?.role ?? file.role ?? null, list),
+  })
+
   if (lines.length === 0 && !numberedText && !notesText) return null
 
   const editable = !!(canEdit && !file.fromHistory && onRenumber)
@@ -186,14 +201,13 @@ export default function StatementNotes({ file, canEdit = false, onCombine, onCha
         <input
           ref={halfInputRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept={HALF_ACCEPT}
           className="hidden"
           data-testid="add-half-input"
           aria-hidden="true"
           tabIndex={-1}
           onChange={(e) => {
-            const role = halfRoleRef.current ?? file.role ?? null
-            if (role && e.target.files?.length) onAddHalf(role, e.target.files)
+            addHalfFiles(halfRoleRef.current ?? file.role ?? null, e.target.files)
             halfRoleRef.current = null
             e.target.value = ''
           }}
@@ -217,13 +231,34 @@ export default function StatementNotes({ file, canEdit = false, onCombine, onCha
             <>
               {' '}
               {l.key === 'layout' && l.text !== 'Wrong numbers?' ? '· ' : ''}
-              <button type="button" className={LINK} onClick={() => runAction(l.action)}>
-                {l.action.label}
-              </button>
+              {l.action.kind === 'addHalf' ? (
+                <button
+                  type="button"
+                  {...halfDropProps}
+                  title="Choose the file — or drop it here"
+                  className={`${LINK} rounded-[3px] ${halfDragging ? DROP_HIGHLIGHT : ''}`}
+                  onClick={() => runAction(l.action)}
+                >
+                  {/* Fixed text while a file is over it (the ring shows the
+                      state): a shorter label would shrink the link out from
+                      under the pointer and flicker the highlight. */}
+                  {l.action.label}
+                </button>
+              ) : (
+                <button type="button" className={LINK} onClick={() => runAction(l.action)}>
+                  {l.action.label}
+                </button>
+              )}
             </>
           )}
         </p>
       ))}
+
+      {halfRejection ? (
+        <p role="alert" className="text-[12.5px] font-medium text-[rgb(var(--c-watch))]">
+          {halfRejection}
+        </p>
+      ) : null}
 
       {numberedText && (
         <Disclosure

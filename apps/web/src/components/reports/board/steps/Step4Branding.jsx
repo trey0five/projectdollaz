@@ -18,6 +18,7 @@ import {
   longDate,
 } from '../boardReportUtils.js'
 import WizardNav from './WizardNav.jsx'
+import { DROP_HIGHLIGHT, useFileDrop } from '../../../../hooks/useFileDrop.js'
 
 const ACCEPT = 'image/png,image/jpeg,image/svg+xml'
 
@@ -106,6 +107,14 @@ export default function Step4Branding({ ctx }) {
     }
   }
 
+  // A logo dropped on the Upload/Replace button runs the same onLogoFile.
+  const { dragging: logoDragging, dropProps: logoDropProps } = useFileDrop({
+    accept: ACCEPT,
+    disabled: !isOwner || busy,
+    onFiles: ([f]) => onLogoFile(f),
+    onReject: (msg) => setLogoErr(msg),
+  })
+
   const patchBranding = async (patch) => {
     if (!school?.id) return
     setBusy(true)
@@ -169,7 +178,13 @@ export default function Step4Branding({ ctx }) {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {isOwner && (
-                  <label className="btn btn-secondary btn-sm cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[#2563EB]/50">
+                  <label
+                    {...logoDropProps}
+                    title="Choose a logo — or drop the image here"
+                    className={`btn btn-secondary btn-sm cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[#2563EB]/50 ${
+                      logoDragging ? DROP_HIGHLIGHT : ''
+                    }`}
+                  >
                     <ImageUp size={14} aria-hidden="true" />
                     {logo ? 'Replace' : 'Upload logo'}
                     <input
@@ -197,7 +212,7 @@ export default function Step4Branding({ ctx }) {
               </div>
             </div>
             <p className="mt-1.5 text-[11px] text-ink2">
-              PNG, JPG, or SVG. Large images are resized automatically to a web-friendly size.
+              PNG, JPG, or SVG — choose one or drop it on the button. Large images are resized automatically to a web-friendly size.
             </p>
             {logoErr && (
               <p className="b2-callout b2-risk mt-1.5" role="alert">

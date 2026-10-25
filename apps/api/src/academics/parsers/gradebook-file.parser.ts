@@ -146,6 +146,17 @@ export function parseGradebookCsv(
 ): GradebookParseResult {
   const text = new TextDecoder('utf-8').decode(bytes instanceof Buffer ? new Uint8Array(bytes) : bytes)
   const grid = parseCsv(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).map((r) => r.map((c) => String(c ?? '')))
+  return parseGradebookGrid(grid, opts)
+}
+
+/**
+ * The same parse over an already-read grid — how an Excel workbook (read by the
+ * shared table reader) reaches the gradebook without a CSV round-trip.
+ */
+export function parseGradebookGrid(
+  grid: string[][],
+  opts: { schoolYear?: number; term?: string } = {},
+): GradebookParseResult {
   const headerIdx = detectHeaderRow(grid)
   if (headerIdx < 0) throw new Error('No header row found — the file does not look like a gradebook export.')
 

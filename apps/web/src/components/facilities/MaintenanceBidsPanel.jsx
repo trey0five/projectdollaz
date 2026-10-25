@@ -36,6 +36,7 @@ import {
 import { facilitiesApi, documentsApi, apiErrorMessage } from '../../lib/api.js'
 import { Section, Pill, Button } from '../ui/surface/index.js'
 import '../../styles/pending/b1-domain.css'
+import { DROP_HIGHLIGHT, useFileDrop } from '../../hooks/useFileDrop.js'
 
 function fmtMoney(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
@@ -93,6 +94,14 @@ function BidDocuments({ schoolId, bid, docs, canEdit, onUploaded, onError }) {
     }
   }
 
+  // A document dropped on "Attach" uploads exactly as one chosen through it.
+  // Several dropped at once: the first is attached and the rest are named.
+  const { dragging, dropProps } = useFileDrop({
+    onFiles: ([f]) => upload(f),
+    onReject: (msg) => onError(msg),
+    disabled: busy || !canEdit,
+  })
+
   if (!canEdit && docs.length === 0) return null
 
   return (
@@ -123,10 +132,13 @@ function BidDocuments({ schoolId, bid, docs, canEdit, onUploaded, onError }) {
             type="button"
             disabled={busy}
             onClick={() => fileRef.current?.click()}
-            title="Attach a quote / proposal document"
-            className="dt-link text-[11.5px] disabled:opacity-50"
+            title="Attach a quote / proposal document — or drop it here"
+            {...dropProps}
+            className={`dt-link rounded-[4px] text-[11.5px] disabled:opacity-50 ${dragging ? DROP_HIGHLIGHT : ''}`}
           >
             <Paperclip size={11} aria-hidden="true" />
+            {/* Fixed label while a file is over it — the ring alone shows the
+                state, so the button never resizes out from under the pointer. */}
             {busy ? 'Uploading…' : 'Attach'}
           </button>
         </>

@@ -12,7 +12,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { gateGradebookSummary, type GradebookSummaryOutput } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
-import { parseGradebookCsv } from './parsers/gradebook-file.parser.js'
+import { tableBytes } from '../common/upload-bytes.js'
+import { looksLikeWorkbook, mainSheet, readTable } from '@finrep/ingestion'
+import { parseGradebookCsv, parseGradebookGrid } from './parsers/gradebook-file.parser.js'
 import { matchAll, type MatchCandidate, type RosterStudent } from './matching/student-match.js'
 
 @Injectable()
@@ -25,6 +27,7 @@ export class GradebookService {
    * the roster-match rate before a single mark lands.
    */
   async preview(schoolId: string, file: { buffer: Buffer; originalname?: string }, opts: { schoolYear?: number; term?: string } = {}) {
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     const parsed = this.parse(file, opts)
     const roster = await this.roster(schoolId)
     const { summary } = matchAll(this.candidates(parsed.rows), roster)
@@ -55,6 +58,7 @@ export class GradebookService {
     file: { buffer: Buffer; originalname?: string },
     opts: { schoolYear?: number; term?: string; userId?: string } = {},
   ) {
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     const parsed = this.parse(file, opts)
     const roster = await this.roster(schoolId)
     const { decisions } = matchAll(this.candidates(parsed.rows), roster)
@@ -206,6 +210,13 @@ export class GradebookService {
   private parse(file: { buffer: Buffer; originalname?: string }, opts: { schoolYear?: number; term?: string }) {
     if (!file?.buffer || file.buffer.length === 0) throw new BadRequestException('Empty file.')
     try {
+      // Excel (.xlsx/.xls) through the shared reader — the sheet with the most
+      // rows — and CSV as text, so a gradebook takes what Assessment results takes.
+      if (looksLikeWorkbook(file.buffer)) {
+        const sheet = mainSheet(readTable(file.buffer))
+        if (!sheet) throw new Error('This workbook has no sheet with a header row and data.')
+        return parseGradebookGrid([sheet.header, ...sheet.rows].map((r) => r.map((c) => String(c ?? ''))), opts)
+      }
       return parseGradebookCsv(file.buffer, opts)
     } catch (e) {
       throw new BadRequestException((e as Error).message)

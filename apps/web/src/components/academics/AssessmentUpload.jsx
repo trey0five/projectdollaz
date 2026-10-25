@@ -16,17 +16,18 @@
 //
 // PREMIUM UI P4 (a2): it renders inside the add-data wizard's work Panel, so it
 // adds no box of its own;
-// the dropzone is a dashed hairline on the ground at the panel radius
-// (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
+// the dropzone is the shared FileDropZone — a dashed hairline that takes a drop
+// or a click (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
 // is ink over a 2px module-hue rule, the preview is a hairline-ruled block of
 // key/value facts, notes carry a 2px semantic mark, and actions are flat Buttons.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { TEST_TYPE_KEYS, TEST_TYPE_LABELS } from '../../lib/academicsVocab.js'
 import { academicsApi } from '../../lib/api.js'
 import Button from '../ui/surface/Button.jsx'
+import FileDropZone from '../ui/FileDropZone.jsx'
 import '../../styles/pending/a2-carry.css'
 
 /** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
@@ -103,6 +104,16 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
     }
   }
 
+  // The ONE way a file arrives — the picker and a drop both call this. A new
+  // file forgets the year/grade picked for the last one.
+  const chooseFile = (f) => {
+    if (!f) return
+    setFile(f)
+    setChosenYear('')
+    setChosenGrade('')
+    doPreview(f, { year: '', grade: '' })
+  }
+
   const pickYear = (y) => {
     setChosenYear(y)
     if (file && y) doPreview(file, { year: y })
@@ -149,29 +160,19 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
         see exactly what was read before anything is saved.
       </p>
 
-      <label
-        className="a2-drop mt-4 cursor-pointer items-center gap-3 px-4 py-4"
-      >
-        <FileUp size={20} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-small text-ink">
-          {file ? file.name : 'Choose an Excel or CSV file…'}
-        </span>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (!f) return
-            setFile(f)
-            setChosenYear('')
-            setChosenGrade('')
-            doPreview(f, { year: '', grade: '' })
-          }}
-        />
-        {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
-      </label>
+      {/* Drop or choose — both run chooseFile (owner 2026-10-25: "like the finance module"). */}
+      <FileDropZone
+        className="mt-4"
+        testId="assessment-drop"
+        inputRef={inputRef}
+        accept={ACCEPT}
+        busy={busy}
+        fileName={file?.name}
+        title={file ? 'Drop another Excel or CSV file here, or choose one' : 'Drop an Excel or CSV file here, or choose one'}
+        ariaLabel="Choose an assessment results file"
+        hint="Excel, CSV or a PDF export · one results file at a time"
+        onFiles={([f]) => chooseFile(f)}
+      />
 
       <AnimatePresence>
         {preview ? (

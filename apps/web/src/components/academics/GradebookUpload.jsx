@@ -12,20 +12,23 @@
 //
 // PREMIUM UI P4 (a2): it renders inside the add-data wizard's work Panel, so it
 // adds no box of its own;
-// the dropzone is a dashed hairline on the ground at the panel radius
-// (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
+// the dropzone is the shared FileDropZone — a dashed hairline that takes a drop
+// or a click (keyboard-reachable: the file input is sr-only, not display:none), the eyebrow
 // is ink over a 2px module-hue rule, the preview is a hairline-ruled block of
 // key/value facts, notes carry a 2px semantic mark, and actions are flat Buttons.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
 import Button from '../ui/surface/Button.jsx'
+import FileDropZone from '../ui/FileDropZone.jsx'
 import '../../styles/pending/a2-carry.css'
 
 /** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
 const HUE_VAR = { '--c-module': '13 148 136' }
+
+export const GRADEBOOK_ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,.pdf,text/csv,text/plain'
 
 export default function GradebookUpload({ schoolId, canEdit, onDone }) {
   const inputRef = useRef(null)
@@ -58,6 +61,13 @@ export default function GradebookUpload({ schoolId, canEdit, onDone }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // The ONE way a file arrives — the picker and a drop both call this.
+  const chooseFile = (f) => {
+    if (!f) return
+    setFile(f)
+    doPreview(f)
   }
 
   const doCommit = async () => {
@@ -102,29 +112,23 @@ export default function GradebookUpload({ schoolId, canEdit, onDone }) {
       </p>
       <h3 className="a2-title">Upload course marks</h3>
       <p className="mt-1 max-w-[70ch] text-small text-ink2">
-        A gradebook export from your SIS — one row per mark, or one row per student with a column per course. Letter
+        A gradebook export from your SIS — Excel or CSV — one row per mark, or one row per student with a column per course. Letter
         grades are converted and the letter is kept. You will see what was read before anything is saved.
       </p>
 
-      <label
-        className="a2-drop mt-4 cursor-pointer items-center gap-3 px-4 py-4"
-      >
-        <FileUp size={20} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-small text-ink">{file ? file.name : 'Choose a CSV file…'}</span>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".csv,text/csv,text/plain"
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (!f) return
-            setFile(f)
-            doPreview(f)
-          }}
-        />
-        {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
-      </label>
+      {/* Drop or choose — both run chooseFile (owner 2026-10-25: "like the finance module"). */}
+      <FileDropZone
+        className="mt-4"
+        testId="gradebook-drop"
+        inputRef={inputRef}
+        accept={GRADEBOOK_ACCEPT}
+        busy={busy}
+        fileName={file?.name}
+        title={file ? 'Drop another Excel or CSV file here, or choose one' : 'Drop an Excel or CSV file here, or choose one'}
+        ariaLabel="Choose a gradebook file (Excel or CSV)"
+        hint="Excel, CSV or PDF · one gradebook export at a time"
+        onFiles={([f]) => chooseFile(f)}
+      />
 
       <AnimatePresence>
         {preview ? (
