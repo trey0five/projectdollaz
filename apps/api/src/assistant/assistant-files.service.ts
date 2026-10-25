@@ -20,6 +20,10 @@ import {
   statementGap,
   statementsTie,
   statementTypeFromFileName,
+  mainSheet,
+  normalizeHeader,
+  readTable,
+  gradeKeyFromText,
   type IntakeMemory,
   type NormalizedRow,
   type SheetCandidate,
@@ -267,6 +271,16 @@ export class AssistantFilesService {
           continue
         }
 
+        // A spreadsheet that is plainly NOT financial — a student roster, a score
+        // file, a board or committee list — is told where it goes (#50) instead of
+        // being chewed as a trial balance and reported as unreadable. Headers only
+        // reach the model; never a cell (a roster's cells are names — FERPA).
+        const elsewhere = this.sniffNonFinancial(buf)
+        if (elsewhere) {
+          digests.push(this.wrapDigest(att.name, `kind: spreadsheet (${elsewhere.what})\nattachmentId: ${attachmentId}\n${elsewhere.note}`))
+          continue
+        }
+
         // xlsx / csv — parse server-side via @finrep/ingestion (the only place bytes
         // become rows). Guarded; a parse failure degrades to a note, never throws out.
         const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
@@ -334,6 +348,66 @@ export class AssistantFilesService {
     this.pairSameTurn(parsed, importCandidates, digests)
 
     return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
+  }
+
+  /**
+   * Is this spreadsheet a roster / score file / people list rather than money?
+   * Judged from the HEADER ROW and the shape of the grade column only. Returns
+   * what it looks like and the hand-off the model should offer, or null.
+   */
+  private sniffNonFinancial(buf: Buffer): { what: string; note: string } | null {
+    let sheet
+    try {
+      sheet = mainSheet(readTable(buf))
+    } catch {
+      return null
+    }
+    if (!sheet || sheet.rows.length === 0) return null
+    const h = sheet.header.map(normalizeHeader)
+    const has = (...words: string[]) => h.some((x) => words.some((w) => x === w || x.includes(w)))
+    const moneyish = has('debit', 'credit', 'balance', 'amount', 'actual', 'budget', 'account', 'acct', 'total', 'income', 'expense', 'revenue', 'asset', 'liabilit', 'equity')
+    const columns = sheet.header.filter(Boolean).slice(0, 10).map((c) => `“${c.trim()}”`).join(', ')
+    const rows = sheet.rows.length
+
+    // Scores: subject / composite columns beside a student or school column.
+    const scoreish = has('composite', 'npr', 'percentile', 'scalescore', 'scaledscore', 'math', 'reading', 'english', 'science', 'testdate', 'testtype')
+    if (scoreish && has('student', 'grade', 'school', 'name', 'id') && !moneyish) {
+      return {
+        what: 'assessment results — not financial',
+        note:
+          `This looks like a test-results file (${rows} rows; columns ${columns}). You can't import assessment scores from chat. ` +
+          `Tell the user it belongs in Academics → Add data → "Upload a results file" (any Excel or CSV works there), offer to take them with navigate_to_page("academics-cohorts"), ` +
+          `and offer file_document to keep the file in Knowledge. Do not describe its contents.`,
+      }
+    }
+    // A board / committee list: people words, no money, no student grades.
+    const boardish = has('trustee', 'boardmember', 'committee', 'termexpires', 'termend', 'termstart', 'position', 'officer')
+    const gradeCol = h.findIndex((x) => x === 'grade' || x === 'gr' || x === 'gradelevel' || x === 'grd')
+    if (boardish && !moneyish && gradeCol < 0) {
+      const committee = has('committee')
+      return {
+        what: committee ? 'committee list — not financial' : 'board roster / people list — not financial',
+        note:
+          `This looks like a ${committee ? 'committee list' : 'board roster or people list'} (${rows} rows; columns ${columns}). You can't import it from chat. ` +
+          `Tell the user it belongs in Governance → Add data → "${committee ? 'Upload a committee list' : 'Upload a board roster'}" (any Excel or CSV works there), offer navigate_to_page("governance"), ` +
+          `and offer file_document to keep the file in Knowledge. Do not list the people in it.`,
+      }
+    }
+    // A student roster: a grade column most rows fill with a grade, a name/student column, no money.
+    const nameish = has('student', 'firstname', 'lastname', 'name', 'pupil')
+    if (gradeCol >= 0 && nameish && !moneyish) {
+      const graded = sheet.rows.filter((r) => gradeKeyFromText(r[gradeCol] ?? '') != null).length
+      if (graded >= Math.max(1, Math.ceil(rows * 0.6))) {
+        return {
+          what: 'student roster — not financial',
+          note:
+            `This looks like a student roster (${rows} rows; columns ${columns}). You can't import a roster from chat, and you must not repeat any student's name. ` +
+            `Tell the user it belongs in Enrollment → Add data → "Upload a roster file" (any Excel or CSV works there; the preview shows every row first), offer navigate_to_page("enrollment"), ` +
+            `and offer file_document to keep the file in Knowledge.`,
+        }
+      }
+    }
+    return null
   }
 
   /**

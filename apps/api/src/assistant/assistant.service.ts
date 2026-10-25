@@ -181,6 +181,29 @@ const MAX_TURNS = 6
 // while /strategy sat mounted. A page belongs in all four places or none:
 // this set, PageKey below, the two tool-schema enums, and the web bridge's map.
 
+/**
+ * The ONE place a failed answer is worded for the person (#50). The raw
+ * message goes to the log; the user gets the cause they can act on.
+ */
+export function plainStreamFailure(msg: string): string {
+  if (/LLM error (402|429)/.test(msg)) {
+    return 'KYRO’s AI service is temporarily unavailable — the AI account is out of credits. Please top it up and try again.'
+  }
+  if (/non-whitespace text|ValidationException|returned the following errors|invalid (request|parameter)|malformed/i.test(msg)) {
+    if (/too (long|large|many)|context (length|window)|token limit|input is too long|exceeds/i.test(msg)) {
+      return 'This conversation got too long for me to carry. Start a new chat and attach the file again — it’ll go through.'
+    }
+    return 'I couldn’t send that to the AI service — a formatting problem on our side, not your file. Start a new chat and try again; your files are still on your computer.'
+  }
+  if (/too (long|large|many)|context (length|window)|token limit|input is too long|exceeds/i.test(msg)) {
+    return 'This conversation got too long for me to carry. Start a new chat and attach the file again — it’ll go through.'
+  }
+  if (/ECONNRESET|ETIMEDOUT|ENOTFOUND|timed? ?out|50[234]|ServiceUnavailable|Throttling|overloaded|rate limit/i.test(msg)) {
+    return 'The AI service didn’t answer in time. Give it a moment and try again.'
+  }
+  return 'Sorry — I couldn’t finish that answer. Try again, or start a new chat. If it keeps happening, tell support what you were doing.'
+}
+
 const PAGE_KEYS = new Set<string>([
   'home',
   'data',
@@ -1332,6 +1355,7 @@ export class AssistantService {
     }
 
     const tools = toolsForRole(role)
+    let lastTool: string | null = null
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
         // Restore tokenized identities in the streamed text as it flows (buffering
@@ -1349,6 +1373,7 @@ export class AssistantService {
           return
         }
         for (const tc of msg.tool_calls) {
+          lastTool = tc.function.name
           emit({ type: 'status', text: TOOL_LABELS[tc.function.name] ?? 'Working…' })
           const result = await this.runToolCall(tc, ctx, {
             onChart: (c) => emit({ type: 'chart', spec: c }),
@@ -1368,17 +1393,10 @@ export class AssistantService {
       emit({ type: 'done' })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      this.logger.warn(`assistant stream failed: ${msg}`)
-      // Surface an honest reason for the common upstream-billing case (the LLM
-      // provider returns 402 when the account is out of credits) so it doesn't
-      // look like Penny is broken.
-      const outOfCredits = /LLM error (402|429)/.test(msg)
-      emit({
-        type: 'error',
-        text: outOfCredits
-          ? 'KYRO’s AI service is temporarily unavailable — the AI account is out of credits. Please top it up and try again.'
-          : 'Sorry — I hit an error answering that.',
-      })
+      // Which step broke, for CloudWatch (#50): the tool that was running, or
+      // the model turn itself.
+      this.logger.warn(`assistant stream failed [${lastTool ?? 'model turn'}]: ${msg}`)
+      emit({ type: 'error', text: plainStreamFailure(msg) })
       emit({ type: 'done' })
     }
   }
@@ -6198,6 +6216,9 @@ export class AssistantService {
       'chooses to combine them (and they tie) — the digest says which; never combine on your own. ' +
       'Users NEVER see attachmentIds — never ask them for one. If they refer to a file and no attachment ' +
       'digest is present, ask them to attach the file(s) again. ' +
+      'When a tool returns an error, never say "I hit an error": explain what happened in plain words (no tool ' +
+      'names, no attachmentId / importPartial / field names) and say the one thing the user can do next. A file ' +
+      'that belongs in another module (a roster, test scores, a board list) is handed off, never retyped. ' +
       'When the user wants to SAVE or FILE an attached document to the Knowledge store (a policy, board packet, ' +
       'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
       'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +
