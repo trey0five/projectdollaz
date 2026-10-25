@@ -25,7 +25,7 @@ import PromotePyToggle from './PromotePyToggle.jsx'
 import '../styles/pending/b2-finance.css'
 import { SLOT_ROLES, ROLE_META } from '../lib/roleMeta.js'
 
-const ACCEPT = '.xlsx,.xls,.csv'
+const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 
 const WATCH_HUE = '#d97706'
 const GOOD_HUE = '#059669'

@@ -1,3 +1,4 @@
+import { pdfToXlsx } from '@finrep/ingestion/pdf'
 // Penny attachments — turns the base64 files riding the latest user turn into
 // (a) compact, clearly-UNTRUSTED text digests the LLM can reason over, (b) vision
 // blocks for images/PDFs, and (c) a request-scoped map of fully-parsed
@@ -187,7 +188,8 @@ export class AssistantFilesService {
     const importCandidates: ImportCandidate[] = []
     let totalBytes = 0
 
-    for (const att of attachments) {
+    for (const attIn of attachments) {
+      let att: AttachmentInput = attIn
       // try/finally so every exit path (incl. the `continue`s) labels a
       // re-sent file's digest(s) as carried from an earlier turn.
       const digestStart = digests.length
@@ -227,6 +229,18 @@ export class AssistantFilesService {
           fileName: this.safeName(att.name),
           kind: att.kind,
         })
+
+        // #52 — a PDF with a text layer is read as the table it printed, then
+        // handled exactly like a spreadsheet (digest redacted; the ORIGINAL PDF
+        // stays in rawFiles for filing). FERPA holds: the PDF itself never
+        // reaches the model, only the rebuilt table's digest.
+        if (att.kind === 'pdf') {
+          const xlsx = await this.pdfTable(buf)
+          if (xlsx) {
+            buf = xlsx
+            att = { ...att, kind: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+          }
+        }
 
         if (att.kind === 'image') {
           // FERPA: do NOT send the image bytes to the model (may hold student
@@ -348,6 +362,18 @@ export class AssistantFilesService {
     this.pairSameTurn(parsed, importCandidates, digests)
 
     return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
+  }
+
+  /** A text-layer PDF → its table as xlsx bytes; null for a scan or anything pdfjs can't open. */
+  private async pdfTable(buf: Buffer): Promise<Buffer | null> {
+    try {
+      const { xlsx, table } = await pdfToXlsx(buf)
+      if (table.scanned || table.grid.length < 2) return null
+      return Buffer.from(xlsx)
+    } catch (e) {
+      this.logger.warn(`attachment pdf table failed: ${e instanceof Error ? e.message : 'error'}`)
+      return null
+    }
   }
 
   /**

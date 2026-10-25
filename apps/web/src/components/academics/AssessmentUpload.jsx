@@ -32,7 +32,7 @@ import '../../styles/pending/a2-carry.css'
 /** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
 const HUE_VAR = { '--c-module': '13 148 136' }
 
-export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain'
+export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,.pdf,text/csv,text/plain'
 const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
 /** This year and the ten before it — a results file is rarely older. */

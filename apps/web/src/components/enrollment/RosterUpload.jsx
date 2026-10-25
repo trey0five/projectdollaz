@@ -202,7 +202,7 @@ export default function RosterUpload({
         <input
           ref={inputRef}
           type="file"
-          accept=".zip,.csv,.tsv,.txt,.xlsx,.xls"
+          accept=".zip,.csv,.tsv,.txt,.xlsx,.xls,.pdf"
           className="hidden"
           onChange={(e) => pickFile(e.target.files?.[0])}
         />

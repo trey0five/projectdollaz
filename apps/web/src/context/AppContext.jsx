@@ -42,6 +42,7 @@ import { autoMapEntries } from '../lib/sectionSuggest.js'
 import { serverMappedAccts, reviewSummary } from '../lib/reviewQueue.js'
 import { rememberPicks, sessionPicks } from '../lib/sessionPicks.js'
 import { usePersistence } from './PersistenceContext.jsx'
+import { asTableFile } from '../lib/pdfTable.js'
 
 const AppContext = createContext(null)
 
@@ -238,7 +239,8 @@ export function AppProvider({
 
         let bytes = null
         try {
-          bytes = await readBytes(file)
+          // #52 — a PDF is rebuilt into its table by the API; the card keeps the PDF's name.
+          bytes = await readBytes(await asTableFile(schoolId, file))
           const memory = await memoryP
           const result = ingest(file.name, bytes, { memory })
 

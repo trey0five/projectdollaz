@@ -1,3 +1,4 @@
+import { tableBytes } from '../common/upload-bytes.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Record imports (#51): every module with an Add-data step takes a FILE —
 // maintenance items, gifts & pledges, campaigns, accreditation standards (a
@@ -83,6 +84,7 @@ export class RecordImportsService {
     file: { buffer: Buffer } | undefined,
     mapping: ColumnOverride | null = null,
   ): Promise<ImportPreview<unknown>> {
+    file = await tableBytes(file) // #52
     const { sheet, warnings } = this.sheet(file)
     const NEEDS: Record<ImportTarget, string> = {
       maintenance: 'an item column',

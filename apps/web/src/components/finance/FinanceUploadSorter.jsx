@@ -27,8 +27,10 @@ import Button from '../ui/surface/Button.jsx'
 import { getIntakeMemory } from '../../lib/intakeMemory.js'
 import { DESTINATION, groupByDestination, sortFinanceFile } from '../../lib/financeSort.js'
 import { stashPending } from '../../lib/pendingUploads.js'
+import { apiErrorMessage } from '../../lib/api.js'
+import { asTableFile, isPdfFile } from '../../lib/pdfTable.js'
 
-const ACCEPT = '.xlsx,.xls,.csv,.tsv,.txt'
+const ACCEPT = '.xlsx,.xls,.csv,.tsv,.txt,.pdf'
 
 const KIND_ICON = {
   budget: PiggyBank,
@@ -61,8 +63,21 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
     await Promise.all(
       seeded.map(async (it) => {
         let verdict
+        let file = it.file
         try {
-          verdict = await sortFinanceFile(it.file, memoryRef.current)
+          // #52 — a PDF is rebuilt into its table by the API first; the tile
+          // then gets the .xlsx. The card keeps the PDF's name.
+          if (isPdfFile(file)) {
+            try {
+              file = await asTableFile(schoolId, file)
+            } catch (e) {
+              verdict = { kind: 'unsupported', destination: null, title: 'PDF', detail: apiErrorMessage(e, 'Couldn’t read this PDF.') }
+            }
+          }
+          if (!verdict) {
+            verdict = await sortFinanceFile(file, memoryRef.current)
+            if (file !== it.file) verdict = { ...verdict, detail: `Read from the PDF · ${verdict.detail}` }
+          }
         } catch (e) {
           verdict = {
             kind: 'unread',
@@ -71,7 +86,7 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
             detail: e?.message || 'We’ll show you the first rows on the next screen so you can point at the right columns.',
           }
         }
-        setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, status: 'done', verdict } : p)))
+        setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, status: 'done', verdict, table: file } : p)))
       }),
     )
   }
@@ -80,11 +95,11 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
 
   const reading = items.some((it) => it.status === 'reading')
   const done = items.filter((it) => it.status === 'done' && it.verdict)
-  const groups = groupByDestination(done.map((it) => ({ ...it.verdict, file: it.file })))
+  const groups = groupByDestination(done.map((it) => ({ ...it.verdict, file: it.file, table: it.table })))
 
   const go = (destinationKey) => {
     const dest = DESTINATION[destinationKey]
-    const files = (groups.get(destinationKey) || []).map((s) => s.file)
+    const files = (groups.get(destinationKey) || []).map((s) => s.table || s.file)
     if (!dest || !files.length) return
     stashPending(dest.pending, files)
     goToOption?.(dest.option)
@@ -113,8 +128,8 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
         </span>
         <h3 className="mt-3 text-heading font-semibold text-ink">Upload your financial files</h3>
         <p className="mx-auto mt-1 max-w-[46rem] text-[14px] text-ink2">
-          Drop your QuickBooks exports or spreadsheets — trial balance, Profit and Loss, Balance Sheet,
-          month-end numbers, budget — and we’ll figure out what each one is. Drop several at once.
+          Drop your QuickBooks exports, spreadsheets or PDF reports — trial balance, Profit and Loss, Balance
+          Sheet, month-end numbers, budget — and we’ll figure out what each one is. Drop several at once.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <Button
@@ -137,7 +152,7 @@ export default function FinanceUploadSorter({ schoolId, canEdit = true, goToOpti
             }}
           />
         </div>
-        <p className="mt-3 text-[12px] text-ink2">Excel or CSV · PDFs can’t be read yet · up to a few MB each</p>
+        <p className="mt-3 text-[12px] text-ink2">Excel, CSV or PDF · a scanned PDF (a photo of a page) can’t be read yet · up to a few MB each</p>
       </div>
 
       {/* Verdicts */}

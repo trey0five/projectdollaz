@@ -28,11 +28,12 @@ import { takePending } from '../lib/pendingUploads.js'
 import { getIntakeMemory, invalidateIntakeMemory } from '../lib/intakeMemory.js'
 import YearTimeline from './datahub/YearTimeline.jsx'
 import ColumnPicker from './intake/ColumnPicker.jsx'
+import { asTableFile } from '../lib/pdfTable.js'
 
 const HALF_LABEL = { pl: 'Income only', bs: 'Balance sheet only' }
 const OTHER_HALF = { pl: 'Balance Sheet', bs: 'Profit and Loss' }
 
-const ACCEPT = '.xlsx,.xls,.csv'
+const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 
 // FY options for an undated file's manual year picker (never guessed silently).
 function yearOptions() {
@@ -90,7 +91,7 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
       list.map(async (f) => {
         let bytes = null
         try {
-          bytes = await readBytes(f)
+          bytes = await readBytes(await asTableFile(persistence.schoolId, f)) // #52: a PDF → its table
           return await expandFileToCandidates(f.name, bytes, mem)
         } catch (e) {
           return [errorCandidate(f.name, e, bytes)]

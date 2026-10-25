@@ -1,6 +1,7 @@
 // Four thin controllers so each target keeps ITS module's gate (@RequiresModule
 // is class-level). Paths: schools/:schoolId/import/<target>/{preview,commit}.
 import {
+  BadRequestException,
   Body,
   Controller,
   Param,
@@ -23,6 +24,7 @@ import { RecordImportsService } from './record-imports.service.js'
 import { GovernanceImportService } from '../governance/governance-import.service.js'
 import { ImportMappingDto, ImportPeopleCommitDto } from '../governance/dto/governance-import.dto.js'
 import { parseMappingField } from '../common/import-mapping.js'
+import { tableBytes } from '../common/upload-bytes.js'
 import {
   ImportCampaignsCommitDto,
   ImportGiftsCommitDto,
@@ -129,5 +131,26 @@ export class StaffImportController {
   @Roles('owner', 'accountant')
   commit(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Body() dto: ImportPeopleCommitDto, @CurrentUser() user: User) {
     return this.people.commitPeople(schoolId, dto.rows, user.id).then((r) => ({ ...r, skipped: 0 }))
+  }
+}
+
+/**
+ * #52 — the browser-side finance paths (This-year intake, Add years, Monthly,
+ * Budget, the upload sorter) parse in the browser; a PDF is sent here first and
+ * comes back as the table it printed, as an .xlsx. Any signed-in editor of the
+ * school; no module gate (every module's uploads use it).
+ */
+@Controller('schools/:schoolId/import/pdf-table')
+@UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
+export class PdfTableController {
+  @Post()
+  @Roles('owner', 'accountant')
+  @upload()
+  async convert(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: (UploadedTable & { originalname?: string }) | undefined) {
+    void schoolId
+    if (!file?.buffer?.length) throw new BadRequestException('No file uploaded.')
+    const out = await tableBytes(file)
+    if (!out || out.buffer === file.buffer) throw new BadRequestException('That file isn’t a PDF.')
+    return { fileName: out.originalname ?? 'table.xlsx', xlsxBase64: out.buffer.toString('base64') }
   }
 }

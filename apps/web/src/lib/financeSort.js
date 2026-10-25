@@ -35,12 +35,14 @@ const isPdfName = (name) => /\.pdf$/i.test(name || '')
  */
 export async function sortFinanceFile(file, memory = null) {
   const name = file?.name || 'file'
+  // A PDF reaches here only when the sorter couldn't convert it (the API
+  // rebuilds a text-layer PDF into its table first — #52).
   if (isPdfName(name)) {
     return {
       kind: 'unsupported',
       destination: null,
       title: 'PDF',
-      detail: 'We can’t read numbers out of a PDF yet. Export the report as Excel or CSV from QuickBooks and drop that instead.',
+      detail: 'Couldn’t read a table out of this PDF. Export the report as Excel or CSV, or as a PDF straight from the program that made it.',
     }
   }
   if (!isSpreadsheetName(name)) {

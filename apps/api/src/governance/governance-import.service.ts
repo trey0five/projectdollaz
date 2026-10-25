@@ -1,3 +1,4 @@
+import { tableBytes } from '../common/upload-bytes.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Governance imports (#46): a board roster / people list and a committee list,
 // as files — preview (stateless) → commit (the reviewed rows, as JSON).
@@ -105,6 +106,7 @@ export class GovernanceImportService {
     file: { buffer: Buffer; size?: number } | undefined,
     opts: { defaultGroup?: PersonGroup; mapping?: ColumnOverride | null } = {},
   ): Promise<PeoplePreview> {
+    file = await tableBytes(file) // #52
     const { records, columns, warnings, table, problem } = this.readPeople(file, opts.defaultGroup ?? 'board', opts.mapping ?? null)
     if (problem) return { columns, summary: { new: 0, update: 0, skipped: 0 }, warnings, rows: [], table, problem }
     const existing = await this.prisma.governancePerson.findMany({
@@ -171,6 +173,7 @@ export class GovernanceImportService {
     file: { buffer: Buffer; size?: number } | undefined,
     opts: { mapping?: ColumnOverride | null } = {},
   ): Promise<CommitteesPreview> {
+    file = await tableBytes(file) // #52
     const { records, columns, warnings, table, problem } = this.readCommittees(file, opts.mapping ?? null)
     if (problem) {
       return { columns, summary: { committees: 0, newCommittees: 0, members: 0, newPeople: 0, skipped: 0 }, warnings, rows: [], table, problem }

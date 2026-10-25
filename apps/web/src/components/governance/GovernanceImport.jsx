@@ -17,7 +17,7 @@ import Button from '../ui/surface/Button.jsx'
 import ColumnMapDialog from '../imports/ColumnMapDialog.jsx'
 import '../../styles/pending/a2-carry.css'
 
-const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls'
+const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,.pdf'
 
 const COPY = {
   people: {
@@ -153,7 +153,7 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
           Choose file
         </Button>
         <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
-        <p className="text-[12px] text-ink2">Excel or CSV · any column names</p>
+        <p className="text-[12px] text-ink2">Excel, CSV or PDF · any column names</p>
       </div>
 
       {preview ? (

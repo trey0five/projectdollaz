@@ -1,3 +1,4 @@
+import { tableBytes } from '../../common/upload-bytes.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 5 — Student roster service. The school's own system of record when no
 // SIS is connected. FERPA POSTURE: names live ONLY in the role-gated register
@@ -472,6 +473,7 @@ export class StudentsService {
     opts: { mapping?: ColumnOverride | null } = {},
   ): Promise<ImportPreviewResult> {
     if (!file || !file.buffer || file.size === 0) throw new BadRequestException('No file uploaded.')
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     let parsed
     try {
       parsed = parseStudentImport(file.buffer, demographicsFile?.buffer, { mapping: opts.mapping ?? null })

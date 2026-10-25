@@ -4,7 +4,7 @@ import '../styles/pending/b2-finance.css'
 import { UploadCloud } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 
-const ACCEPT = '.xlsx,.xls,.csv'
+const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 
 /** Empty-state hero dropzone: keyboard-focusable, drop target + browse. */
 export default function HeroDropzone() {

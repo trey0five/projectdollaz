@@ -115,6 +115,11 @@ export function detectHeaderRow(grid: string[][]): number {
   return idx < 0 ? 0 : idx
 }
 
+/** A grid (any source — a PDF's rebuilt table, a sheet) → a TableSheet with the header row found. */
+export function gridToSheet(name: string | null, grid: string[][]): TableSheet | null {
+  return toSheet(name, grid)
+}
+
 function toSheet(name: string | null, grid: string[][]): TableSheet | null {
   const cleaned = grid.map((r) => r.map((c) => (c ?? '').toString().trim()))
   const headerRow = detectHeaderRow(cleaned)

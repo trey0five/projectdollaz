@@ -1,5 +1,6 @@
 export {
   readTable,
+  gridToSheet,
   mainSheet,
   detectHeaderRow,
   detectDelimiter,

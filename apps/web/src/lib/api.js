@@ -516,6 +516,9 @@ export const recordsImportApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   commit: (schoolId, target, body) => api.post(`/schools/${schoolId}/import/${target}/commit`, body),
+  // #52 — a PDF → the table it printed, as xlsx (base64), for the browser-side parsers.
+  pdfTable: (schoolId, form) =>
+    api.post(`/schools/${schoolId}/import/pdf-table`, form, { headers: { 'Content-Type': 'multipart/form-data' } }),
 }
 
 // ── Governance file imports (#46): a board roster / people list, a committee list ──

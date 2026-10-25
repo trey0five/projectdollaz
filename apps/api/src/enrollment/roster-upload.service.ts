@@ -1,3 +1,4 @@
+import { tableBytes } from '../common/upload-bytes.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // ONE upload, the whole job: a OneRoster export that carries per-student detail
 // now creates the STUDENT RECORDS *and* promotes the headcount into
@@ -568,6 +569,7 @@ export class RosterUploadService {
     if (!file || !file.buffer || file.size === 0) {
       throw new BadRequestException('No file uploaded.')
     }
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     const zip = looksLikeZip(file.buffer) && !looksLikeWorkbook(file.buffer)
       ? file.buffer
       : wrapCsvAsZip(toOneRosterBytes(file.buffer))

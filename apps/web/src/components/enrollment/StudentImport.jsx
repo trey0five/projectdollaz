@@ -269,7 +269,7 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.tsv,.txt,.xlsx,.xls"
+              accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf"
               className="hidden"
               onChange={(e) => pickFile(e.target.files?.[0])}
             />

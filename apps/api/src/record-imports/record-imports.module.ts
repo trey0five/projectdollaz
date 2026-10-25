@@ -10,6 +10,7 @@ import {
   CampaignsImportController,
   GiftsImportController,
   MaintenanceImportController,
+  PdfTableController,
   StaffImportController,
   StandardsImportController,
 } from './record-imports.controller.js'
@@ -27,6 +28,7 @@ import {
     CampaignsImportController,
     StandardsImportController,
     StaffImportController,
+    PdfTableController,
   ],
   providers: [RecordImportsService],
 })

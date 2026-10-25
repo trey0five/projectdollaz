@@ -27,6 +27,7 @@ import { monthlyApi, apiErrorMessage } from '../../lib/api.js'
 import { getIntakeMemory } from '../../lib/intakeMemory.js'
 import { failureFromError, failureText } from '../../lib/ingestFailure.js'
 import { fyMonthKeys } from '../../lib/monthlyShapes.js'
+import { asTableFile } from '../../lib/pdfTable.js'
 
 // The signed net of the parsed rows as an accounting dollar figure ($0.00 when
 // the rows net to zero — a balanced trial balance), never a bare number.
@@ -89,10 +90,18 @@ export default function MonthlyUploadCard({
   const handleFile = async (file) => {
     if (!file) return
     setSaveError('')
+    // #52 — a PDF is rebuilt into its table by the API (an .xlsx from here on).
+    try {
+      file = await asTableFile(schoolId, file)
+    } catch (e) {
+      setFileName(file.name)
+      setParseError(e?.response?.data?.message || 'Couldn’t read a table out of this PDF.')
+      return
+    }
     if (!isXlsx(file.name)) {
       setParsed(null)
       setFileName(file.name)
-      setParseError('Please choose an .xlsx (or .xls) trial balance.')
+      setParseError('Please choose an .xlsx, .xls or PDF trial balance.')
       return
     }
     setFileName(file.name)
@@ -208,7 +217,7 @@ export default function MonthlyUploadCard({
               ref={inputRef}
               id="monthly-tb-file"
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.pdf"
               className="sr-only"
               onChange={(e) => handleFile(e.target.files?.[0])}
             />

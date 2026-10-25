@@ -21,6 +21,11 @@
       "types": "./dist/diocesan/index.d.ts",
       "import": "./dist/diocesan/index.js",
       "default": "./dist/diocesan/index.js"
+    },
+    "./pdf": {
+      "types": "./dist/pdf/index.d.ts",
+      "import": "./dist/pdf/index.js",
+      "default": "./dist/pdf/index.js"
     }
   },
   "files": [
@@ -32,6 +37,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "pdfjs-dist": "4.10.38",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

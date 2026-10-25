@@ -15,6 +15,7 @@ import ResolveUnmatched from './ResolveUnmatched.jsx'
 import { useBudgetAssessment } from '../../hooks/useBudgetAssessment.js'
 import { Button } from '../ui/surface/index.js'
 import '../../styles/pending/b2-finance.css'
+import { asTableFile } from '../../lib/pdfTable.js'
 
 function readBytes(file) {
   return new Promise((resolve, reject) => {
@@ -67,10 +68,18 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported, 
   const handleFile = async (file) => {
     if (!file) return
     setSaveError('')
+    // #52 — a PDF is rebuilt into its table by the API (an .xlsx from here on).
+    try {
+      file = await asTableFile(schoolId, file)
+    } catch (e) {
+      setFileName(file.name)
+      setParseError(e?.response?.data?.message || 'Couldn’t read a table out of this PDF.')
+      return
+    }
     if (!isXlsx(file.name)) {
       setSpread(null)
       setFileName(file.name)
-      setParseError('Please choose an .xlsx (or .xls) budget spreadsheet.')
+      setParseError('Please choose an .xlsx, .xls or PDF budget spreadsheet.')
       return
     }
     setFileName(file.name)
@@ -157,7 +166,7 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported, 
           ref={inputRef}
           id="budget-spread-file"
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.pdf"
           className="sr-only"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />

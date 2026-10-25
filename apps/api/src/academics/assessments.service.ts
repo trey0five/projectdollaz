@@ -1,3 +1,4 @@
+import { tableBytes } from '../common/upload-bytes.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // AssessmentsService — ingest, aggregate, and serve the academic dashboards.
 //
@@ -153,6 +154,7 @@ export class AssessmentsService {
   ): Promise<UploadPreview> {
     // An objective summary is a different file with a different grain, so it is
     // detected and routed here rather than being forced through the score path.
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     if (this.isObjectiveFile(file)) return this.previewObjectives(file, opts)
     const parsed = this.parse(file, opts)
     const subjects = subjectsSeen(parsed)
@@ -206,6 +208,7 @@ export class AssessmentsService {
     file: { buffer: Buffer; originalname?: string },
     opts: { testType?: string; schoolYear?: number; gradeLevel?: string; userId?: string } = {},
   ): Promise<{ importId: string; resultsCreated: number; aggregatesUpserted: number; matched: number; unmatched: number; warnings: string[] }> {
+    file = (await tableBytes(file)) ?? file // #52: a PDF reads as the table it printed
     if (this.isObjectiveFile(file)) return this.commitObjectives(schoolId, file, opts)
     const parsed = this.parse(file, opts)
     const year = opts.schoolYear ?? parsed.years[0] ?? null
@@ -1348,6 +1351,7 @@ export class AssessmentsService {
     opts: { testType?: string; schoolYear?: number } = {},
     resolve?: (name: string) => { schoolId: string | null; matchedName: string | null; decision: string },
   ) {
+    file = (await tableBytes(file)) ?? file // #52
     const parsed = this.parse(file, opts)
     if (parsed.scope !== 'school_aggregate') {
       throw new BadRequestException(
@@ -1387,6 +1391,7 @@ export class AssessmentsService {
     resolve?: (name: string) => { schoolId: string | null },
     overrides: Record<string, string> = {},
   ) {
+    file = (await tableBytes(file)) ?? file // #52
     const parsed = this.parse(file, opts)
     if (parsed.scope !== 'school_aggregate') {
       throw new BadRequestException('Student-level files belong to a single school — upload from that school.')
