@@ -24,7 +24,7 @@
 //   title            string — big serif navy page title
 //   Icon             lucide component — the domain glyph in the header badge
 //   attentionCount   number — count behind the header pill (0 → "all clear")
-//   kpis             array of { label, value, sub:{icon,text,tone}, status }
+//   kpis             array of { label, value, sub:{icon,text,tone}, status, hint?, onClick? }
 //   tabs             array of { key, label } — the register tabs
 //   activeTab        string — the active tab key
 //   onTabChange      (key) => void
@@ -292,6 +292,8 @@ export default function DomainCommandCenter({
                     status={kpi.status}
                     icon={kpi.icon}
                     unit={kpi.unit}
+                    hint={kpi.hint}
+                    onClick={kpi.onClick}
                   />
                 ))}
               </StatStrip>

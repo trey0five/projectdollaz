@@ -1018,6 +1018,8 @@ function GovernanceWorkspace() {
     const policiesKpi = {
       label: 'Policies to review',
       icon: ScrollText,
+      hint: 'Policies past their review date, or due within 60 days. Reviewing a policy (a new review date) clears it.',
+      onClick: () => setTab('policies'),
       value: String(flagged),
       unit: total > 0 ? `of ${total}` : null,
       // No policies yet → no verdict (a 0/0 is not "Good").
@@ -1036,6 +1038,8 @@ function GovernanceWorkspace() {
     const minutesKpi = {
       label: 'Minutes to sign off',
       icon: FileSignature,
+      hint: 'Past meetings whose minutes aren’t approved yet; overdue 14 days after the meeting. Approving the minutes on the meeting clears it.',
+      onClick: () => setTab('meetings'),
       value: minutesOverdue > 0 ? `${pending} · ${minutesOverdue} overdue` : String(pending),
       // No meetings on record → nothing to sign off, so no verdict.
       status: minutesOverdue > 0 ? 'risk' : pending > 0 ? 'watch' : meetings.length === 0 ? 'neutral' : 'good',
@@ -1053,6 +1057,8 @@ function GovernanceWorkspace() {
     const committeesKpi = {
       label: 'Committees',
       icon: Users2,
+      hint: 'Active committees. One without a chair shows Watch — set a chair among its members.',
+      onClick: () => setTab('committees'),
       value: String(active.length),
       status: noChair > 0 ? 'watch' : active.length === 0 ? 'neutral' : 'good',
       sub:
@@ -1067,6 +1073,8 @@ function GovernanceWorkspace() {
     const boardKpi = {
       label: 'Board members',
       icon: Users,
+      hint: 'Active people in the Board group. Grows when you add people (or upload a board roster); a person marked inactive drops out.',
+      onClick: () => setTab('people'),
       value: String(boardPeople.length),
       status: boardPeople.length > 0 ? 'good' : 'neutral',
       sub:
@@ -1080,6 +1088,8 @@ function GovernanceWorkspace() {
     const termsKpi = {
       label: 'Terms ending soon',
       icon: CalendarRange,
+      hint: 'Board members whose term ends within 90 days, plus any already past. Set a new term end on the person to clear it.',
+      onClick: () => setTab('people'),
       value: expiredTerms > 0 ? `${expiringTerms} · ${expiredTerms} expired` : String(expiringTerms),
       status: expiredTerms > 0 ? 'risk' : expiringTerms > 0 ? 'watch' : boardPeople.length === 0 ? 'neutral' : 'good',
       sub:
@@ -1095,6 +1105,8 @@ function GovernanceWorkspace() {
     const credentialsKpi = {
       label: 'Finance team credentials',
       icon: FileText,
+      hint: 'Finance-team people with at least one credential document attached. Attach a document on the person to count them.',
+      onClick: () => setTab('people'),
       value: String(withDocs),
       unit: financePeople.length > 0 ? `of ${financePeople.length}` : null,
       status:
@@ -1125,6 +1137,8 @@ function GovernanceWorkspace() {
     const nextKpi = {
       label: 'Next meeting',
       icon: CalendarClock,
+      hint: 'The nearest scheduled meeting. Within 7 days of it, a blank agenda shows Watch — add the agenda on the meeting.',
+      onClick: () => setTab('meetings'),
       value: nextIso ? (shortDate(nextIso) ?? '—') : '—',
       // Nothing scheduled is a fact, not a verdict.
       status: !nextIso ? 'neutral' : noAgenda ? 'watch' : 'good',
@@ -1146,6 +1160,7 @@ function GovernanceWorkspace() {
     // The first four are the band's glass cards (what needs a decision, then
     // the board itself); the rest ride as the band's small "more figures" chips.
     return [policiesKpi, minutesKpi, boardKpi, nextKpi, termsKpi, committeesKpi, credentialsKpi]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policies, committees, meetings, summary, people])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
@@ -1551,11 +1566,16 @@ function GovernanceWorkspace() {
       actions={reportButton}
       howItWorks={
         <>
-          <p>Everything here comes from the people, meetings, committees and policies you add.</p>
+          <p>Everything here comes from the people, meetings, committees and policies you add — nothing is pulled from elsewhere.</p>
           <p>
-            A policy is due for review on its own cycle (12 months unless you set another). Board terms count as
-            ending soon inside 90 days.
+            <b>Policies to review</b> counts policies past their review date or due within 60 days; a policy is due on its own
+            cycle (12 months unless you set another), and reviewing it sets the next date.{' '}
+            <b>Minutes to sign off</b> counts past meetings whose minutes aren’t approved; they’re overdue 14 days after the meeting.{' '}
+            <b>Board members</b> are the active people in the Board group; <b>Terms ending soon</b> are the ones whose term ends
+            within 90 days (or already has). <b>Committees</b> shows Watch when one has no chair. <b>Finance team credentials</b>{' '}
+            counts finance-team people with a document attached. <b>Next meeting</b> wants an agenda within 7 days of the date.
           </p>
+          <p>Each figure opens the list it came from — click it to see exactly which items are counted.</p>
           <p>
             Good, Watch and At risk only appear when there is something to judge. An empty list shows no label.
           </p>

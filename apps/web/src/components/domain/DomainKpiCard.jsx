@@ -23,7 +23,13 @@ import { VerdictPill } from '../ui/aurora/index.js'
 // kept so the sub line reads the same off the band).
 const SUB_TONE = { bad: 'tone-risk', good: 'tone-good', neutral: 'tone-neutral' }
 
-export default function DomainKpiCard({ label, value, sub, status = 'neutral', icon: Icon = null, unit = null }) {
+/**
+ * `hint` (#47) is the plain-words line under the figure: what the number counts
+ * and what clears it ("Policies past their review date or due within 30 days.
+ * Review one to clear it."). `onClick` makes the card a way in — it opens the
+ * register the number came from.
+ */
+export default function DomainKpiCard({ label, value, sub, status = 'neutral', icon: Icon = null, unit = null, hint = null, onClick = null }) {
   const SubIcon = sub?.icon
   const toneCls = SUB_TONE[sub?.tone] ?? SUB_TONE.neutral
   const labelNode = Icon ? (
@@ -39,12 +45,12 @@ export default function DomainKpiCard({ label, value, sub, status = 'neutral', i
   // A short pure figure ("12", "$4.2M", "87%") keeps the big glass size and
   // never breaks; anything with words stays a wrapping text value.
   const figure = typeof value === 'number' || (typeof value === 'string' && value.length <= 9 && /^[\d$€£.,%+\-−/ ]+$/.test(value))
-  return (
+  const card = (
     <Stat
       label={labelNode}
       value={value}
       unit={unit}
-      className={`au-kpi stat-text min-w-0${figure ? ' au-kpi-num' : ''}`}
+      className={`au-kpi stat-text min-w-0${figure ? ' au-kpi-num' : ''}${onClick ? ' au-kpi-link' : ''}`}
       role="listitem"
     >
       {sub ? (
@@ -54,7 +60,31 @@ export default function DomainKpiCard({ label, value, sub, status = 'neutral', i
           <span className="min-w-0 break-words hyphens-auto">{sub.text}</span>
         </div>
       ) : null}
+      {hint ? (
+        <p className="au-kpi-hint mt-1 min-w-0 break-words text-[12px] leading-snug text-ink2" data-testid="kpi-hint">
+          {hint}
+        </p>
+      ) : null}
       <VerdictPill verdict={status} reserve />
     </Stat>
+  )
+  if (!onClick) return card
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${label} — open`}
+      title={`Open ${label.toLowerCase()}`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className="min-w-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+    >
+      {card}
+    </div>
   )
 }
