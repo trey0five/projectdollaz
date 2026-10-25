@@ -22,9 +22,11 @@ import {
   GIFT_FIELDS,
   MAINTENANCE_FIELDS,
   STANDARD_FIELDS,
+  type ColumnOverride,
   type FieldSpec,
   type TableSheet,
 } from '@finrep/ingestion'
+import { importTable, type ImportTable } from '../common/import-mapping.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
@@ -51,6 +53,8 @@ export interface ImportPreview<T> {
   summary: { new: number; update: number; skipped: number }
   warnings: string[]
   rows: ImportPreviewRow<T>[]
+  table: ImportTable
+  problem: string | null
 }
 
 export interface ImportResult {
@@ -73,12 +77,31 @@ export class RecordImportsService {
 
   // ── Preview ─────────────────────────────────────────────────────────────────
 
-  async preview(schoolId: string, target: ImportTarget, file: { buffer: Buffer } | undefined): Promise<ImportPreview<unknown>> {
+  async preview(
+    schoolId: string,
+    target: ImportTarget,
+    file: { buffer: Buffer } | undefined,
+    mapping: ColumnOverride | null = null,
+  ): Promise<ImportPreview<unknown>> {
     const { sheet, warnings } = this.sheet(file)
+    const NEEDS: Record<ImportTarget, string> = {
+      maintenance: 'an item column',
+      gifts: 'an amount column (a donor and a date make a row importable)',
+      campaigns: 'a campaign name column',
+      standards: 'a standard column (the text of each standard or indicator)',
+    }
+    const FIELDS: Record<ImportTarget, readonly FieldSpec[]> = {
+      maintenance: MAINTENANCE_FIELDS,
+      gifts: GIFT_FIELDS,
+      campaigns: CAMPAIGN_FIELDS,
+      standards: STANDARD_FIELDS,
+    }
+    const problemResult = (read: { columns: { matches: Array<{ key: string; header: string }>; mapping: Record<string, number> }; problem: string | null }) =>
+      this.result(target, read.columns.matches, FIELDS[target], warnings, [], importTable(sheet, FIELDS[target], read.columns as never, NEEDS[target]), read.problem)
     switch (target) {
       case 'maintenance': {
-        const read = maintenanceFromSheet(sheet)
-        if (read.problem) throw new BadRequestException(read.problem)
+        const read = maintenanceFromSheet(sheet, mapping)
+        if (read.problem) return problemResult(read)
         const existing = await this.prisma.maintenanceItem.findMany({ where: { schoolId }, select: { id: true, title: true, location: true } })
         const byKey = new Map(existing.map((e) => [`${norm(e.title)}|${norm(e.location)}`, e.id]))
         const rows = read.records.map((r) => {
@@ -101,11 +124,11 @@ export class RecordImportsService {
           const existingId = byKey.get(`${norm(r.title)}|${norm(r.location)}`) ?? null
           return this.row(r.row, record, existingId, issues)
         })
-        return this.result('maintenance', read.columns.matches, MAINTENANCE_FIELDS, warnings, rows)
+        return this.result('maintenance', read.columns.matches, MAINTENANCE_FIELDS, warnings, rows, importTable(sheet, MAINTENANCE_FIELDS, read.columns, NEEDS.maintenance), null)
       }
       case 'gifts': {
-        const read = giftsFromSheet(sheet)
-        if (read.problem) throw new BadRequestException(read.problem)
+        const read = giftsFromSheet(sheet, mapping)
+        if (read.problem) return problemResult(read)
         const seen = new Set<string>()
         const rows = read.records.map((r) => {
           const issues: string[] = []
@@ -128,11 +151,11 @@ export class RecordImportsService {
           }
           return this.row(r.row, record, null, issues)
         })
-        return this.result('gifts', read.columns.matches, GIFT_FIELDS, warnings, rows)
+        return this.result('gifts', read.columns.matches, GIFT_FIELDS, warnings, rows, importTable(sheet, GIFT_FIELDS, read.columns, NEEDS.gifts), null)
       }
       case 'campaigns': {
-        const read = campaignsFromSheet(sheet)
-        if (read.problem) throw new BadRequestException(read.problem)
+        const read = campaignsFromSheet(sheet, mapping)
+        if (read.problem) return problemResult(read)
         const existing = await this.prisma.advancementCampaign.findMany({ where: { schoolId }, select: { id: true, name: true } })
         const byName = new Map(existing.map((e) => [norm(e.name), e.id]))
         const rows = read.records.map((r) => {
@@ -154,11 +177,11 @@ export class RecordImportsService {
           }
           return this.row(r.row, record, byName.get(norm(r.name)) ?? null, issues)
         })
-        return this.result('campaigns', read.columns.matches, CAMPAIGN_FIELDS, warnings, rows)
+        return this.result('campaigns', read.columns.matches, CAMPAIGN_FIELDS, warnings, rows, importTable(sheet, CAMPAIGN_FIELDS, read.columns, NEEDS.campaigns), null)
       }
       case 'standards': {
-        const read = standardsFromSheet(sheet)
-        if (read.problem) throw new BadRequestException(read.problem)
+        const read = standardsFromSheet(sheet, mapping)
+        if (read.problem) return problemResult(read)
         const existing = await this.prisma.accreditationStandard.findMany({ where: { schoolId }, select: { id: true, code: true } })
         const byCode = new Map(existing.map((e) => [norm(e.code), e.id]))
         const rows = read.records.map((r) => {
@@ -179,7 +202,7 @@ export class RecordImportsService {
           }
           return this.row(r.row, record, byCode.get(norm(r.code)) ?? null, issues)
         })
-        return this.result('standards', read.columns.matches, STANDARD_FIELDS, warnings, rows)
+        return this.result('standards', read.columns.matches, STANDARD_FIELDS, warnings, rows, importTable(sheet, STANDARD_FIELDS, read.columns, NEEDS.standards), null)
       }
     }
   }
@@ -302,10 +325,14 @@ export class RecordImportsService {
     fields: readonly FieldSpec[],
     warnings: string[],
     rows: ImportPreviewRow<T>[],
+    table: ImportTable,
+    problem: string | null,
   ): ImportPreview<T> {
     const label = (key: string) => fields.find((f) => f.key === key)?.label ?? key
     return {
       target,
+      table,
+      problem,
       columns: matches.map((m) => ({ field: label(m.key), header: m.header })),
       summary: {
         new: rows.filter((r) => r.action === 'new').length,

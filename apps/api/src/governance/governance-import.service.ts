@@ -17,9 +17,11 @@ import {
   readTable,
   COMMITTEE_FIELDS,
   PEOPLE_FIELDS,
+  type ColumnOverride,
   type PersonRecord,
   type CommitteeMemberRecord,
 } from '@finrep/ingestion'
+import { importTable, type ImportTable } from '../common/import-mapping.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeopleService } from './people.service.js'
 import { CommitteesService } from './committees.service.js'
@@ -44,6 +46,8 @@ export interface PeoplePreview {
   summary: { new: number; update: number; skipped: number }
   warnings: string[]
   rows: PeoplePreviewRow[]
+  table: ImportTable
+  problem: string | null
 }
 
 export interface CommitteePreviewRow {
@@ -62,6 +66,8 @@ export interface CommitteesPreview {
   summary: { committees: number; newCommittees: number; members: number; newPeople: number; skipped: number }
   warnings: string[]
   rows: CommitteePreviewRow[]
+  table: ImportTable
+  problem: string | null
 }
 
 const normName = (s: string | null | undefined) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -97,9 +103,10 @@ export class GovernanceImportService {
   async previewPeople(
     schoolId: string,
     file: { buffer: Buffer; size?: number } | undefined,
-    opts: { defaultGroup?: PersonGroup } = {},
+    opts: { defaultGroup?: PersonGroup; mapping?: ColumnOverride | null } = {},
   ): Promise<PeoplePreview> {
-    const { records, columns, warnings } = this.readPeople(file, opts.defaultGroup ?? 'board')
+    const { records, columns, warnings, table, problem } = this.readPeople(file, opts.defaultGroup ?? 'board', opts.mapping ?? null)
+    if (problem) return { columns, summary: { new: 0, update: 0, skipped: 0 }, warnings, rows: [], table, problem }
     const existing = await this.prisma.governancePerson.findMany({
       where: { schoolId },
       select: { id: true, name: true, email: true },
@@ -121,6 +128,8 @@ export class GovernanceImportService {
       },
       warnings,
       rows,
+      table,
+      problem: null,
     }
   }
 
@@ -157,8 +166,15 @@ export class GovernanceImportService {
 
   // ── Committees ──────────────────────────────────────────────────────────────
 
-  async previewCommittees(schoolId: string, file: { buffer: Buffer; size?: number } | undefined): Promise<CommitteesPreview> {
-    const { records, columns, warnings } = this.readCommittees(file)
+  async previewCommittees(
+    schoolId: string,
+    file: { buffer: Buffer; size?: number } | undefined,
+    opts: { mapping?: ColumnOverride | null } = {},
+  ): Promise<CommitteesPreview> {
+    const { records, columns, warnings, table, problem } = this.readCommittees(file, opts.mapping ?? null)
+    if (problem) {
+      return { columns, summary: { committees: 0, newCommittees: 0, members: 0, newPeople: 0, skipped: 0 }, warnings, rows: [], table, problem }
+    }
     const [committees, people] = await Promise.all([
       this.prisma.committee.findMany({ where: { schoolId }, select: { id: true, name: true } }),
       this.prisma.governancePerson.findMany({ where: { schoolId }, select: { id: true, name: true, email: true } }),
@@ -201,6 +217,8 @@ export class GovernanceImportService {
       },
       warnings,
       rows,
+      table,
+      problem: null,
     }
   }
 
@@ -274,22 +292,22 @@ export class GovernanceImportService {
     return { sheet, warnings }
   }
 
-  private readPeople(file: { buffer: Buffer; size?: number } | undefined, defaultGroup: PersonGroup) {
+  private readPeople(file: { buffer: Buffer; size?: number } | undefined, defaultGroup: PersonGroup, mapping: ColumnOverride | null) {
     const { sheet, warnings } = this.sheet(file)
-    const read = peopleFromSheet(sheet, defaultGroup)
-    if (read.problem) throw new BadRequestException(read.problem)
+    const read = peopleFromSheet(sheet, defaultGroup, mapping)
     const label = (key: string) => PEOPLE_FIELDS.find((f) => f.key === key)?.label ?? key
     const columns = read.columns.matches.map((m) => ({ field: label(m.key), header: m.header }))
-    return { records: read.records, columns, warnings }
+    const table = importTable(sheet, PEOPLE_FIELDS, read.columns, 'a name (one “Name” column, or “First name” + “Last name”)')
+    return { records: read.records, columns, warnings, table, problem: read.problem }
   }
 
-  private readCommittees(file: { buffer: Buffer; size?: number } | undefined) {
+  private readCommittees(file: { buffer: Buffer; size?: number } | undefined, mapping: ColumnOverride | null) {
     const { sheet, warnings } = this.sheet(file)
-    const read = committeesFromSheet(sheet)
-    if (read.problem) throw new BadRequestException(read.problem)
+    const read = committeesFromSheet(sheet, mapping)
     const label = (key: string) => COMMITTEE_FIELDS.find((f) => f.key === key)?.label ?? key
     const columns = read.columns.matches.map((m) => ({ field: label(m.key), header: m.header }))
-    return { records: read.records, columns, warnings }
+    const table = importTable(sheet, COMMITTEE_FIELDS, read.columns, 'a committee name column')
+    return { records: read.records, columns, warnings, table, problem: read.problem }
   }
 
   private toPersonDto(r: PersonRecord): { person: CreatePersonDto; issues: string[] } {

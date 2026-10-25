@@ -2,8 +2,8 @@
 // commit updates matches and creates the rest through the module services.
 import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
-import { BadRequestException } from '@nestjs/common'
 import { RecordImportsService } from './record-imports.service.js'
+import type { CreateStandardDto } from '../accreditation/dto/create-standard.dto.js'
 
 const file = (s: string) => ({ buffer: Buffer.from(s, 'utf8') })
 
@@ -66,9 +66,12 @@ describe('standards', () => {
       ['update', { code: '1.2', title: '1.2 Mission is set', rating: 'met' }],
       ['new', { code: '2.1', title: '2.1 Curriculum documented', rating: 'partially_met' }],
     ])
-    const r = await svc.commitStandards('s1', p.rows.map((x) => x.record), 'u1')
+    const r = await svc.commitStandards('s1', p.rows.map((x) => x.record as CreateStandardDto), 'u1')
     expect(r).toEqual({ created: 1, updated: 1, skipped: 0, total: 2 })
     expect(accreditation.updateStandard).toHaveBeenCalledWith('s1', 't1', { code: '1.2', title: '1.2 Mission is set', rating: 'met' }, 'u1')
-    await expect(svc.preview('s1', 'standards', file('Owner,Date\nAnn,2027\n'))).rejects.toThrow(BadRequestException)
+    const missing = await svc.preview('s1', 'standards', file('Owner,Date\nAnn,2027\n'))
+    expect(missing.problem).toMatch(/Couldn’t find a standard column/)
+    expect(missing.rows).toEqual([])
+    expect(missing.table.needs).toMatch(/standard column/)
   })
 })

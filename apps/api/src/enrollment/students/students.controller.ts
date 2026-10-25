@@ -1,3 +1,5 @@
+import { parseMappingField } from '../../common/import-mapping.js'
+import { ImportPreviewFieldsDto } from './students.dto.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 5 — Student roster controller. Same guard chain + role split as the
 // enrollment connector (JwtAuthGuard membership-checks :schoolId; entitlement-
@@ -119,8 +121,11 @@ export class StudentsController {
   importPreview(
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @UploadedFiles() files: { file?: UploadedCsv[]; demographics?: UploadedCsv[] } | undefined,
+    @Body() dto: ImportPreviewFieldsDto,
   ) {
-    return this.students.importPreview(schoolId, files?.file?.[0], files?.demographics?.[0])
+    return this.students.importPreview(schoolId, files?.file?.[0], files?.demographics?.[0], {
+      mapping: parseMappingField(dto.mapping),
+    })
   }
 
   /**

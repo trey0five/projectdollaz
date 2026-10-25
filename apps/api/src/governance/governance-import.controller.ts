@@ -18,7 +18,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { GovernanceImportService } from './governance-import.service.js'
-import { ImportCommitteesCommitDto, ImportPeopleCommitDto, ImportPeoplePreviewDto } from './dto/governance-import.dto.js'
+import { ImportCommitteesCommitDto, ImportMappingDto, ImportPeopleCommitDto, ImportPeoplePreviewDto } from './dto/governance-import.dto.js'
+import { parseMappingField } from '../common/import-mapping.js'
 
 /** 10 MB — a board roster is a few KB; the cap is for a stray workbook. */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -46,7 +47,7 @@ export class GovernanceImportController {
     @UploadedFile() file: UploadedTable | undefined,
     @Body() dto: ImportPeoplePreviewDto,
   ) {
-    return this.imports.previewPeople(schoolId, file, { defaultGroup: dto.defaultGroup })
+    return this.imports.previewPeople(schoolId, file, { defaultGroup: dto.defaultGroup, mapping: parseMappingField(dto.mapping) })
   }
 
   @Post('people/commit')
@@ -65,8 +66,9 @@ export class GovernanceImportController {
   previewCommittees(
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @UploadedFile() file: UploadedTable | undefined,
+    @Body() dto: ImportMappingDto,
   ) {
-    return this.imports.previewCommittees(schoolId, file)
+    return this.imports.previewCommittees(schoolId, file, { mapping: parseMappingField(dto.mapping) })
   }
 
   @Post('committees/commit')

@@ -3,7 +3,7 @@
 // through PeopleService / CommitteesService.
 import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
-import { BadRequestException, ConflictException } from '@nestjs/common'
+import { ConflictException } from '@nestjs/common'
 import { GovernanceImportService, isoDateFromText } from './governance-import.service.js'
 
 const file = (s: string) => ({ buffer: Buffer.from(s, 'utf8'), size: s.length })
@@ -70,10 +70,15 @@ describe('people import', () => {
     expect(people.create).toHaveBeenCalledWith('s1', { name: 'Bo Diaz', groups: ['finance_team'] }, 'u1')
   })
 
-  it('refuses a file with no name column, naming what it saw', async () => {
+  it('a file with no name column previews with a problem (the popup fixes it), naming what it saw', async () => {
     const { svc } = make()
-    await expect(svc.previewPeople('s1', file('Position,Email\nChair,a@x.org\n'))).rejects.toThrow(BadRequestException)
-    await expect(svc.previewPeople('s1', file('Position,Email\nChair,a@x.org\n'))).rejects.toThrow(/“Position”, “Email”/)
+    const p = await svc.previewPeople('s1', file('Position,Email\nChair,a@x.org\n'))
+    expect(p.problem).toMatch(/Couldn’t find a name column.*“Position”, “Email”/)
+    expect(p.rows).toEqual([])
+    expect(p.table.headers).toEqual(['Position', 'Email'])
+    const fixed = await svc.previewPeople('s1', file('Position,Email\nAnn Smith,a@x.org\n'), { mapping: { name: 0, title: null } })
+    expect(fixed.problem).toBeNull()
+    expect(fixed.rows[0]!.person.name).toBe('Ann Smith')
   })
 })
 

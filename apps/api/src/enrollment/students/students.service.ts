@@ -28,6 +28,8 @@ import { EnrollmentService } from '../enrollment.service.js'
 import { rosterRollup } from './roster-rollup.js'
 import { tallyByStatus, type StatusTallies, type TallyRow } from './aggregate-tally.js'
 import { parseStudentImport, type StudentCandidate } from './student-import.parser.js'
+import type { ColumnOverride } from '@finrep/ingestion'
+import type { ImportTable } from '../../common/import-mapping.js'
 import type {
   CreateStudentDto,
   ListStudentsQueryDto,
@@ -182,6 +184,9 @@ export interface ImportPreviewResult {
   rows: ImportPreviewRow[]
   /** How the file's columns were read, so the preview can say "Student Name → Student name". */
   columns?: { field: string; header: string }[]
+  /** #44 — the mapping popup's material, and a missing-column problem instead of a 400. */
+  table?: ImportTable
+  problem?: string | null
 }
 
 const FLAG_FIELD: Record<StudentFlagKey, 'hasIep' | 'has504' | 'ell'> = {
@@ -464,11 +469,12 @@ export class StudentsService {
     schoolId: string,
     file: { buffer: Buffer; size: number } | undefined,
     demographicsFile?: { buffer: Buffer; size: number },
+    opts: { mapping?: ColumnOverride | null } = {},
   ): Promise<ImportPreviewResult> {
     if (!file || !file.buffer || file.size === 0) throw new BadRequestException('No file uploaded.')
     let parsed
     try {
-      parsed = parseStudentImport(file.buffer, demographicsFile?.buffer)
+      parsed = parseStudentImport(file.buffer, demographicsFile?.buffer, { mapping: opts.mapping ?? null })
     } catch (e) {
       throw new BadRequestException(e instanceof Error ? e.message : 'Could not read the roster file.')
     }
@@ -498,7 +504,15 @@ export class StudentsService {
       summary[action]++
       return { action, existingId: match.id, student: r.student, issues: [] }
     })
-    return { shape: parsed.shape, summary, warnings: parsed.warnings, rows, ...(parsed.columns ? { columns: parsed.columns } : {}) }
+    return {
+      shape: parsed.shape,
+      summary,
+      warnings: parsed.warnings,
+      rows,
+      ...(parsed.columns ? { columns: parsed.columns } : {}),
+      ...(parsed.table ? { table: parsed.table } : {}),
+      problem: parsed.problem ?? null,
+    }
   }
 
   /** Commit the previewed/user-edited rows. merge = upsert matching like the

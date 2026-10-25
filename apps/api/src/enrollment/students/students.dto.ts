@@ -339,3 +339,12 @@ export class PromoteSnapshotDto {
   @IsDateString()
   observedOn?: string
 }
+
+/** Multipart text fields beside the roster file on a preview (#44). */
+export class ImportPreviewFieldsDto {
+  /** JSON { fieldKey: columnIndex | null } from the mapping popup. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  mapping?: string
+}

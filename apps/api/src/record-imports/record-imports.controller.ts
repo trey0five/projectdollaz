@@ -21,7 +21,8 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { RecordImportsService } from './record-imports.service.js'
 import { GovernanceImportService } from '../governance/governance-import.service.js'
-import { ImportPeopleCommitDto } from '../governance/dto/governance-import.dto.js'
+import { ImportMappingDto, ImportPeopleCommitDto } from '../governance/dto/governance-import.dto.js'
+import { parseMappingField } from '../common/import-mapping.js'
 import {
   ImportCampaignsCommitDto,
   ImportGiftsCommitDto,
@@ -44,8 +45,8 @@ export class MaintenanceImportController {
   @Post('preview')
   @Roles('owner', 'accountant')
   @upload()
-  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined) {
-    return this.imports.preview(schoolId, 'maintenance', file)
+  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined, @Body() dto: ImportMappingDto) {
+    return this.imports.preview(schoolId, 'maintenance', file, parseMappingField(dto.mapping))
   }
   @Post('commit')
   @Roles('owner', 'accountant')
@@ -62,8 +63,8 @@ export class GiftsImportController {
   @Post('preview')
   @Roles('owner', 'accountant')
   @upload()
-  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined) {
-    return this.imports.preview(schoolId, 'gifts', file)
+  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined, @Body() dto: ImportMappingDto) {
+    return this.imports.preview(schoolId, 'gifts', file, parseMappingField(dto.mapping))
   }
   @Post('commit')
   @Roles('owner', 'accountant')
@@ -80,8 +81,8 @@ export class CampaignsImportController {
   @Post('preview')
   @Roles('owner', 'accountant')
   @upload()
-  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined) {
-    return this.imports.preview(schoolId, 'campaigns', file)
+  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined, @Body() dto: ImportMappingDto) {
+    return this.imports.preview(schoolId, 'campaigns', file, parseMappingField(dto.mapping))
   }
   @Post('commit')
   @Roles('owner', 'accountant')
@@ -98,8 +99,8 @@ export class StandardsImportController {
   @Post('preview')
   @Roles('owner', 'accountant')
   @upload()
-  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined) {
-    return this.imports.preview(schoolId, 'standards', file)
+  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined, @Body() dto: ImportMappingDto) {
+    return this.imports.preview(schoolId, 'standards', file, parseMappingField(dto.mapping))
   }
   @Post('commit')
   @Roles('owner', 'accountant')
@@ -117,8 +118,8 @@ export class StaffImportController {
   @Post('preview')
   @Roles('owner', 'accountant')
   @upload()
-  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined) {
-    return this.people.previewPeople(schoolId, file as { buffer: Buffer }, { defaultGroup: 'staff' }).then((p) => ({
+  preview(@Param('schoolId', ParseUUIDPipe) schoolId: string, @UploadedFile() file: UploadedTable | undefined, @Body() dto: ImportMappingDto) {
+    return this.people.previewPeople(schoolId, file as { buffer: Buffer }, { defaultGroup: 'staff', mapping: parseMappingField(dto.mapping) }).then((p) => ({
       ...p,
       // The generic preview shape: `record` is what the commit takes back.
       rows: p.rows.map((r) => ({ row: r.row, action: r.action, existingId: r.existingId, record: r.person, issues: r.issues })),

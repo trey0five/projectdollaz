@@ -18,7 +18,7 @@ export interface FieldSpec {
   required?: boolean
 }
 
-export type MatchHow = 'exact' | 'contains' | 'fuzzy'
+export type MatchHow = 'exact' | 'contains' | 'fuzzy' | 'chosen'
 
 export interface ColumnMatch {
   key: string
@@ -66,11 +66,30 @@ function fuzzyEqual(a: string, b: string): boolean {
   return Math.abs(a.length - b.length) <= tolerance && levenshtein(a, b) <= tolerance
 }
 
-export function matchColumns(header: readonly string[], fields: readonly FieldSpec[]): ColumnMatches {
+/** A person's picks from the mapping popup: field key → column index (−1 / null = "no column"). */
+export type ColumnOverride = Record<string, number | null>
+
+export function matchColumns(header: readonly string[], fields: readonly FieldSpec[], override?: ColumnOverride | null): ColumnMatches {
   const norm = header.map(normalizeHeader)
   const taken = new Set<number>()
   const mapping: Record<string, number> = {}
   const matches: ColumnMatch[] = []
+  const chosenOff = new Set<string>()
+
+  // Pass 0 — what the person chose wins outright, and a column they chose is
+  // never also guessed for another field; a field they set to "none" stays empty.
+  for (const f of fields) {
+    const pick = override?.[f.key]
+    if (pick === undefined) continue
+    if (pick === null || pick < 0 || pick >= header.length) {
+      chosenOff.add(f.key)
+      continue
+    }
+    if (taken.has(pick)) continue
+    taken.add(pick)
+    mapping[f.key] = pick
+    matches.push({ key: f.key, column: pick, header: header[pick] ?? '', how: 'chosen' })
+  }
 
   const claim = (f: FieldSpec, col: number, how: MatchHow) => {
     taken.add(col)
@@ -83,13 +102,14 @@ export function matchColumns(header: readonly string[], fields: readonly FieldSp
   // Pass 1 — exact. Every field gets its exact match before any fuzzy pass runs,
   // so "last name" can never be stolen by a field whose fuzzy guess came first.
   for (const f of fields) {
+    if (f.key in mapping || chosenOff.has(f.key)) continue
     const want = names(f)
     const col = norm.findIndex((h, i) => !taken.has(i) && h !== '' && want.includes(h))
     if (col >= 0) claim(f, col, 'exact')
   }
   // Pass 2 — containment (the longer of the two must be ≥ 4 chars so "id" ⊂ "paid" can't match).
   for (const f of fields) {
-    if (f.key in mapping) continue
+    if (f.key in mapping || chosenOff.has(f.key)) continue
     const want = names(f).filter((n) => n.length >= 3)
     const col = norm.findIndex(
       (h, i) =>
@@ -101,7 +121,7 @@ export function matchColumns(header: readonly string[], fields: readonly FieldSp
   }
   // Pass 3 — typos.
   for (const f of fields) {
-    if (f.key in mapping) continue
+    if (f.key in mapping || chosenOff.has(f.key)) continue
     const want = names(f)
     const col = norm.findIndex((h, i) => !taken.has(i) && want.some((n) => fuzzyEqual(h, n)))
     if (col >= 0) claim(f, col, 'fuzzy')

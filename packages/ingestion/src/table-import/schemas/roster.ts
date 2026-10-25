@@ -5,7 +5,7 @@
 // Customer 2026-10-24: an Excel roster was refused for "missing expected columns"
 // because the headers weren't spelled sourcedId / firstName / grade.
 // ─────────────────────────────────────────────────────────────────────────────
-import { cell, describeHeader, matchColumns, type ColumnMatches, type FieldSpec } from '../match-columns.js'
+import { cell, describeHeader, matchColumns, type ColumnMatches, type ColumnOverride, type FieldSpec } from '../match-columns.js'
 import type { TableSheet } from '../read-table.js'
 
 export const ROSTER_FIELDS: readonly FieldSpec[] = [
@@ -122,8 +122,8 @@ export function oneRosterCodeForGradeKey(key: string): string {
  * Read a sheet as a roster. Never throws: `problem` says, in plain words, when
  * there's no way to get a name or a grade out of it — naming the columns we saw.
  */
-export function rosterFromSheet(sheet: TableSheet): RosterRead {
-  const columns = matchColumns(sheet.header, ROSTER_FIELDS)
+export function rosterFromSheet(sheet: TableSheet, override?: ColumnOverride | null): RosterRead {
+  const columns = matchColumns(sheet.header, ROSTER_FIELDS, override)
   const m = columns.mapping
   const hasSplitName = 'firstName' in m || 'lastName' in m
   const hasName = hasSplitName || 'fullName' in m

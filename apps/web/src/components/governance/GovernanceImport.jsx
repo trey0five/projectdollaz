@@ -14,6 +14,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, RefreshCcw, Upload } from 'lucide-react'
 import { governanceImportApi, apiErrorMessage } from '../../lib/api.js'
 import Button from '../ui/surface/Button.jsx'
+import ColumnMapDialog from '../imports/ColumnMapDialog.jsx'
 import '../../styles/pending/a2-carry.css'
 
 const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls'
@@ -45,6 +46,7 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false) // the mapping popup (#44)
   const copy = COPY[kind]
 
   const reset = () => {
@@ -52,7 +54,27 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
     setPreview(null)
     setResult(null)
     setErr('')
+    setMapOpen(false)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const runPreview = async (f, map = null) => {
+    setBusy(true)
+    setErr('')
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      if (kind === 'people') fd.append('defaultGroup', defaultGroup)
+      if (map) fd.append('mapping', JSON.stringify(map))
+      const res = kind === 'people' ? await governanceImportApi.previewPeople(schoolId, fd) : await governanceImportApi.previewCommittees(schoolId, fd)
+      const p = res.data ?? res
+      setPreview(p)
+      setMapOpen(!!p.problem) // a required column we couldn't find: the popup opens itself
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Could not read that file.'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   const pick = async (f) => {
@@ -67,7 +89,9 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
       fd.append('file', f)
       if (kind === 'people') fd.append('defaultGroup', defaultGroup)
       const res = kind === 'people' ? await governanceImportApi.previewPeople(schoolId, fd) : await governanceImportApi.previewCommittees(schoolId, fd)
-      setPreview(res.data ?? res)
+      const p = res.data ?? res
+      setPreview(p)
+      setMapOpen(!!p.problem)
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not read that file.'))
     } finally {
@@ -141,6 +165,14 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
                 : `${summary.committees} committee${summary.committees === 1 ? '' : 's'} (${summary.newCommittees} new) · ${summary.members} membership${summary.members === 1 ? '' : 's'} · ${summary.newPeople} people to add`}
             </p>
           ) : null}
+          {preview.problem ? (
+            <p className="a2-note mt-2" data-tone="watch">
+              <AlertTriangle size={13} aria-hidden /> {preview.problem}{' '}
+              <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                Pick the columns
+              </button>
+            </p>
+          ) : null}
           {preview.columns?.length ? (
             <p className="mt-2 text-[12.5px] text-ink2" data-testid="governance-import-columns">
               How we read your columns:{' '}
@@ -150,6 +182,14 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
                   <span className="font-medium text-ink">{c.header}</span> → {c.field}
                 </span>
               ))}
+              {preview.table ? (
+                <>
+                  {' · '}
+                  <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                    Change how columns are read
+                  </button>
+                </>
+              ) : null}
             </p>
           ) : null}
           {(preview.warnings ?? []).map((w) => (
@@ -195,7 +235,7 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
           </ul>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="primary" onClick={commit} disabled={busy} icon={<FileSpreadsheet size={14} />}>
+            <Button variant="primary" onClick={commit} disabled={busy || !!preview.problem} icon={<FileSpreadsheet size={14} />}>
               {copy.cta}
             </Button>
             <Button variant="quiet" onClick={reset} icon={<RefreshCcw size={13} />}>
@@ -217,6 +257,18 @@ export default function GovernanceImport({ schoolId, canEdit, kind = 'people', d
         <p className="a2-note mt-3" data-tone="risk">
           {err}
         </p>
+      ) : null}
+      {mapOpen && preview?.table ? (
+        <ColumnMapDialog
+          table={preview.table}
+          problem={preview.problem}
+          busy={busy}
+          onClose={() => setMapOpen(false)}
+          onApply={(map) => {
+            setMapOpen(false)
+            if (file) void runPreview(file, map)
+          }}
+        />
       ) : null}
     </div>
   )

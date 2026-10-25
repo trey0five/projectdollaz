@@ -14,6 +14,7 @@ export {
   describeHeader,
   cell,
   type FieldSpec,
+  type ColumnOverride,
   type ColumnMatch,
   type ColumnMatches,
   type MatchHow,

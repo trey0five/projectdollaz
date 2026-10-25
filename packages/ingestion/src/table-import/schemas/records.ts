@@ -4,7 +4,7 @@
 // reader returns raw-string records (plus a few word→key coercions the file
 // can't be expected to spell the app's way); the API validates and writes.
 // ─────────────────────────────────────────────────────────────────────────────
-import { cell, describeHeader, matchColumns, type ColumnMatches, type FieldSpec } from '../match-columns.js'
+import { cell, describeHeader, matchColumns, type ColumnMatches, type ColumnOverride, type FieldSpec } from '../match-columns.js'
 import type { TableSheet } from '../read-table.js'
 
 export interface RecordsRead<T> {
@@ -18,8 +18,9 @@ function readRows<T>(
   fields: readonly FieldSpec[],
   required: { key: string; what: string; example: string },
   build: (r: readonly string[], m: Record<string, number>, row: number) => T | null,
+  override?: ColumnOverride | null,
 ): RecordsRead<T> {
-  const columns = matchColumns(sheet.header, fields)
+  const columns = matchColumns(sheet.header, fields, override)
   if (!(required.key in columns.mapping)) {
     return {
       records: [],
@@ -108,7 +109,7 @@ export function recurrenceFromText(raw: string): MaintenanceRecord['recurrence']
   return ''
 }
 
-export function maintenanceFromSheet(sheet: TableSheet): RecordsRead<MaintenanceRecord> {
+export function maintenanceFromSheet(sheet: TableSheet, override?: ColumnOverride | null): RecordsRead<MaintenanceRecord> {
   return readRows(sheet, MAINTENANCE_FIELDS, { key: 'title', what: 'item', example: 'Item' }, (r, m, row) => {
     const title = cell(r, m, 'title')
     if (!title) return null
@@ -127,7 +128,7 @@ export function maintenanceFromSheet(sheet: TableSheet): RecordsRead<Maintenance
       recurrence: recurrenceFromText(cell(r, m, 'recurrence')),
       notes: cell(r, m, 'notes'),
     }
-  })
+  }, override)
 }
 
 // ── Advancement: gifts & pledges, campaigns ─────────────────────────────────
@@ -162,7 +163,7 @@ export function giftKindFromText(raw: string, receivedAmount: number | null, amo
   return 'gift'
 }
 
-export function giftsFromSheet(sheet: TableSheet): RecordsRead<GiftRecord> {
+export function giftsFromSheet(sheet: TableSheet, override?: ColumnOverride | null): RecordsRead<GiftRecord> {
   return readRows(sheet, GIFT_FIELDS, { key: 'amount', what: 'gift amount', example: 'Amount' }, (r, m, row) => {
     const donor = cell(r, m, 'donor')
     const amount = moneyFromText(cell(r, m, 'amount'))
@@ -179,7 +180,7 @@ export function giftsFromSheet(sheet: TableSheet): RecordsRead<GiftRecord> {
       note: cell(r, m, 'note'),
       source: cell(r, m, 'source'),
     }
-  })
+  }, override)
 }
 
 export const CAMPAIGN_FIELDS: readonly FieldSpec[] = [
@@ -228,7 +229,7 @@ export function campaignStatusFromText(raw: string): CampaignRecord['status'] {
   return 'active'
 }
 
-export function campaignsFromSheet(sheet: TableSheet): RecordsRead<CampaignRecord> {
+export function campaignsFromSheet(sheet: TableSheet, override?: ColumnOverride | null): RecordsRead<CampaignRecord> {
   return readRows(sheet, CAMPAIGN_FIELDS, { key: 'name', what: 'campaign name', example: 'Campaign' }, (r, m, row) => {
     const name = cell(r, m, 'name')
     if (!name) return null
@@ -244,7 +245,7 @@ export function campaignsFromSheet(sheet: TableSheet): RecordsRead<CampaignRecor
       status: campaignStatusFromText(cell(r, m, 'status')),
       notes: cell(r, m, 'notes'),
     }
-  })
+  }, override)
 }
 
 // ── Accreditation: standards / indicators ───────────────────────────────────
@@ -286,7 +287,7 @@ export function ratingFromText(raw: string): { rating: StandardRecord['rating'];
   return { rating: '', rubricScore: null }
 }
 
-export function standardsFromSheet(sheet: TableSheet): RecordsRead<StandardRecord> {
+export function standardsFromSheet(sheet: TableSheet, override?: ColumnOverride | null): RecordsRead<StandardRecord> {
   return readRows(sheet, STANDARD_FIELDS, { key: 'title', what: 'standard', example: 'Standard' }, (r, m, row) => {
     const title = cell(r, m, 'title')
     let code = cell(r, m, 'code')
@@ -308,5 +309,5 @@ export function standardsFromSheet(sheet: TableSheet): RecordsRead<StandardRecor
       owner: cell(r, m, 'owner'),
       notes: cell(r, m, 'notes'),
     }
-  })
+  }, override)
 }

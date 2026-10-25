@@ -10,6 +10,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, RefreshCcw, Upload } from 'lucide-react'
 import { recordsImportApi, apiErrorMessage } from '../../lib/api.js'
 import Button from '../ui/surface/Button.jsx'
+import ColumnMapDialog from './ColumnMapDialog.jsx'
 import '../../styles/pending/a2-carry.css'
 
 const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls'
@@ -75,6 +76,8 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+  const [mapping, setMapping] = useState(null) // the popup's picks (#44)
+  const [mapOpen, setMapOpen] = useState(false)
   const copy = TARGET_COPY[target] ?? TARGET_COPY.maintenance
 
   const reset = () => {
@@ -82,7 +85,28 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
     setPreview(null)
     setResult(null)
     setErr('')
+    setMapping(null)
+    setMapOpen(false)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const runPreview = async (f, map) => {
+    setBusy(true)
+    setErr('')
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      if (map) fd.append('mapping', JSON.stringify(map))
+      const res = await recordsImportApi.preview(schoolId, target, fd)
+      const p = res.data ?? res
+      setPreview(p)
+      // A required column we couldn't find: the popup opens by itself.
+      setMapOpen(!!p.problem)
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Could not read that file.'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   const pick = async (f) => {
@@ -91,12 +115,15 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
     setPreview(null)
     setResult(null)
     setErr('')
+    setMapping(null)
     setBusy(true)
     try {
       const fd = new FormData()
       fd.append('file', f)
       const res = await recordsImportApi.preview(schoolId, target, fd)
-      setPreview(res.data ?? res)
+      const p = res.data ?? res
+      setPreview(p)
+      setMapOpen(!!p.problem)
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not read that file.'))
     } finally {
@@ -165,6 +192,14 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
               {summary.new} new · {summary.update} to update · {summary.skipped} skipped
             </p>
           ) : null}
+          {preview.problem ? (
+            <p className="a2-note mt-2" data-tone="watch">
+              <AlertTriangle size={13} aria-hidden /> {preview.problem}{' '}
+              <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                Pick the columns
+              </button>
+            </p>
+          ) : null}
           {preview.columns?.length ? (
             <p className="mt-2 text-[12.5px] text-ink2" data-testid="records-import-columns">
               How we read your columns:{' '}
@@ -174,6 +209,14 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
                   <span className="font-medium text-ink">{c.header}</span> → {c.field}
                 </span>
               ))}
+              {preview.table ? (
+                <>
+                  {' · '}
+                  <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                    Change how columns are read
+                  </button>
+                </>
+              ) : null}
             </p>
           ) : null}
           {(preview.warnings ?? []).map((w) => (
@@ -200,7 +243,7 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
           </ul>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="primary" onClick={commit} disabled={busy} icon={<FileSpreadsheet size={14} />}>
+            <Button variant="primary" onClick={commit} disabled={busy || !!preview.problem} icon={<FileSpreadsheet size={14} />}>
               {copy.cta}
             </Button>
             <Button variant="quiet" onClick={reset} icon={<RefreshCcw size={13} />}>
@@ -220,6 +263,19 @@ export default function RecordsImport({ schoolId, canEdit, target, onApplied }) 
         <p className="a2-note mt-3" data-tone="risk">
           {err}
         </p>
+      ) : null}
+      {mapOpen && preview?.table ? (
+        <ColumnMapDialog
+          table={preview.table}
+          problem={preview.problem}
+          busy={busy}
+          onClose={() => setMapOpen(false)}
+          onApply={(map) => {
+            setMapping(map)
+            setMapOpen(false)
+            if (file) void runPreview(file, map)
+          }}
+        />
       ) : null}
     </div>
   )

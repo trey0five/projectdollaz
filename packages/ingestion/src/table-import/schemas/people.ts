@@ -3,7 +3,7 @@
 // columns were called (#46). Records are raw strings plus a resolved group;
 // the API validates dates and writes.
 // ─────────────────────────────────────────────────────────────────────────────
-import { cell, describeHeader, matchColumns, type ColumnMatches, type FieldSpec } from '../match-columns.js'
+import { cell, describeHeader, matchColumns, type ColumnMatches, type ColumnOverride, type FieldSpec } from '../match-columns.js'
 import type { TableSheet } from '../read-table.js'
 import { splitFullName } from './roster.js'
 
@@ -65,8 +65,8 @@ export function groupFromText(groupCell: string, title: string): PersonGroupKey 
 const INACTIVE = /^(no|n|false|0|inactive|former|past|retired|resigned|ended|emeritus)$/i
 
 /** Read a sheet as a people list. `defaultGroup` is what the tile was for (a board roster → 'board'). */
-export function peopleFromSheet(sheet: TableSheet, defaultGroup: PersonGroupKey = 'board'): PeopleRead {
-  const columns = matchColumns(sheet.header, PEOPLE_FIELDS)
+export function peopleFromSheet(sheet: TableSheet, defaultGroup: PersonGroupKey = 'board', override?: ColumnOverride | null): PeopleRead {
+  const columns = matchColumns(sheet.header, PEOPLE_FIELDS, override)
   const m = columns.mapping
   const hasName = 'name' in m || 'firstName' in m || 'lastName' in m
   if (!hasName) {

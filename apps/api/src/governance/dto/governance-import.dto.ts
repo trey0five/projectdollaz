@@ -17,6 +17,19 @@ export class ImportPeoplePreviewDto {
   @IsOptional()
   @IsIn(PERSON_GROUPS)
   defaultGroup?: PersonGroup
+
+  /** JSON { fieldKey: columnIndex | null } from the mapping popup (#44). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  mapping?: string
+}
+
+export class ImportMappingDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  mapping?: string
 }
 
 /** The reviewed rows, posted back as JSON (the file is never re-sent). */

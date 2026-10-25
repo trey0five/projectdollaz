@@ -52,6 +52,7 @@ import { STUDENT_STATUS_LABELS } from '../../lib/demographicVocab.js'
 import { summarizeRosterUpload } from './rosterUploadSummary.js'
 import { Button, Pill } from '../ui/surface/index.js'
 import '../../styles/pending/a2-carry.css'
+import ColumnMapDialog from '../imports/ColumnMapDialog.jsx'
 
 /** Preview action → the Pill's mark tone (status as a 2px mark, ink text). */
 const ACTION_TONE = {
@@ -80,6 +81,8 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
   const [preview, setPreview] = useState(null) // { shape, summary, warnings, rows }
   const [included, setIncluded] = useState(() => new Set())
   const [mode, setMode] = useState('merge')
+  const [mapping, setMapping] = useState(null) // the mapping popup's picks (#44)
+  const [mapOpen, setMapOpen] = useState(false)
   const [result, setResult] = useState(null) // { created, updated, deleted, total, promote? }
   const [restoring, setRestoring] = useState(false)
   const [restored, setRestored] = useState(false)
@@ -113,7 +116,9 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
     if (f) pickFile(f)
   }
 
-  const runPreview = async () => {
+  // `map` is the popup's picks; a click event (the button) means "use the saved picks".
+  const runPreview = async (map = mapping) => {
+    if (map && typeof map === 'object' && 'nativeEvent' in map) map = mapping
     if (!file || !schoolId || busy) return
     setBusy(true)
     setErr('')
@@ -121,9 +126,12 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
       const form = new FormData()
       form.append('file', file)
       if (demFile) form.append('demographics', demFile)
+      if (map) form.append('mapping', JSON.stringify(map))
       const res = await enrollmentApi.students.importPreview(schoolId, form)
       const p = res.data ?? res
       setPreview(p)
+      // A required column we couldn't find: the popup opens by itself.
+      setMapOpen(!!p.problem)
       // Default include: every parseable row (skipped rows can't be sent).
       setIncluded(
         new Set(
@@ -325,7 +333,7 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
                 />
                 <Button
                   variant="primary"
-                  onClick={runPreview}
+                  onClick={() => runPreview()}
                   disabled={busy}
                   icon={<UploadCloud size={15} className={busy ? 'motion-safe:animate-pulse' : ''} />}
                 >
@@ -354,6 +362,14 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
                 <SummaryStat label="skipped" value={summary.skipped ?? 0} tone={ACTION_TONE.skipped} />
               </>
             )}
+            {preview.problem && (
+              <p className="basis-full text-[13px] text-ink" data-testid="import-problem">
+                {preview.problem}{' '}
+                <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                  Pick the columns
+                </button>
+              </p>
+            )}
             {preview.columns?.length > 0 && (
               <p className="basis-full text-[12.5px] text-ink2" data-testid="import-columns">
                 How we read your columns:{' '}
@@ -363,6 +379,14 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
                     <span className="font-medium text-ink">{c.header}</span> → {c.field}
                   </span>
                 ))}
+                {preview.table && (
+                  <>
+                    {' · '}
+                    <button type="button" className="dt-link" onClick={() => setMapOpen(true)}>
+                      Change how columns are read
+                    </button>
+                  </>
+                )}
               </p>
             )}
             <Button variant="quiet" size="sm" className="ml-auto" onClick={reset} icon={<RefreshCcw size={13} />}>
@@ -546,6 +570,19 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
           </Button>
         </motion.div>
       )}
+      {mapOpen && preview?.table ? (
+        <ColumnMapDialog
+          table={preview.table}
+          problem={preview.problem}
+          busy={busy}
+          onClose={() => setMapOpen(false)}
+          onApply={(map) => {
+            setMapping(map)
+            setMapOpen(false)
+            void runPreview(map)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

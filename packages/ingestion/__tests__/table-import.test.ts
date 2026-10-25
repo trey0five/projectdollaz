@@ -272,3 +272,17 @@ describe('record schemas (#51)', () => {
     expect(standardsFromSheet(mainSheet(readTable(csv('Owner,Date\nAnn,2027\n')))!).problem).toMatch(/Couldn’t find a standard column/)
   })
 })
+
+// #44 — the mapping popup: a person's pick wins, "none" stays empty.
+describe('matchColumns with an override', () => {
+  it('uses the chosen column, frees our guess, and leaves a field set to none empty', () => {
+    const header = ['Student', 'Homeroom', 'Gr', 'Code']
+    const auto = rosterFromSheet(mainSheet(readTable(csv(header.join(',') + '\nAnn Smith,Lee,9,X1\n')))!)
+    expect(auto.columns.mapping).toMatchObject({ fullName: 0, grade: 2 })
+    const chosen = rosterFromSheet(mainSheet(readTable(csv(header.join(',') + '\nAnn Smith,Lee,9,X1\n')))!, { externalId: 3, homeroom: null, grade: 2 })
+    expect(chosen.columns.mapping).toMatchObject({ fullName: 0, grade: 2, externalId: 3 })
+    expect('homeroom' in chosen.columns.mapping).toBe(false)
+    expect(chosen.columns.matches.find((m) => m.key === 'externalId')?.how).toBe('chosen')
+    expect(chosen.records[0]!.externalId).toBe('X1')
+  })
+})

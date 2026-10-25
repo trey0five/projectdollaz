@@ -5,7 +5,7 @@
 // record per (committee, member); a committee with no members is one record
 // with member ''.
 // ─────────────────────────────────────────────────────────────────────────────
-import { cell, describeHeader, matchColumns, type ColumnMatches, type FieldSpec } from '../match-columns.js'
+import { cell, describeHeader, matchColumns, type ColumnMatches, type ColumnOverride, type FieldSpec } from '../match-columns.js'
 import type { TableSheet } from '../read-table.js'
 
 export const MEMBER_ROLE_KEYS = ['chair', 'vice_chair', 'secretary', 'member'] as const
@@ -83,8 +83,8 @@ export function splitMembersCell(cellText: string): Array<{ member: string; role
     .filter((x) => x.member)
 }
 
-export function committeesFromSheet(sheet: TableSheet): CommitteesRead {
-  const columns = matchColumns(sheet.header, COMMITTEE_FIELDS)
+export function committeesFromSheet(sheet: TableSheet, override?: ColumnOverride | null): CommitteesRead {
+  const columns = matchColumns(sheet.header, COMMITTEE_FIELDS, override)
   const m = columns.mapping
   if (!('committee' in m)) {
     return {

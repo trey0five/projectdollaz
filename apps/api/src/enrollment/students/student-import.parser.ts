@@ -33,9 +33,11 @@ import {
   mainSheet,
   readTable,
   rosterFromSheet,
+  type ColumnOverride,
   type RosterRecord,
   type TableSheet,
 } from '@finrep/ingestion'
+import { importTable, type ImportTable } from '../../common/import-mapping.js'
 
 /** A candidate roster row in CreateStudentDto shape (grade kept raw when unmapped
  *  so the preview can SHOW what was in the file next to its skip issue). */
@@ -71,6 +73,10 @@ export interface ParsedStudentImport {
   warnings: string[]
   /** How the file's columns were read ("Student Name" → Student name), for the preview. */
   columns?: { field: string; header: string }[]
+  /** The mapping popup's material (#44): headers, a few rows, the fields, our mapping. */
+  table?: ImportTable
+  /** A required column we couldn't find — the preview shows the popup instead of failing. */
+  problem?: string | null
 }
 
 // ── CSV plumbing (local copy — the ingestion parseCsv is unexported) ──────────
@@ -424,7 +430,11 @@ function parseFlexible(records: readonly RosterRecord[], warnings: string[]): Pa
  * @throws only when the file is empty, or no name / grade column can be found —
  * and then the message names the columns it saw.
  */
-export function parseStudentImport(file: Buffer, demographicsFile?: Buffer): ParsedStudentImport {
+export function parseStudentImport(
+  file: Buffer,
+  demographicsFile?: Buffer,
+  opts: { mapping?: ColumnOverride | null } = {},
+): ParsedStudentImport {
   const { sheet, sheetCount } = readSheet(file)
   const header = sheet.header.map(headerKey)
   const rows = sheet.rows
@@ -444,9 +454,10 @@ export function parseStudentImport(file: Buffer, demographicsFile?: Buffer): Par
     return { shape: 'oneroster', rows: parseOneRosterUsers(header, rows, demographics, warnings), warnings }
   }
 
-  const roster = rosterFromSheet(sheet)
-  if (roster.problem) throw new Error(roster.problem)
+  const roster = rosterFromSheet(sheet, opts.mapping ?? null)
   const label = (key: string) => ROSTER_FIELDS.find((f) => f.key === key)?.label ?? key
   const columns = roster.columns.matches.map((m) => ({ field: label(m.key), header: m.header }))
-  return { shape: 'simple', rows: parseFlexible(roster.records, warnings), warnings, columns }
+  const table = importTable(sheet, ROSTER_FIELDS, roster.columns, 'a student name (one “Student name” column, or “First name” + “Last name”) and a grade')
+  if (roster.problem) return { shape: 'simple', rows: [], warnings, columns, table, problem: roster.problem }
+  return { shape: 'simple', rows: parseFlexible(roster.records, warnings), warnings, columns, table, problem: null }
 }

@@ -136,7 +136,11 @@ describe('parseStudentImport — OneRoster users.csv (+ demographics.csv)', () =
 
 describe('parseStudentImport — hard failures', () => {
   it('throws on an unrecognizable header set', () => {
-    expect(() => parseStudentImport(buf('foo,bar\n1,2'))).toThrow(/Couldn’t find a student name column.*“foo”, “bar”/)
+    // #44: a missing required column is a `problem` the mapping popup can fix, not a throw.
+    const p = parseStudentImport(buf('foo,bar\n1,2'))
+    expect(p.problem).toMatch(/Couldn’t find a student name column.*“foo”, “bar”/)
+    expect(p.rows).toEqual([])
+    expect(p.table?.headers).toEqual(['foo', 'bar'])
   })
 
   it('throws on an empty file', () => {
@@ -144,7 +148,7 @@ describe('parseStudentImport — hard failures', () => {
   })
 
   it('throws when the simple shape lacks the grade column', () => {
-    expect(() => parseStudentImport(buf('firstName,lastName\nA,B'))).toThrow(/grade column/)
+    expect(parseStudentImport(buf('firstName,lastName\nA,B')).problem).toMatch(/grade column/)
   })
 })
 
@@ -179,7 +183,11 @@ describe('parseStudentImport — a roster with the school’s own column names',
   })
 
   it('says which columns it saw when there is no name or no grade column', () => {
-    expect(() => parseStudentImport(file('Homeroom,Grade\nLee,9\n'))).toThrow(/Couldn’t find a student name column.*“Homeroom”, “Grade”/)
-    expect(() => parseStudentImport(file('Student,Homeroom\nAnn Smith,Lee\n'))).toThrow(/Couldn’t find a grade column/)
+    expect(parseStudentImport(file('Homeroom,Grade\nLee,9\n')).problem).toMatch(/Couldn’t find a student name column.*“Homeroom”, “Grade”/)
+    expect(parseStudentImport(file('Student,Homeroom\nAnn Smith,Lee\n')).problem).toMatch(/Couldn’t find a grade column/)
+    // …and the popup's picks fix it: Homeroom is not the grade, but a chosen column is.
+    const fixed = parseStudentImport(file('Student,Level\nAnn Smith,9\n'), undefined, { mapping: { grade: 1 } })
+    expect(fixed.problem).toBeNull()
+    expect(fixed.rows[0]!.student.grade).toBe('9')
   })
 })
