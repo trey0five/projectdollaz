@@ -43,6 +43,7 @@ import { RetentionModule } from './retention/retention.module.js'
 import { AdminModule } from './admin/admin.module.js'
 import { SupportModule } from './support/support.module.js'
 import { InboxModule } from './inbox/inbox.module.js'
+import { RecordImportsModule } from './record-imports/record-imports.module.js'
 
 @Module({
   imports: [
@@ -95,6 +96,9 @@ import { InboxModule } from './inbox/inbox.module.js'
     // first surface under src/hr/; nothing else in the app imports it.
     HrModule,
     AdvancementModule,
+    // #51 — file imports for facilities / advancement / accreditation / HR (imports
+    // those modules' services; imported by nothing).
+    RecordImportsModule,
     KnowledgeModule,
     EnrollmentModule,
     AcademicsModule,

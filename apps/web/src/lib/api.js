@@ -508,6 +508,16 @@ export const committeesApi = {
     ),
 }
 
+// ── Record file imports (#51): maintenance / gifts / campaigns / standards / staff ──
+// schools/:id/import/<target>/{preview,commit}; each target is gated by ITS module.
+export const recordsImportApi = {
+  preview: (schoolId, target, form) =>
+    api.post(`/schools/${schoolId}/import/${target}/preview`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commit: (schoolId, target, body) => api.post(`/schools/${schoolId}/import/${target}/commit`, body),
+}
+
 // ── Governance file imports (#46): a board roster / people list, a committee list ──
 // Multipart preview (stateless) → JSON commit of the reviewed rows. Same module gate.
 export const governanceImportApi = {

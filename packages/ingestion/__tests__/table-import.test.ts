@@ -214,3 +214,61 @@ describe('committeesFromSheet', () => {
     expect(splitMembersCell('Ann Smith (Chair, 2026); Bo Diaz, Cy Fox').map((x) => x.member)).toEqual(['Ann Smith', 'Bo Diaz', 'Cy Fox'])
   })
 })
+
+// #51 — the remaining modules' lists, any column names.
+import {
+  maintenanceFromSheet,
+  giftsFromSheet,
+  campaignsFromSheet,
+  standardsFromSheet,
+  moneyFromText,
+  ratingFromText,
+} from '../src/index.js'
+
+describe('record schemas (#51)', () => {
+  it('money and ratings as people write them', () => {
+    expect(moneyFromText('$12,500.00')).toBe(12500)
+    expect(moneyFromText('(1,200)')).toBe(-1200)
+    expect(moneyFromText('1.5k')).toBe(1500)
+    expect(moneyFromText('')).toBeNull()
+    expect(moneyFromText('TBD')).toBeNull()
+    expect(ratingFromText('Met')).toEqual({ rating: 'met', rubricScore: null })
+    expect(ratingFromText('Partially Met')).toEqual({ rating: 'partially_met', rubricScore: null })
+    expect(ratingFromText('Not Met')).toEqual({ rating: 'not_met', rubricScore: null })
+    expect(ratingFromText('3')).toEqual({ rating: 'met', rubricScore: 3 })
+    expect(ratingFromText('N/A')).toEqual({ rating: 'not_started', rubricScore: null })
+  })
+
+  it('a maintenance log: Task / Building / Next Service / Contractor / Estimate / Frequency / Done?', () => {
+    const t = readTable(csv('Facilities log\n\nTask,Building,Next Service,Contractor,Estimate,Frequency,Done?\nBoiler inspection,Main,10/1/2026,ABC Mechanical,"$1,200",Annual,No\nRoof repair,Gym,,,"$18,000",,Yes\n'))
+    const r = maintenanceFromSheet(mainSheet(t)!)
+    expect(r.problem).toBeNull()
+    expect(r.records.map((x) => [x.title, x.location, x.targetDate, x.vendor, x.estimatedCost, x.recurrence, x.status])).toEqual([
+      ['Boiler inspection', 'Main', '10/1/2026', 'ABC Mechanical', 1200, 'annual', 'open'],
+      ['Roof repair', 'Gym', '', '', 18000, '', 'resolved'],
+    ])
+  })
+
+  it('a gift export: Donor / Gift Date / Amount / Fund / Type, pledges by word or by partial payment', () => {
+    const t = readTable(csv('Donor,Gift Date,Amount,Paid,Fund,Type\n"Smith, Ann",9/1/2026,"$5,000",,Annual Fund,Gift\nBo Diaz,9/3/2026,"10,000","2,500",Capital Campaign,\n'))
+    const r = giftsFromSheet(mainSheet(t)!)
+    expect(r.records.map((x) => [x.donor, x.amount, x.receivedAmount, x.kind, x.campaign])).toEqual([
+      ['Smith, Ann', 5000, null, 'gift', 'Annual Fund'],
+      ['Bo Diaz', 10000, 2500, 'pledge', 'Capital Campaign'],
+    ])
+  })
+
+  it('a campaign list and a standards list', () => {
+    const c = campaignsFromSheet(mainSheet(readTable(csv('Campaign,Goal,Raised to date,FY,Status\nAnnual Fund,"250,000","120,000",FY2027,Active\nGala,"80,000",,2026-27,Planned\n')))!)
+    expect(c.records.map((x) => [x.name, x.goalAmount, x.raisedAmount, x.fiscalYear, x.status])).toEqual([
+      ['Annual Fund', 250000, 120000, 2027, 'active'],
+      ['Gala', 80000, null, 2027, 'planned'],
+    ])
+    const s = standardsFromSheet(mainSheet(readTable(csv('Standard,Domain,Self-Assessment,Owner\n1.2 The governing body sets the mission,Leadership,Met,Head of School\n2.1 Curriculum is documented,Learning,Partially met,\n')))!)
+    expect(s.records.map((x) => [x.code, x.title, x.category, x.rating, x.owner])).toEqual([
+      ['1.2', '1.2 The governing body sets the mission', 'Leadership', 'met', 'Head of School'],
+      ['2.1', '2.1 Curriculum is documented', 'Learning', 'partially_met', ''],
+    ])
+    expect(standardsFromSheet(mainSheet(readTable(csv('Owner,Date\nAnn,2027\n')))!).problem).toMatch(/Couldn’t find a standard column/)
+  })
+})

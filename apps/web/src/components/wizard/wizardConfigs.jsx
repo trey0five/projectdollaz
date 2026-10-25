@@ -61,6 +61,7 @@ import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
 import FinanceUploadSorter from '../finance/FinanceUploadSorter.jsx'
 import GovernanceImport from '../governance/GovernanceImport.jsx'
+import RecordsImport from '../imports/RecordsImport.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
@@ -343,6 +344,18 @@ export const wizardConfigs = {
     module: 'accreditation',
     hue: HUE.accreditation,
     options: [
+      // #51 — the list as a FILE, first; the forms stay.
+      {
+        key: 'import-standards',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload your standards',
+        blurb:
+          'Your accreditor’s standards or indicators as Excel or CSV — Code, Standard, Domain, Rating, Owner… any column names. Standards already on file (same code) are updated.',
+        cta: 'Upload standards',
+        renderEmbed: (ctx) => <RecordsImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} target="standards" onApplied={ctx.onSaved} />,
+      },
+
       {
         key: 'standard',
         kind: 'flow',
@@ -359,6 +372,18 @@ export const wizardConfigs = {
     module: 'facilities',
     hue: HUE.facilities,
     options: [
+      // #51 — the list as a FILE, first; the forms stay.
+      {
+        key: 'import-maintenance',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload a maintenance or asset list',
+        blurb:
+          'Your maintenance log or asset list as Excel or CSV — Item, Location, Due date, Vendor, Cost, Status… any column names.',
+        cta: 'Upload list',
+        renderEmbed: (ctx) => <RecordsImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} target="maintenance" onApplied={ctx.onSaved} />,
+      },
+
       {
         key: 'maintenance',
         kind: 'flow',
@@ -375,6 +400,28 @@ export const wizardConfigs = {
     module: 'advancement',
     hue: HUE.advancement,
     options: [
+      // #51 — the list as a FILE, first; the forms stay.
+      {
+        key: 'import-gifts',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload gifts and pledges',
+        blurb:
+          'A gift or pledge export as Excel or CSV — Donor, Date, Amount, Campaign, Type… any column names. Campaigns named in the file are created if missing.',
+        cta: 'Upload gifts',
+        renderEmbed: (ctx) => <RecordsImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} target="gifts" onApplied={ctx.onSaved} />,
+      },
+      {
+        key: 'import-campaigns',
+        kind: 'embed',
+        Icon: FileSpreadsheet,
+        label: 'Upload a campaign list',
+        blurb:
+          'Your campaigns as Excel or CSV — Campaign, Goal, Raised, Fiscal year, Start, End, Status… any column names.',
+        cta: 'Upload campaigns',
+        renderEmbed: (ctx) => <RecordsImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} target="campaigns" onApplied={ctx.onSaved} />,
+      },
+
       {
         key: 'campaign',
         kind: 'flow',
@@ -501,6 +548,18 @@ export const wizardConfigs = {
     title: 'Add staffing and people records',
     hue: HUE.hr,
     options: [
+      // #51 — the list as a FILE, first; the forms stay.
+      {
+        key: 'import-staff',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload a staff list',
+        blurb:
+          'Your staff list as Excel or CSV — Name, Title, Email, Start date… any column names. People already on file are updated; the rest join the staff group.',
+        cta: 'Upload staff',
+        renderEmbed: (ctx) => <RecordsImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} target="staff" onApplied={ctx.onSaved} />,
+      },
+
       {
         key: 'staffing',
         kind: 'flow',

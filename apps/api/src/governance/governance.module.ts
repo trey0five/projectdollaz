@@ -44,6 +44,6 @@ import { GovernanceImportService } from './governance-import.service.js'
   // for the governance STEP's meeting items (the analytics → governance edge already
   // exists for PoliciesService — no new circular dep). GovernanceReportService is
   // EXPORTED for Penny's read-only get_governance_status tool (AssistantModule).
-  exports: [PoliciesService, CommitteesService, MeetingsService, PeopleService, GovernanceReportService],
+  exports: [PoliciesService, CommitteesService, MeetingsService, PeopleService, GovernanceReportService, GovernanceImportService],
 })
 export class GovernanceModule {}
