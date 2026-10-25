@@ -28,3 +28,23 @@ export {
   type RosterRecord,
   type RosterRead,
 } from './schemas/roster.js'
+export {
+  PEOPLE_FIELDS,
+  PERSON_GROUP_KEYS,
+  peopleFromSheet,
+  groupFromText,
+  type PersonRecord,
+  type PeopleRead,
+  type PersonGroupKey,
+} from './schemas/people.js'
+export {
+  COMMITTEE_FIELDS,
+  MEMBER_ROLE_KEYS,
+  committeesFromSheet,
+  memberRoleFromText,
+  committeeKindFromName,
+  splitMembersCell,
+  type CommitteeMemberRecord,
+  type CommitteesRead,
+  type MemberRoleKey,
+} from './schemas/committees.js'

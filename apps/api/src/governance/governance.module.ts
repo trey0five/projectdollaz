@@ -13,6 +13,8 @@ import { PeopleController } from './people.controller.js'
 import { PeopleService } from './people.service.js'
 import { GovernanceReportController } from './governance-report.controller.js'
 import { GovernanceReportService } from './governance-report.service.js'
+import { GovernanceImportController } from './governance-import.controller.js'
+import { GovernanceImportService } from './governance-import.service.js'
 
 /**
  * Phase 3 Governance v1 — the Policy Register module. The first NON-FINANCE domain
@@ -35,8 +37,9 @@ import { GovernanceReportService } from './governance-report.service.js'
     MeetingsController,
     PeopleController,
     GovernanceReportController,
+    GovernanceImportController,
   ],
-  providers: [PoliciesService, CommitteesService, MeetingsService, PeopleService, GovernanceReportService],
+  providers: [PoliciesService, CommitteesService, MeetingsService, PeopleService, GovernanceReportService, GovernanceImportService],
   // MeetingsService is EXPORTED so AnalyticsModule's BriefingService can inject it
   // for the governance STEP's meeting items (the analytics → governance edge already
   // exists for PoliciesService — no new circular dep). GovernanceReportService is

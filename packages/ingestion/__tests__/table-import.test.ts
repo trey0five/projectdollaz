@@ -159,3 +159,58 @@ function crc32(buf: Buffer): number {
   }
   return ~c >>> 0
 }
+
+// #46 — board roster + committee list, any column names.
+import { peopleFromSheet, committeesFromSheet, splitMembersCell, groupFromText } from '../src/index.js'
+
+describe('peopleFromSheet', () => {
+  it('reads a board roster with Member / Position / Term Expires / Email, resolving groups from titles', () => {
+    const t = readTable(csv('Board of Trustees 2026-27\n\nMember,Position,Term Expires,Email,Status\nAnn Smith,Board Chair,6/30/2027,ann@x.org,Current\n"Diaz, Bo",Treasurer / CFO,2028,,Current\nCy Fox,Trustee,,,Former\nDee Gee,Principal,,,\n'))
+    const r = peopleFromSheet(mainSheet(t)!, 'board')
+    expect(r.problem).toBeNull()
+    expect(r.records.map((p) => [p.name, p.title, p.group, p.termEnd, p.email, p.active])).toEqual([
+      ['Ann Smith', 'Board Chair', 'board', '6/30/2027', 'ann@x.org', true],
+      ['Bo Diaz', 'Treasurer / CFO', 'finance_team', '2028', '', true],
+      ['Cy Fox', 'Trustee', 'board', '', '', false],
+      ['Dee Gee', 'Principal', 'staff', '', '', true],
+    ])
+  })
+  it('a Group column wins over the title; the default fills the rest', () => {
+    expect(groupFromText('Finance Committee', 'Trustee')).toBe('finance_team')
+    expect(groupFromText('', 'Business Manager')).toBe('finance_team')
+    expect(groupFromText('', 'Reading Specialist')).toBeNull()
+    const r = peopleFromSheet(mainSheet(readTable(csv('Name\nAnn Smith\n')))!, 'staff')
+    expect(r.records[0]!.group).toBe('staff')
+  })
+  it('says which columns it saw when there is no name', () => {
+    expect(peopleFromSheet(mainSheet(readTable(csv('Position,Email\nChair,a@x.org\n')))!).problem).toMatch(/Couldn’t find a name column.*“Position”, “Email”/)
+  })
+})
+
+describe('committeesFromSheet', () => {
+  it('one row per member, with the committee cell blank under its first row', () => {
+    const t = readTable(csv('Committee,Member,Role\nFinance,Ann Smith,Chair\n,Bo Diaz,Member\nGovernance,Cy Fox,Vice Chair\n'))
+    const r = committeesFromSheet(mainSheet(t)!)
+    expect(r.problem).toBeNull()
+    expect(r.records.map((x) => [x.committee, x.member, x.role, x.kind])).toEqual([
+      ['Finance', 'Ann Smith', 'chair', 'finance'],
+      ['Finance', 'Bo Diaz', 'member', 'finance'],
+      ['Governance', 'Cy Fox', 'vice_chair', 'governance'],
+    ])
+  })
+  it('one row per committee with a Members cell and a Chair column', () => {
+    const t = readTable(csv('Committee Name,Chair,Members,Purpose\nAdvancement,Ann Smith,"Ann Smith, Bo Diaz (Secretary); Cy Fox - member",Fundraising\nBuildings,,,\n'))
+    const r = committeesFromSheet(mainSheet(t)!)
+    expect(r.records.map((x) => [x.committee, x.member, x.role])).toEqual([
+      ['Advancement', 'Ann Smith', 'chair'],
+      ['Advancement', 'Bo Diaz', 'secretary'],
+      ['Advancement', 'Cy Fox', 'member'],
+      ['Buildings', '', 'member'],
+    ])
+    expect(r.records[0]!.kind).toBe('advancement')
+    expect(r.records[0]!.description).toBe('Fundraising')
+  })
+  it('splits member cells on commas and semicolons but not inside parentheses', () => {
+    expect(splitMembersCell('Ann Smith (Chair, 2026); Bo Diaz, Cy Fox').map((x) => x.member)).toEqual(['Ann Smith', 'Bo Diaz', 'Cy Fox'])
+  })
+})

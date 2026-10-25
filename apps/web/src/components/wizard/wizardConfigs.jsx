@@ -60,6 +60,7 @@ import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
 
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
 import FinanceUploadSorter from '../finance/FinanceUploadSorter.jsx'
+import GovernanceImport from '../governance/GovernanceImport.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
@@ -273,6 +274,31 @@ export const wizardConfigs = {
     module: 'governance',
     hue: HUE.governance,
     options: [
+      // #46 — the roster and the committee list as FILES, first; the forms stay.
+      {
+        key: 'import-people',
+        kind: 'embed',
+        Icon: Upload,
+        label: 'Upload a board roster',
+        blurb:
+          'A board roster, finance-team or staff list as Excel or CSV — any column names. People already on file are updated; the rest are added.',
+        cta: 'Upload people',
+        renderEmbed: (ctx) => (
+          <GovernanceImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} kind="people" defaultGroup="board" onApplied={ctx.onSaved} />
+        ),
+      },
+      {
+        key: 'import-committees',
+        kind: 'embed',
+        Icon: FileSpreadsheet,
+        label: 'Upload a committee list',
+        blurb:
+          'Committees and who sits on them, as Excel or CSV — one row per member, or one row per committee with a Members cell. Missing committees and people are created.',
+        cta: 'Upload committees',
+        renderEmbed: (ctx) => (
+          <GovernanceImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} kind="committees" onApplied={ctx.onSaved} />
+        ),
+      },
       {
         key: 'person',
         kind: 'flow',

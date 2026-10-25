@@ -508,6 +508,22 @@ export const committeesApi = {
     ),
 }
 
+// ── Governance file imports (#46): a board roster / people list, a committee list ──
+// Multipart preview (stateless) → JSON commit of the reviewed rows. Same module gate.
+export const governanceImportApi = {
+  previewPeople: (schoolId, form) =>
+    api.post(`/schools/${schoolId}/governance/import/people/preview`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commitPeople: (schoolId, body) => api.post(`/schools/${schoolId}/governance/import/people/commit`, body),
+  previewCommittees: (schoolId, form) =>
+    api.post(`/schools/${schoolId}/governance/import/committees/preview`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commitCommittees: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/governance/import/committees/commit`, body),
+}
+
 // ── Governance Phase 2: PEOPLE (board / finance team / staff roster) ──────────
 // School-scoped, same 'governance' module gate. People are REAL-WORLD governance
 // people (board members usually aren't app users) — userId is an optional link.
