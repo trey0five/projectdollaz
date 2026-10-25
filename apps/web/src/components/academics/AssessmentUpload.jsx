@@ -4,8 +4,15 @@
 // The two-step exists because these files are unpredictable: a publisher export
 // has title rows, odd column names and sometimes another school's data in it.
 // The preview shows exactly what the parser understood — shape, year, subjects,
-// row count, warnings, and a sample — BEFORE anything is written, so nobody
-// discovers a mis-parse by finding wrong numbers on a board slide.
+// row count, how each column was read, warnings, and a sample — BEFORE anything
+// is written, so nobody discovers a mis-parse by finding wrong numbers on a
+// board slide.
+//
+// #49: Excel files are accepted (the server reads them through the shared table
+// reader), and the three things a file can be missing — the test, the year, the
+// grade — become pickers right here instead of an error. The year picker
+// replaces a dead end: the preview used to say "set the year when you commit"
+// and the commit then refused because there was nowhere to set it.
 //
 // PREMIUM UI P4 (a2): it renders inside the add-data wizard's work Panel, so it
 // adds no box of its own;
@@ -25,6 +32,23 @@ import '../../styles/pending/a2-carry.css'
 /** The same hue as an RGB triple, for `--c-module` (the eyebrow's 2px rule). */
 const HUE_VAR = { '--c-module': '13 148 136' }
 
+export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain'
+const GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+
+/** This year and the ten before it — a results file is rarely older. */
+export function yearOptions(now = new Date()) {
+  const y = now.getFullYear() + (now.getMonth() >= 6 ? 1 : 0) // FY ends in June
+  return Array.from({ length: 11 }, (_, i) => y - i)
+}
+
+/** "How we read your columns" — the roles the parser assigned, used ones first. */
+export function columnsLine(columns) {
+  const list = Array.isArray(columns) ? columns : []
+  const used = list.filter((c) => c.role && c.role !== 'Not used')
+  const unused = list.filter((c) => !c.role || c.role === 'Not used').map((c) => c.header)
+  return { used, unused }
+}
+
 export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
@@ -34,6 +58,8 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   const [done, setDone] = useState(null)
   const [needsType, setNeedsType] = useState(false)
   const [chosenType, setChosenType] = useState('')
+  const [chosenYear, setChosenYear] = useState('')
+  const [chosenGrade, setChosenGrade] = useState('')
 
   const reset = () => {
     setFile(null)
@@ -42,17 +68,25 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
     setError('')
     setNeedsType(false)
     setChosenType('')
+    setChosenYear('')
+    setChosenGrade('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const doPreview = async (f, testType = chosenType) => {
+  const fields = (fd, { testType, year, grade }) => {
+    if (testType) fd.append('testType', testType)
+    if (year) fd.append('schoolYear', String(year))
+    if (grade) fd.append('gradeLevel', grade)
+  }
+
+  const doPreview = async (f, { testType = chosenType, year = chosenYear, grade = chosenGrade } = {}) => {
     setBusy(true)
     setError('')
     setDone(null)
     try {
       const fd = new FormData()
       fd.append('file', f)
-      if (testType) fd.append('testType', testType)
+      fields(fd, { testType, year, grade })
       const res = await academicsApi.preview(schoolId, fd)
       setPreview(res.data ?? res)
       setNeedsType(false)
@@ -69,15 +103,26 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
     }
   }
 
+  const pickYear = (y) => {
+    setChosenYear(y)
+    if (file && y) doPreview(file, { year: y })
+  }
+  const pickGrade = (g) => {
+    setChosenGrade(g)
+    if (file && g) doPreview(file, { grade: g })
+  }
+
+  const yearToSave = chosenYear || preview?.years?.[0] || ''
+  const canSave = !!preview && !busy && !(preview.needsYear && !yearToSave) && !(preview.needsGrade && !chosenGrade)
+
   const doCommit = async () => {
-    if (!file) return
+    if (!file || !canSave) return
     setBusy(true)
     setError('')
     try {
       const fd = new FormData()
       fd.append('file', file)
-      if (chosenType || preview?.testType) fd.append('testType', chosenType || preview.testType)
-      if (preview?.years?.[0]) fd.append('schoolYear', String(preview.years[0]))
+      fields(fd, { testType: chosenType || preview?.testType, year: yearToSave, grade: chosenGrade })
       const res = await academicsApi.commit(schoolId, fd)
       setDone(res.data ?? res)
       setPreview(null)
@@ -90,6 +135,7 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   }
 
   if (!canEdit) return null
+  const cols = columnsLine(preview?.columns)
 
   return (
     <div style={HUE_VAR}>
@@ -98,8 +144,9 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
       </p>
       <h3 className="a2-title">Upload a results file</h3>
       <p className="mt-1 max-w-[70ch] text-small text-ink2">
-        A diocesan summary, a publisher export, or a student-level file. Title rows and odd column names are handled —
-        you will see exactly what was read before anything is saved.
+        A diocesan summary, a publisher export, or a student-level file — Excel or CSV. Title rows and odd column
+        names are handled; if the file doesn’t say which test, year or grade it is, you’ll pick that here. You will
+        see exactly what was read before anything is saved.
       </p>
 
       <label
@@ -107,18 +154,20 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
       >
         <FileUp size={20} aria-hidden />
         <span className="min-w-0 flex-1 truncate text-small text-ink">
-          {file ? file.name : 'Choose a CSV file…'}
+          {file ? file.name : 'Choose an Excel or CSV file…'}
         </span>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,text/csv,text/plain"
+          accept={ACCEPT}
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (!f) return
             setFile(f)
-            doPreview(f)
+            setChosenYear('')
+            setChosenGrade('')
+            doPreview(f, { year: '', grade: '' })
           }}
         />
         {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
@@ -137,7 +186,7 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
                 ['Shape', preview.scope === 'student' ? 'Student-level' : 'School summary'],
                 ['Test', (preview.testType ?? '').toUpperCase()],
                 ['Score', preview.scoreType === 'percentile' ? 'National percentile' : 'Scale score'],
-                ['Years', (preview.years ?? []).join(', ') || '—'],
+                ['Years', (preview.years ?? []).join(', ') || (chosenYear ? String(chosenYear) : '—')],
                 ['Rows', preview.rows],
                 ['Subjects', (preview.subjects ?? []).length],
               ].map(([k, v]) => (
@@ -148,6 +197,19 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
               ))}
             </div>
 
+            {cols.used.length > 0 ? (
+              <p className="mt-3 text-small text-ink2" data-testid="assessment-columns">
+                How we read your columns:{' '}
+                {cols.used.map((c, i) => (
+                  <span key={c.header}>
+                    {i > 0 && ' · '}
+                    <b className="font-medium text-ink">{c.header}</b> → {c.role}
+                  </span>
+                ))}
+                {cols.unused.length > 0 ? <span> · not used: {cols.unused.join(', ')}</span> : null}
+              </p>
+            ) : null}
+
             {preview.match ? (
               <p className="mt-3 text-small text-ink2">
                 Roster match: <b className="tabular-nums text-ink">{preview.match.matched}</b> matched,{' '}
@@ -156,14 +218,54 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
               </p>
             ) : null}
 
-            {(preview.warnings ?? []).map((w) => (
-              <p key={w} className="a2-note mt-2" data-tone="watch">
-                <AlertTriangle size={13} aria-hidden /> {w}
-              </p>
-            ))}
+            {/* The things the file didn't say — pickers, not errors. */}
+            {preview.needsYear || preview.needsGrade ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3" data-testid="assessment-pickers">
+                {preview.needsYear ? (
+                  <label className="flex items-center gap-2 text-small text-ink">
+                    <span>This file doesn’t say the year — which school year is it?</span>
+                    <select
+                      aria-label="School year"
+                      value={chosenYear}
+                      onChange={(e) => pickYear(e.target.value)}
+                      className="a2-field" style={{ width: 'auto', minWidth: '8rem' }}
+                    >
+                      <option value="">Choose a year…</option>
+                      {yearOptions().map((y) => (
+                        <option key={y} value={y}>{`${y - 1}–${String(y).slice(2)}`}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {preview.needsGrade ? (
+                  <label className="flex items-center gap-2 text-small text-ink">
+                    <span>No grade column — which grade are these students in?</span>
+                    <select
+                      aria-label="Grade"
+                      value={chosenGrade}
+                      onChange={(e) => pickGrade(e.target.value)}
+                      className="a2-field" style={{ width: 'auto', minWidth: '7rem' }}
+                    >
+                      <option value="">Choose a grade…</option>
+                      {GRADES.map((g) => (
+                        <option key={g} value={g}>{g === 'K' ? 'Kindergarten' : `Grade ${g}`}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            {(preview.warnings ?? [])
+              .filter((w) => !(preview.needsYear && /No year column/.test(w)))
+              .map((w) => (
+                <p key={w} className="a2-note mt-2" data-tone="watch">
+                  <AlertTriangle size={13} aria-hidden /> {w}
+                </p>
+              ))}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="primary" onClick={doCommit} disabled={busy}>
+              <Button variant="primary" onClick={doCommit} disabled={!canSave}>
                 Save these results
               </Button>
               <Button variant="secondary" onClick={reset}>
@@ -198,7 +300,7 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
                 </option>
               ))}
             </select>
-            <Button variant="primary" disabled={!chosenType || busy} onClick={() => doPreview(file, chosenType)}>
+            <Button variant="primary" disabled={!chosenType || busy} onClick={() => doPreview(file, { testType: chosenType })}>
               Read it again
             </Button>
           </div>

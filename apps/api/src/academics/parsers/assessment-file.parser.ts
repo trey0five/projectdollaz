@@ -75,6 +75,8 @@ export interface AssessmentParseResult {
   warnings: string[]
   /** Rows the parser could not use at all (bad/blank/duplicate header rows). */
   skipped: number
+  /** How each header was read ("Reading NPR" → Subject: reading), for the preview (#49). */
+  columns: Array<{ header: string; role: string }>
 }
 
 export const TOTAL_KEY = '__total__'
@@ -448,6 +450,27 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   const hasIdentity = identityCols.length > 0
   const scope: ParsedScope = hasIdentity ? 'student' : 'school_aggregate'
 
+  // What the preview shows as "how we read your columns" — the FINAL roles,
+  // after every disqualification above.
+  const roleOf = new Map<number, string>()
+  const roleLabels: Array<[keyof typeof idx, string]> = [
+    ['school', 'School'], ['year', 'Year'], ['grade', 'Grade'], ['tested', 'Students tested'],
+    ['eligible', 'Students eligible'], ['extId', 'Student ID'], ['first', 'First name'],
+    ['last', 'Last name'], ['name', 'Student name'], ['total', 'Composite / total'],
+  ]
+  const identityKeys = new Set(['extId', 'first', 'last', 'name'])
+  for (const [k, label] of roleLabels) {
+    const i = idx[k]
+    if (i < 0 || roleOf.has(i)) continue
+    // An identity column something else disqualified ("Form ID") is not an identity.
+    if (identityKeys.has(k) && nonIdentity.has(i)) continue
+    roleOf.set(i, label)
+  }
+  for (const s of subjectCols) roleOf.set(s.col, `Subject: ${s.subject}`)
+  const columns = headers
+    .map((h, i) => ({ header: h, role: roleOf.get(i) ?? 'Not used' }))
+    .filter((c) => c.header.trim() !== '')
+
   if (idx.total < 0 && subjectCols.length === 0) {
     throw new Error('No score columns found — expected a composite/total column or subject columns.')
   }
@@ -559,6 +582,7 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
     students,
     warnings,
     skipped,
+    columns,
   }
 }
 

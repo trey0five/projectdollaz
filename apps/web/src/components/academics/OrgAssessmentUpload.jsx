@@ -24,6 +24,8 @@ import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileUp, Loader2, MinusCircle } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
+import { TEST_TYPE_KEYS, TEST_TYPE_LABELS } from '../../lib/academicsVocab.js'
+import { ACCEPT, yearOptions } from './AssessmentUpload.jsx'
 import Button from '../ui/surface/Button.jsx'
 import Panel from '../ui/surface/Panel.jsx'
 import '../../styles/pending/a2-carry.css'
@@ -39,22 +41,32 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
+  // #49: the test, the year — pickers, not dead ends (the school uploader's idiom).
+  const [needsType, setNeedsType] = useState(false)
+  const [chosenType, setChosenType] = useState('')
+  const [chosenYear, setChosenYear] = useState('')
 
   const reset = () => {
     setFile(null)
     setPreview(null)
     setDone(null)
     setError('')
+    setNeedsType(false)
+    setChosenType('')
+    setChosenYear('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const run = async (f, commit = false) => {
+  const run = async (f, commit = false, { testType = chosenType, year = chosenYear } = {}) => {
     setBusy(true)
     setError('')
     try {
       const fd = new FormData()
       fd.append('file', f)
-      if (commit && preview?.testType) fd.append('testType', preview.testType)
+      const type = testType || (commit ? preview?.testType : '')
+      if (type) fd.append('testType', type)
+      const y = year || (commit ? preview?.years?.[0] : '')
+      if (y) fd.append('schoolYear', String(y))
       const res = commit ? await academicsApi.orgCommit(orgId, fd) : await academicsApi.orgPreview(orgId, fd)
       const body = res.data ?? res
       if (commit) {
@@ -64,10 +76,15 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
       } else {
         setPreview(body)
         setDone(null)
+        setNeedsType(false)
       }
     } catch (e) {
-      setError(e?.response?.data?.message ?? (commit ? 'Could not save those results.' : 'Could not read that file.'))
-      if (!commit) setPreview(null)
+      const message = e?.response?.data?.message ?? (commit ? 'Could not save those results.' : 'Could not read that file.')
+      setError(message)
+      if (!commit) {
+        setPreview(null)
+        setNeedsType(/which test/i.test(message))
+      }
     } finally {
       setBusy(false)
     }
@@ -77,6 +94,7 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
   // { sourceName, schoolId, matchedName, decision, rows }.
   const matches = preview?.schools ?? []
   const unmatched = matches.filter((m) => !m.schoolId)
+  const canSave = !!preview && !busy && !(preview.needsYear && !chosenYear)
 
   return (
     <Panel style={HUE_VAR}>
@@ -90,17 +108,18 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
         className="a2-drop mt-4 cursor-pointer items-center gap-3 px-4 py-4"
       >
         <FileUp size={20} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-small text-ink">{file ? file.name : 'Choose a CSV file…'}</span>
+        <span className="min-w-0 flex-1 truncate text-small text-ink">{file ? file.name : 'Choose an Excel or CSV file…'}</span>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,text/csv,text/plain"
+          accept={ACCEPT}
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (!f) return
             setFile(f)
-            run(f, false)
+            setChosenYear('')
+            run(f, false, { year: '' })
           }}
         />
         {busy ? <Loader2 size={16} className="motion-safe:animate-spin text-ink2" aria-label="Reading…" /> : null}
@@ -127,6 +146,26 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
                 </span>
               ))}
             </div>
+
+            {preview.needsYear ? (
+              <label className="mt-3 flex flex-wrap items-center gap-2 text-small text-ink" data-testid="org-year-picker">
+                <span>This file doesn’t say the year — which school year is it?</span>
+                <select
+                  aria-label="School year"
+                  value={chosenYear}
+                  onChange={(e) => {
+                    setChosenYear(e.target.value)
+                    if (file && e.target.value) run(file, false, { year: e.target.value })
+                  }}
+                  className="a2-field" style={{ width: 'auto', minWidth: '8rem' }}
+                >
+                  <option value="">Choose a year…</option>
+                  {yearOptions().map((y) => (
+                    <option key={y} value={y}>{`${y - 1}–${String(y).slice(2)}`}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             {matches.length > 0 ? (
               <ul className="a2-rows a2-rows-tight mt-3">
@@ -164,7 +203,7 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
             ))}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="primary" onClick={() => file && run(file, true)} disabled={busy}>
+              <Button variant="primary" onClick={() => file && run(file, true)} disabled={!canSave}>
                 Save to {matches.length - unmatched.length} school
                 {matches.length - unmatched.length === 1 ? '' : 's'}
               </Button>
@@ -185,6 +224,30 @@ export default function OrgAssessmentUpload({ orgId, onDone }) {
             : '.'}
         </p>
       ) : null}
+      {needsType && file ? (
+        <div className="a2-block" data-testid="org-test-picker">
+          <p className="a2-note" data-tone="watch">
+            Nothing in this file names the test. Choose it and we will read the file again.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Test type"
+              value={chosenType}
+              onChange={(e) => setChosenType(e.target.value)}
+              className="a2-field" style={{ width: 'auto', minWidth: '14rem', maxWidth: '100%' }}
+            >
+              <option value="">Choose a test…</option>
+              {TEST_TYPE_KEYS.map((k) => (
+                <option key={k} value={k}>{TEST_TYPE_LABELS[k] ?? k.toUpperCase()}</option>
+              ))}
+            </select>
+            <Button variant="primary" disabled={!chosenType || busy} onClick={() => run(file, false, { testType: chosenType })}>
+              Read it again
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? (
         <p className="a2-note mt-3" data-tone="risk">
           {error}

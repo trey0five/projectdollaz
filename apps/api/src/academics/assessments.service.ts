@@ -15,6 +15,7 @@
 // honest tester-weighted diocesan average possible.
 // ─────────────────────────────────────────────────────────────────────────────
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { detectDelimiter, looksLikeWorkbook, mainSheet, parseDelimited, readTable } from '@finrep/ingestion'
 import {
   SCORE_TYPE_FOR_FAMILY,
   SUBJECTS_FOR_FAMILY,
@@ -75,11 +76,11 @@ import {
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
-  TOTAL_KEY,
   looksLikeObjectiveFile,
-  parseAssessmentCsv,
-  parseObjectiveCsv,
+  parseAssessmentGrid,
+  parseObjectiveGrid,
   subjectsSeen,
+  TOTAL_KEY,
   type AssessmentParseResult,
 } from './parsers/assessment-file.parser.js'
 import { matchAll, type MatchCandidate, type RosterStudent } from './matching/student-match.js'
@@ -126,6 +127,12 @@ export interface UploadPreview {
   sample: Array<Record<string, unknown>>
   /** Echoed back to /commit so the file is parsed once, not twice. */
   token: string
+  /** How each header was read, for "how we read your columns" (#49). */
+  columns?: Array<{ header: string; role: string }>
+  /** The file carries no year — the uploader must pick one before committing. */
+  needsYear: boolean
+  /** A student file with no grade on any row — pick one before committing. */
+  needsGrade: boolean
 }
 
 @Injectable()
@@ -184,6 +191,9 @@ export class AssessmentsService {
       match,
       sample,
       token: Buffer.from(JSON.stringify({ n: file.originalname ?? null })).toString('base64url'),
+      columns: parsed.columns,
+      needsYear: parsed.years.length === 0,
+      needsGrade: parsed.scope === 'student' && parsed.students.length > 0 && parsed.students.every((st) => st.gradeLevel == null),
     }
   }
 
@@ -1175,9 +1185,7 @@ export class AssessmentsService {
 
   private isObjectiveFile(file: { buffer: Buffer }): boolean {
     try {
-      const text = new TextDecoder('utf-8').decode(new Uint8Array(file.buffer)).slice(0, 20000)
-      const grid = text.split('\n').map((line) => line.split(','))
-      return looksLikeObjectiveFile(grid)
+      return looksLikeObjectiveFile(this.grid(file).slice(0, 200))
     } catch {
       return false
     }
@@ -1204,6 +1212,8 @@ export class AssessmentsService {
         opi: r.opi === null ? null : Math.round(r.opi),
       })),
       token: 'objective',
+      needsYear: parsed.years.length === 0,
+      needsGrade: false,
     }
   }
 
@@ -1314,7 +1324,7 @@ export class AssessmentsService {
     opts: { testType?: string; schoolYear?: number; gradeLevel?: string },
   ) {
     try {
-      return parseObjectiveCsv(file.buffer, {
+      return parseObjectiveGrid(this.grid(file), {
         testType: opts.testType,
         defaultYear: opts.schoolYear,
         defaultGrade: opts.gradeLevel,
@@ -1355,6 +1365,7 @@ export class AssessmentsService {
       family: parsed.family,
       scoreType: parsed.scoreType,
       years: parsed.years,
+      needsYear: parsed.years.length === 0,
       subjects: subjectsSeen(parsed),
       rows: parsed.aggregates.length,
       warnings: parsed.warnings,
@@ -1561,9 +1572,8 @@ export class AssessmentsService {
     file: { buffer: Buffer; originalname?: string },
     opts: { testType?: string; schoolYear?: number; gradeLevel?: string },
   ): AssessmentParseResult {
-    if (!file?.buffer || file.buffer.length === 0) throw new BadRequestException('Empty file.')
     try {
-      return parseAssessmentCsv(file.buffer, {
+      return parseAssessmentGrid(this.grid(file), {
         testType: opts.testType,
         defaultYear: opts.schoolYear,
         defaultGrade: opts.gradeLevel,
@@ -1572,6 +1582,29 @@ export class AssessmentsService {
     } catch (e) {
       throw new BadRequestException((e as Error).message)
     }
+  }
+
+  /**
+   * Any tabular upload → the grid the parsers read. .xlsx/.xls through the
+   * shared reader (every sheet; the one with the most rows), CSV/TSV as text
+   * (quote-aware, so a header like "Reading, NPR" can't split). #49: Excel
+   * exports used to be refused by the file picker and the text decoder alike.
+   */
+  private grid(file: { buffer: Buffer }): string[][] {
+    if (!file?.buffer || file.buffer.length === 0) throw new BadRequestException('Empty file.')
+    if (looksLikeWorkbook(file.buffer)) {
+      let read
+      try {
+        read = readTable(file.buffer)
+      } catch (e) {
+        throw new BadRequestException((e as Error).message)
+      }
+      const sheet = mainSheet(read)
+      if (!sheet) throw new BadRequestException('This workbook has no sheet with a header row and data.')
+      return [sheet.header, ...sheet.rows]
+    }
+    const text = file.buffer.toString('utf8')
+    return parseDelimited(text, detectDelimiter(text)).map((r) => r.map((c) => String(c ?? '')))
   }
 
   private candidates(parsed: AssessmentParseResult): MatchCandidate[] {
